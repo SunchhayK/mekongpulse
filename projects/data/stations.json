@@ -1,0 +1,59 @@
+{
+  "version": "1.0.0",
+  "verified_at": "2026-10-17",
+  "sources": {
+    "levels_and_stages": "MRC telemetry API (api.mrcmekong.org) live station metadata, verified 2026-10-17",
+    "zero_gauge": "MRC Regional Flood Management and Mitigation Centre bulletin (ffw.mrcmekong.org)"
+  },
+  "notes": "Station IDs corrected from the technical report v1.1.0: 019803 is Tan Chau (VN) and 019806 is Neak Luong in the live MRC API. Koh Khel is 033402 and Kompong Cham is 019802. fallback_id names the adjacent station used by the failover model; hydraulic offsets are computed empirically from paired 30-day series at sync time, never hardcoded.",
+  "stations": [
+    {
+      "id": "019802",
+      "name_en": "Kompong Cham",
+      "name_kh": "កំពង់ចាម",
+      "river": "Mekong",
+      "lat": 11.994647,
+      "lng": 105.46873,
+      "alarm_stage_m": 15.2,
+      "flood_stage_m": 16.2,
+      "zero_gauge_elevation_m": null,
+      "fallback_id": "033401"
+    },
+    {
+      "id": "020102",
+      "name_en": "Prek Kdam",
+      "name_kh": null,
+      "river": "Tonlesap",
+      "lat": 11.81117,
+      "lng": 104.80678,
+      "alarm_stage_m": 9.5,
+      "flood_stage_m": 10.0,
+      "zero_gauge_elevation_m": 0.08,
+      "fallback_id": "033401"
+    },
+    {
+      "id": "033401",
+      "name_en": "Chaktomuk",
+      "name_kh": "ចតុមុខ",
+      "river": "Bassac",
+      "lat": 11.563,
+      "lng": 104.9353,
+      "alarm_stage_m": 10.5,
+      "flood_stage_m": 12.0,
+      "zero_gauge_elevation_m": -1.02,
+      "fallback_id": "033402"
+    },
+    {
+      "id": "033402",
+      "name_en": "Koh Khel",
+      "name_kh": null,
+      "river": "Bassac",
+      "lat": 11.242035,
+      "lng": 105.036156,
+      "alarm_stage_m": 7.9,
+      "flood_stage_m": 8.4,
+      "zero_gauge_elevation_m": -1.0,
+      "fallback_id": "033401"
+    }
+  ]
+}

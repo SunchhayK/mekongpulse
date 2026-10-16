@@ -1,0 +1,5 @@
+# MekongPulse uv workspace root.
+# Members share one lockfile; each member still works standalone
+# (e.g. `cd shared && uv run pytest`).
+[tool.uv.workspace]
+members = ["shared", "backend", "bot"]

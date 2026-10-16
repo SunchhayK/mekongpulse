@@ -1,0 +1,88 @@
+"""Environment-driven settings shared by every MekongPulse service.
+
+Three first-class environments (development, staging, production) are selected
+by the ENVIRONMENT variable; `projects/scripts/switch_env.sh` wires the
+matching .env preset. Persistence adapters are chosen from the environment:
+PostgreSQL for development/staging, Firestore + GCS for production.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# projects/ root: shared/src/mekong_shared/config.py -> parents[3]
+PROJECTS_ROOT = Path(__file__).resolve().parents[3]
+DATA_DIR_DEFAULT = PROJECTS_ROOT / "data"
+
+ENVIRONMENTS = ("development", "staging", "production")
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    environment: str = "development"
+
+    # --- persistence -----------------------------------------------------
+    database_url: str = "postgresql://postgres:postgres@localhost:5432/mekongpulse"
+    repository_backend: str | None = None  # postgres | firestore | memory (None = auto)
+    firestore_project: str | None = None
+    gcs_bucket: str | None = None
+    gcs_public_base: str | None = None  # e.g. https://storage.googleapis.com/<bucket>
+
+    # --- external telemetry ----------------------------------------------
+    mrc_base_url: str = "https://api.mrcmekong.org/api/v1"
+    open_meteo_base_url: str = "https://api.open-meteo.com/v1"
+    http_timeout_seconds: float = 10.0
+
+    # --- telegram ---------------------------------------------------------
+    telegram_bot_token: str | None = None
+    telegram_webhook_secret: str | None = None
+    telegram_broadcast_channel_id: str | None = None
+
+    # --- gemini -----------------------------------------------------------
+    gemini_api_key: str | None = None
+    gemini_text_model: str = "gemini-3.8-flash"
+    gemini_tts_model: str = "gemini-3.8-flash-tts"
+    use_vertex_ai: bool = False
+    vertex_project: str | None = None
+    vertex_location: str = "asia-southeast1"
+
+    # --- gateway / security ----------------------------------------------
+    admin_token: str | None = None  # Bearer token for scheduler/admin endpoints
+    cors_origins: str = "*"  # comma-separated; restricted in production
+    log_salt: str = "mekongpulse-dev-salt"  # SHA-256 salt for GPS / id anonymization
+    public_base_url: str = "http://localhost:8080"  # audio URLs etc.
+
+    # --- domain -----------------------------------------------------------
+    data_dir: Path = DATA_DIR_DEFAULT
+    audio_dir: Path = DATA_DIR_DEFAULT / "audio"
+    sentinel_debounce_hours: float = 6.0
+    telemetry_stale_after_minutes: int = 120
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment == "production"
+
+    @property
+    def use_firestore(self) -> bool:
+        return self.is_production
+
+    @property
+    def has_telegram(self) -> bool:
+        return bool(self.telegram_bot_token)
+
+    @property
+    def has_gemini(self) -> bool:
+        return bool(self.gemini_api_key) or self.use_vertex_ai
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()
