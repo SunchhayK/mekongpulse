@@ -32,6 +32,10 @@ class RiskTier(StrEnum):
         }[self.value]
 
     @property
+    def label_en(self) -> str:
+        return self.value
+
+    @property
     def severity(self) -> int:
         return list(RiskTier).index(self)
 
