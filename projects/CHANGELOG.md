@@ -2,6 +2,70 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.3.3] — 2026-10-18
+
+Stage-personalized push alerts, a read-only console fix, and the technical report brought level with the shipped stack.
+
+### Added
+
+- `shared` — 0.2.0: sentinel escalations now dispatch per stored stage. Subscribers are grouped by their subscription's rice stage and each group gets its own directive set; subscribers without a stored stage keep the conservative ripening default (INV-03). Covered by `test_escalation_personalizes_by_stored_stage`.
+- `docs` — `research/features-scan.md`, `research/sellers-market.md`, `research/gov-workflow.md`: comparable-systems inventory with candidate features; Cambodian paddy-market evidence (buyer information gap; the public-signal design constraint); NCDM reporting chain plus the officials' console roadmap.
+
+### Changed
+
+- `bot` — 0.3.0: `make_telegram_dispatcher` accepts `post_to_channel` (default `true`; existing two-argument call sites unchanged); the sentinel sets it so the public channel receives exactly one post per commune escalation, carried on the ripening group.
+- `frontend` — 0.3.1: the assessment dialog no longer offers crop-stage chips. The console is read-only (FR-10), so `api.assess()` omits `crop_stage` and the backend applies its conservative ripening default; the dead `CROP_STAGES` constant and `.crop-stage-row` rule are removed.
+- `docs` — `technical-report.md` 1.1.0 → 1.2.0: aligned with the shipped stack and revised product report — `gemini-3.8-flash` + `gemini-3.8-flash-tts` (24 kHz PCM → MP3 via `lameenc`), zero-tile SVG/canvas console (Google Maps and Material Web claims removed), 15-minute scheduler, four-station roster including `019802` Kompong Cham, `TEST-SPA-01` corrected to `081001` (Khpob) with new `TEST-SPA-03`, agronomy fixture rewritten against the real `AgriDecisionEngine` API, ADR-0005 amended, deployment topology (Cloud Run target + current self-hosted demo with the Firebase console) stated, FR-10 added to the traceability matrix (10/10).
+- `docs` — `product-report.md`: FR-10 Officials' Coordination Console added; sellers/traders scoped as public-signal-only beneficiaries with the documented ethics constraint; non-goals 7–8 added (no buyer feeds, no parallel damage pipeline); Tier 3 roadmap rebuilt from the three new research notes.
+
+### Fixed
+
+- `shared`, `bot` — sentinel escalations ignored each subscriber's stored rice stage (the patrol always assessed with `RIPENING`), so the push path did not match FR-09/AC-03's stage-aware promise. Push alerts now carry each subscriber's stage's directives; the public-channel post stays single and conservative.
+
+## [0.3.2] — 2026-10-18
+
+Product report 1.2.0 (audience split) plus sourced research notes for the AI Builder Cup submission.
+
+### Added
+
+- `docs` — `research/`: sourced research for the submission. `competition.md` (Google Cloud AI Builder Cup 2026 rules, themes, rubric, submission constraints, from primary sources), `landscape.md` (flood/agri advisory landscape and the hazard × stage × Khmer gap), `cambodia-context.md` (fact-check of the report's figures against institutional sources).
+- `docs` — `product-report.md` §5 "Google Cloud AI Builder Cup 2026 alignment": theme mapping, rubric mapping (40/25/25/10), submission constraints checklist.
+
+### Changed
+
+- `docs` — `product-report.md` 1.1.0 → 1.2.0: audience split made explicit. Farmers are served only through the Telegram bot, where the rice-stage profile is asked once and stored on the subscription (FR-04/06/09, AC-01/07, JRN-03/04); the web dashboard is specified as a read-only officials' console (non-goal 5, AC-08, JRN-08/09), so no crop-stage prompt exists outside the bot.
+- `docs` — `product-report.md`: claims corrected to match the shipped stack (zero-tile SVG basin map instead of Google Maps Platform; `gemini-3.8-flash` + `gemini-3.8-flash-tts` instead of Gemini 2.0 Flash; 15-minute scheduler; MFI CSV export marked Phase 2).
+- `docs` — `product-report.md`: figures fact-checked and corrected (2022: 152,386 ha affected, 85,482 households; US$405–500/ha production cost instead of $400–700/ha "fertilizer and seed"; EWS 1294 ~118,000 subscribers; station `019803` → `033402` for Koh Khel; Koh Thom and Peam Chor corrected from communes to districts; stage default noted as season-aware).
+
+## [0.3.1] — 2026-10-18
+
+Self-hosted API: the dashboard stays on Firebase Hosting, but the API now runs on the `labyrinth.ts` server instead of a laptop tunnel.
+
+### Added
+
+- `scripts` — `docker-compose.server.yml`: API + dedicated PostgreSQL sidecar for the `labyrinth.ts` host. The port is published on loopback only (the host's existing Cloudflare tunnel is the sole ingress), `restart: unless-stopped` survives reboots, and a `bot` profile runs the optional Telegram poller.
+- `scripts` — `server_sync.sh`: telemetry sync + sentinel patrol trigger for cron (`*/15 * * * *`), mirroring the two Cloud Scheduler jobs in `deploy_gcp.sh`.
+- `docs` — self-hosted API section in `README.md` (rsync + compose, tunnel hostname `mekongpulse-api.labyrinth.buzz`, dashboard republish, bot profile).
+
+### Changed
+
+- `scripts` — public API moved from the ephemeral `trycloudflare.com` quick tunnel to `https://mekongpulse-api.labyrinth.buzz` (Cloudflare Tunnel on the server); the Firebase dashboard was republished against the new URL.
+
+## [0.3.0] — 2026-10-17
+
+Dashboard redesign: light "river lab" theme derived from the bytelabkh.com brand tokens.
+
+### Changed
+
+- `frontend` — 0.3.0: full visual rebuild. The Material 3 dark theme (navy/cyan on near-black) is replaced by a light system built on the Byte Lab palette: white paper, mist `#eef2f7` bands, navy `#213a63` for primary actions, sky `#0ea5e9` as the single accent, ink/slate text, hairline borders. IBM Plex Sans + IBM Plex Mono replace Roboto; Kantumruy Pro remains the Khmer fallback.
+- `frontend` — new hero band stating the basin condition in plain language ("N communes in flood danger") with a risk-distribution bar and tier legend, replacing the duplicated basin-summary card.
+- `frontend` — the Khmer voice bulletin now lives in a signature deep-navy panel on the dashboard and inside the assessment dialog.
+- `frontend` — station selector chips are merged with the hydrograph card; emoji tier markers and glyph placeholders are replaced with drawn icons and colored dots.
+
+### Fixed
+
+- `frontend` — map, hydrograph canvas, badges, and dialogs all render against the new light tokens (dark-theme color values removed).
+
 ## [0.1.3] — 2026-10-17
 
 ### Fixed

@@ -3,9 +3,9 @@ id: REPORT-TECH-002
 document_type: technical_report
 title: MekongPulse Technical Architecture and Engineering Report
 project_name: "MekongPulse"
-version: 1.1.0
+version: 1.2.0
 status: approved
-last_updated: 2026-10-16
+last_updated: 2026-10-18
 owners: ["@bytelab-lead", "@tech-lead", "@backend-lead"]
 dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 ---
@@ -17,14 +17,15 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 ### 1.1 Scope of engineering work
 
 - **In-scope**:
-  - Python 3.11 FastAPI microservice deployed on Google Cloud Run in Singapore (`asia-southeast1`).
+  - Python 3.12 FastAPI microservice. Deployment-ready on Google Cloud Run in Singapore (`asia-southeast1`) via `deploy_gcp.sh`; the current public demo runs the same container image self-hosted via Docker Compose behind a Cloudflare tunnel, with the console on Firebase Hosting (see §9.1).
   - Google Cloud Agent Development Kit (ADK) multi-agent pipeline: Ingestion Agent, Spatial Reasoner, Agronomic Advisor, Khmer Vernacular Dispatcher.
-  - Telemetry integration with Mekong River Commission (MRC) REST API (`api.mrcmekong.org`) for 4 permanent Cambodian stations: Prek Kdam (`020102`), Chaktomuk (`033401`), Koh Khel (`033402`), and Kampong Cham (`019802`).
+  - Telemetry integration with Mekong River Commission (MRC) REST API (`api.mrcmekong.org`) for 4 permanent Cambodian stations: Prek Kdam (`020102`), Chaktomuk (`033401`), Koh Khel (`033402`), and Kompong Cham (`019802`).
   - Weather forecast integration with Open-Meteo API for 7-day hourly precipitation and 0–7cm soil moisture.
   - Spatial in-memory R-Tree index over the official 2025 MEF Cambodian administrative gazetteer (1,661 communes).
-  - Gemini 2.0 Flash integration (Gemini API) for respectful Khmer language synthesis and vernacular audio voice notes (MP3 format).
+  - Gemini integration via the Gemini API: `gemini-3.8-flash` for Khmer bulletin polish and the ADK advisor; `gemini-3.8-flash-tts` for spoken Khmer audio (24 kHz PCM WAV transcoded to MP3 with `lameenc`; no system ffmpeg in the container).
   - Telegram Bot webhook processing for GPS location pin queries and automated broadcast dispatches.
-  - Firestore for time-series observation snapshots, commune risk profiles, and alert history; Cloud Storage for audio caching.
+  - Rice-stage profiles: the bot asks once per commune subscription (Khmer inline options), stores the stage on the subscription, and reuses it for every alert and advisory answer. Escalations are dispatched per stage group, so each subscriber receives their stage's directive set; the public channel receives a single post per escalation (conservative ripening posture). `/crop` changes the stage later; the web console is read-only and never collects per-farmer data.
+  - Firestore for time-series observation snapshots, commune risk profiles, and alert history in production; PostgreSQL (asyncpg) in development, staging, and self-hosted modes; Cloud Storage for audio caching.
 - **Deferred / out-of-scope**:
   - Custom physical river buoys or ultrasonic sensor hardware.
   - Heavy 2D hydrodynamic numerical fluid simulations.
@@ -42,15 +43,15 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 | Schema & Settings Validation | Pydantic, pydantic-settings        | 2.10.x            | Request/response data validation and type enforcement              |
 | Async HTTP Client            | HTTPX                              | 0.28.x            | Non-blocking telemetry ingestion client with connection pooling    |
 | Spatial & Geometry Engine    | Shapely, Rtree / STRtree           | 2.0.x             | Sub-15ms in-memory spatial geocoding for 1,661 MEF communes        |
-| AI Reasoning & Synthesis     | google-genai (Gemini API)          | 0.8.x             | Gemini 2.0 Flash agronomic directives and Khmer audio generation   |
+| AI Reasoning & Synthesis     | google-genai (Gemini API), google-adk (bot) | 1.x / 2.12.x      | `gemini-3.8-flash` bulletins & ADK advisor; `gemini-3.8-flash-tts` Khmer voice synthesis |
 | Time-Series & State Store    | google-cloud-firestore             | 2.19.x            | Real-time observation snapshots and commune risk index             |
 | Audio Object Storage         | google-cloud-storage               | 2.18.x            | Direct streaming upload and hosting for synthesized MP3 notes      |
 | Secret Management            | google-cloud-secret-manager        | 2.20.x            | Zero-leak credential injection for Telegram and Gemini keys        |
-| Task Scheduling              | Google Cloud Scheduler             | Managed           | Scheduled 30-minute HTTP cron triggers to `/api/v1/telemetry/sync` |
+| Task Scheduling              | Google Cloud Scheduler             | Managed           | Scheduled 15-minute HTTP cron triggers to `/api/v1/telemetry/sync` (mirrored by host cron when self-hosted) |
 | Serverless Hosting           | Google Cloud Run + Firebase Hosting | Gen 2 (Singapore) | Auto-scaling API containers (`asia-southeast1`) + static dashboard on Firebase Hosting |
-| Web GIS & Visuals            | Google Maps Platform (Maps JavaScript API), HTML5 Canvas | 3.x / @googlemaps/js-api-loader | GCP-native interactive basin GIS map, dark theme styling, and hydrograph curves |
-| UI Component Library         | Google Material Web (`@material/web`) | 1.5.x          | Official Google Material Design 3 Web Components (`<md-filled-button>`, `<md-outlined-card>`, `<md-filter-chip>`, `<md-slider>`) |
-| Design Tokens & UI Contract  | Google Material Design 3 (W3C DTCG) | M3 / v1.0         | Machine-actionable tokens and M3 state layers in root `DESIGN.md`  |
+| Basin Map & Charts           | Hand-rolled React + SVG map, HTML5 canvas hydrographs | n/a | Zero-tile commune risk map and canvas hydrograph curves; no external map provider, API key, or tile requests |
+| UI Framework                 | React 18 + hand-rolled CSS design tokens | 18.3.x      | Light "river lab" theme (navy `#213a63`, sky `#0ea5e9`), IBM Plex + Kantumruy Pro fonts; no external UI library |
+| Design Tokens & UI Contract  | CSS custom properties + root `DESIGN.md` | v1.0         | Tokenized palette, type scale, and component states consumed across the console |
 | Test Harness                 | Pytest, pytest-asyncio, pytest-cov | 8.3.x             | Deterministic unit and Given-When-Then integration tests           |
 
 ### 1.3 High-risk domains: Buy vs build policy
@@ -59,11 +60,10 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | **Secret management & API keys**        | Hardcoded env files in Git repositories leak API tokens; container layer leaks expose credentials in image registries.     | Google Cloud Secret Manager injected via Cloud Run runtime metadata (`--set-secrets`).      |
 | **Object storage & audio delivery**     | Buffering multi-megabyte synthesized audio streams in memory crashes lightweight Cloud Run instances with OOM errors.      | Direct stream pipe to Google Cloud Storage (`google-cloud-storage`) with public CDN URLs.   |
-| **Spoken Khmer speech synthesis**       | Hand-rolled phoneme synthesizers or rule-based TTS lack Khmer tone sandhi, honorifics, and dialect nuances.                | Google Gemini 2.0 Flash multimodal synthesis with agronomic context prompting (Gemini API).    |
+| **Spoken Khmer speech synthesis**       | Hand-rolled phoneme synthesizers or rule-based TTS lack Khmer tone sandhi, honorifics, and dialect nuances.                | Google Gemini native TTS (`gemini-3.8-flash-tts`) with Khmer prompting; 24 kHz PCM transcoded to MP3 with `lameenc`. |
 | **Spatial point-in-polygon resolution** | Iterating 1,661 commune polygon boundaries sequentially yields O(N) lookup times exceeding 450ms.                          | In-memory Shapely STRtree index over 2025 MEF gazetteer GeoJSON yielding < 15ms lookups.    |
-| **Scheduled telemetry synchronization** | In-process `while True: await asyncio.sleep(1800)` loops crash silently on unhandled exceptions and fail across instances. | Google Cloud Scheduler firing authenticated HTTP POST triggers to `/api/v1/telemetry/sync`. |
+| **Scheduled telemetry synchronization** | In-process `while True: await asyncio.sleep(900)` loops crash silently on unhandled exceptions and fail across instances. | Google Cloud Scheduler firing authenticated HTTP POST triggers to `/api/v1/telemetry/sync`. |
 | **Webhook authentication**              | Blindly processing incoming webhooks leaves bots open to spoofed payload injection and replay attacks.                     | HMAC token verification via standard `X-Telegram-Bot-Api-Secret-Token` header validation.   |
-| **Accessible UI primitives**            | Focus trapping bugs, broken keyboard navigation, incorrect ARIA states, screen reader failures.                            | Google Material Web Components (`@material/web`) implementing M3 accessibility, focus management, and state layers. |
 
 ### 1.4 SLA / SLO performance budgets
 
@@ -79,7 +79,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 ### 1.5 Security and authentication architecture
 
 - **API and Webhook Security**: Telegram incoming updates enforce the `X-Telegram-Bot-Api-Secret-Token` header. Web dashboard REST APIs enforce CORS restricted to verified domains (`*.run.app` and localhost during development).
-- **Secret Management**: Google Cloud Secret Manager manages credentials (`TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, `GCS_BUCKET_NAME`).
+- **Secret Management**: Google Cloud Secret Manager manages credentials (`TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, `GCS_BUCKET_NAME`) in the Cloud Run path; development, staging, and self-hosted modes read the same names from the gitignored `.env` presets.
 - **Data Protection**: User GPS coordinates and subscriber identifiers are anonymized via SHA-256 salting before persistent logging in Firestore. TLS 1.3 encryption is enforced in transit.
 - **Access Control**: Public endpoints allow read-only telemetry queries; administrative broadcast triggers require IAM Bearer token authentication.
 
@@ -92,8 +92,8 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
     "level": "INFO",
     "trace_id": "projects/bytelab/traces/8f1e2d3c",
     "event": "TELEGRAM_LOCATION_QUERY",
-    "commune_code": "080402",
-    "commune_name": "Koh Thom",
+    "commune_code": "080404",
+    "commune_name": "Kaoh Thum Ka",
     "risk_tier": "WARNING",
     "audio_generated": true,
     "duration_ms": 2420
@@ -112,10 +112,10 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 flowchart TD
   subgraph ClientChannels["Client Presentation Channels"]
     Telegram["Telegram Bot Client\n(Mobile Farmers & Commune Chiefs)"]
-    WebDashboard["Web GIS Portal (Next.js 14,\nstatic export on Firebase Hosting)\n(Provincial Committees & Cooperatives)"]
+    WebDashboard["Officials' Console (Next.js 14,\nstatic export on Firebase Hosting)\n(Commune Chiefs, District Committees,\nCooperatives, Public - read-only)"]
   end
 
-  subgraph IngressPlatform["Google Cloud Run (asia-southeast1)"]
+  subgraph IngressPlatform["Container Runtime\n(Cloud Run target / self-hosted Docker)"]
     FastAPIApp["FastAPI Gateway & Webhook Service\n(concurrency=80, min-instances=1)"]
   end
 
@@ -129,7 +129,7 @@ flowchart TD
   subgraph GoogleCloudData["Google Cloud Managed Platform"]
     Firestore[("Cloud Firestore\n(Stations, Observations, Commune Risk)")]
     GCS[("Cloud Storage\n(Generated Khmer MP3 Voice Notes)")]
-    Gemini["Google Gemini API\n(Gemini 2.0 Flash Model)"]
+    Gemini["Google Gemini API\n(gemini-3.8-flash + gemini-3.8-flash-tts)"]
   end
 
   subgraph ExternalAPIs["External Telemetry & Forecasting"]
@@ -144,7 +144,7 @@ flowchart TD
   FastAPIApp --> AgriAgent
   FastAPIApp --> VernacularAgent
 
-  IngestAgent -->|Poll Every 30m| MRC
+  IngestAgent -->|Poll Every 15m| MRC
   IngestAgent -->|Query Forecast| OpenMeteo
   VernacularAgent -->|Inference & Speech| Gemini
 
@@ -163,7 +163,7 @@ flowchart TD
   │                                # AgriDecisionEngine, MekongSentinel, TTS, repositories (memory/Postgres/Firestore)
   ├── backend/src/mekong_backend/  # FastAPI gateway: routers/, deps.py, problems.py, app.py, main.py
   ├── bot/src/mekong_bot/          # Telegram service, dispatcher, PTB handlers, polling entrypoint
-  ├── frontend/src/app/            # Next.js 14 (M3) dashboard, client-rendered
+  ├── frontend/src/app/            # Next.js 14 read-only officials console, client-rendered
   └── scripts/                     # switch_env.sh, run_dev.sh, init_db.sh, deploy_gcp.sh, build_gazetteer.py
   ```
 
@@ -212,7 +212,7 @@ erDiagram
   }
 
   COMMUNE {
-    string id PK "MEF 6-digit code (e.g. 080402)"
+    string id PK "MEF 6-digit code (e.g. 080404)"
     string name_khmer
     string name_english
     string district_name
@@ -240,7 +240,7 @@ erDiagram
     string id PK
     string telegram_chat_id
     string commune_id FK
-    string crop_stage "RIPENING|FLOWERING|TILLERING|VEGETATIVE"
+    string crop_stage "TILLERING|VEGETATIVE|FLOWERING|RIPENING"
     timestamp subscribed_at
     timestamp last_notified_at
     string last_notified_risk_tier
@@ -375,7 +375,7 @@ paths:
           required: true
           schema:
             type: string
-          example: "080402"
+          example: "080404"
       requestBody:
         required: false
         content:
@@ -385,7 +385,12 @@ paths:
               properties:
                 crop_stage:
                   type: string
-                  enum: [TILLERING, FLOWERING, RIPENING]
+                  description: >-
+                    Rice stage for directive selection. Optional; defaults to RIPENING.
+                    In production the value comes from the farmer's stored subscription
+                    profile (set once in the Telegram bot); the read-only web console
+                    never sends it.
+                  enum: [TILLERING, VEGETATIVE, FLOWERING, RIPENING]
                   default: RIPENING
       responses:
         "200":
@@ -473,13 +478,13 @@ components:
       properties:
         commune_code:
           type: string
-          example: "080402"
+          example: "080404"
         commune_name_khmer:
           type: string
-          example: "កោះធំ"
+          example: "កោះធំ ក"
         commune_name_english:
           type: string
-          example: "Koh Thom"
+          example: "Kaoh Thum Ka"
         province:
           type: string
           example: "Kandal"
@@ -497,7 +502,7 @@ components:
       properties:
         commune_code:
           type: string
-          example: "080402"
+          example: "080404"
         risk_tier:
           type: string
           enum: [NORMAL, ADVISORY, WARNING, DANGER]
@@ -549,51 +554,45 @@ components:
 | ------------- | ---------------------- | ----------------------------------- | --------------------------- | ---------------------------------------------------- | -------- |
 | `TEST-HYD-01` | `MRCTelemetryClient`   | Station `020102` online             | `poll_station("020102")`    | Returns valid float water level and timestamp        | P0       |
 | `TEST-HYD-02` | `MRCTelemetryClient`   | Station `020102` returns HTTP 500   | `poll_station("020102")`    | Fails over to `033401` with `is_stale_fallback=True` | P0       |
-| `TEST-SPA-01` | `SpatialReasoner`      | GPS `(11.266, 105.033)` in Koh Thom | `resolve_commune(lat, lng)` | Returns commune `080402` in < 15ms                   | P0       |
+| `TEST-SPA-01` | `SpatialReasoner`      | GPS `(11.266, 105.033)` (Kandal; 2025 MEF boundary) | `resolve_commune(lat, lng)` | Returns commune `081001` (Khpob, S'ang) via polygon resolution; < 15ms typical | P0 |
 | `TEST-SPA-02` | `SpatialReasoner`      | GPS `(14.058, 108.277)` in Vietnam  | `resolve_commune(lat, lng)` | Raises `OutsideBasinError` with 422 ProblemDetails   | P1       |
+| `TEST-SPA-03` | `Gazetteer.search`     | Query "Koh Thom" (2025 MEF spelling "Kaoh Thum") | `search_commune(name)` | Returns `080404`/`080405` (Kaoh Thum Ka/Kha), all in district "Kaoh Thum" | P1 |
 | `TEST-AGR-01` | `AgriDecisionEngine`   | Risk `WARNING`, Crop `RIPENING`     | `evaluate_directives()`     | Returns `EMERGENCY_HARVEST_ACCELERATION`             | P0       |
 | `TEST-AGR-02` | `AgriDecisionEngine`   | Rain `> 50mm`, Crop `VEGETATIVE`    | `evaluate_directives()`     | Returns `HOLD_CHEMICAL_FERTILIZER`                   | P0       |
 | `TEST-DIS-01` | `VernacularDispatcher` | Valid directive parameters          | `synthesize_khmer_voice()`  | Produces valid MP3 stream (duration 30–60s)          | P1       |
 
+Drift correction: the v1.1.0 draft expected `TEST-SPA-01` to resolve to `080402` ("Koh Thom"); the 2025 MEF boundary is the source of truth, the point is inside `081001` (Khpob, S'ang), and `080402` is Kampong Kong. See `shared/tests/test_spatial.py`.
+
 ### 5.2 Given-When-Then test fixtures
 
 ```python
-import pytest
-from src.domain.models import CropStage, RiskTier
-from src.application.agri_decision import AgriDecisionEngine
+from mekong_shared.agronomy import AgriDecisionEngine, primary_directive
+from mekong_shared.models import CropStage, RiskTier, Urgency
 
 def test_emergency_harvest_directive_for_ripening_rice():
     # Given
     engine = AgriDecisionEngine()
-    risk_tier = RiskTier.WARNING
-    crop_stage = CropStage.RIPENING
-    lead_time_hours = 38
 
     # When
-    directive = engine.evaluate(risk_tier=risk_tier, crop_stage=crop_stage, lead_time=lead_time_hours)
+    directives = engine.evaluate(RiskTier.WARNING, CropStage.RIPENING, lead_time_hours=38)
 
     # Then
-    assert directive.action_code == "EMERGENCY_HARVEST_ACCELERATION"
-    assert "ប្រមូលផល" in directive.khmer_instruction
-    assert directive.urgency_level == "HIGH"
+    primary = primary_directive(directives)
+    assert primary.action_code == "EMERGENCY_HARVEST_ACCELERATION"
+    assert "ប្រមូលផល" in primary.instruction_kh
+    assert primary.urgency is Urgency.HIGH
 
 def test_fertilizer_hold_during_heavy_rain_forecast():
-    # Given
+    # Given: 65mm of rain forecast within 48h over vegetative rice
     engine = AgriDecisionEngine()
-    risk_tier = RiskTier.ADVISORY
-    crop_stage = CropStage.VEGETATIVE
-    precipitation_48h_mm = 65.0
 
     # When
-    directive = engine.evaluate(
-        risk_tier=risk_tier,
-        crop_stage=crop_stage,
-        rain_48h=precipitation_48h_mm
-    )
+    directives = engine.evaluate(RiskTier.ADVISORY, CropStage.VEGETATIVE, rain_48h_mm=65.0)
 
     # Then
-    assert directive.action_code == "HOLD_CHEMICAL_FERTILIZER"
-    assert "ផ្អាកការបាចជី" in directive.khmer_instruction
+    hold = next(d for d in directives if d.action_code == "HOLD_CHEMICAL_FERTILIZER")
+    assert "ផ្អាកការបាចជី" in hold.instruction_kh
+    assert hold.urgency is Urgency.MEDIUM  # ADVISORY tier
 ```
 
 ---
@@ -636,14 +635,14 @@ def test_fertilizer_hold_during_heavy_rain_forecast():
   - _Positive_: Sub-15ms spatial point-in-polygon resolution. Zero PostGIS container hosting costs. Total dataset is < 10 MB RAM.
   - _Negative_: Adds ~1.2s of GeoJSON parsing during container startup.
 
-### ADR-0005: Gemini 2.0 Flash Audio Generation vs. External Specialized TTS
+### ADR-0005: Gemini Native TTS (gemini-3.8-flash-tts) + lameenc vs. External Specialized TTS
 
-- **Status**: Accepted
-- **Context**: Generating natural spoken Khmer alerts for rural farmers.
-- **Decision**: Use Google Gemini 2.0 Flash multimodal synthesis via the Gemini API (API-key path; Vertex AI remains supported by the client when `USE_VERTEX_AI=true`).
+- **Status**: Accepted (amended)
+- **Context**: Generating natural spoken Khmer alerts for rural farmers. The original draft assumed Gemini 2.0 Flash multimodal synthesis; that model cannot emit audio, and 2.5-era Gemini TTS lacked Khmer support. The verified Khmer-capable path is `gemini-3.8-flash-tts`.
+- **Decision**: Use Google Gemini native TTS (`gemini-3.8-flash-tts`) via the Gemini API (API-key path; Vertex AI remains supported by the client when `USE_VERTEX_AI=true`). The model returns 24 kHz PCM WAV, which the service transcodes to MP3 with `lameenc` bindings, avoiding a system ffmpeg dependency in the container.
 - **Consequences**:
-  - _Positive_: Unified SDK and billing for Khmer reasoning and audio synthesis. Culturally respectful honorifics and correct agricultural vocabulary.
-  - _Negative_: Audio generation takes 1.8–2.2 seconds round-trip.
+  - _Positive_: Unified SDK and billing for Khmer reasoning and audio synthesis. Culturally respectful honorifics and correct agricultural vocabulary. No system codec dependency in the runtime image.
+  - _Negative_: Audio generation takes 1.8–2.2 seconds round-trip; `lameenc` is a pinned native wheel carried per target platform.
 
 ### ADR-0006: Battle-Tested Managed Cloud Services vs. Hand-Rolling High-Risk Domains
 
@@ -651,7 +650,7 @@ def test_fertilizer_hold_during_heavy_rain_forecast():
 - **Context**: Critical project areas (credential management, audio object storage, scheduled background polling, and Khmer voice synthesis) require high reliability under a 48-hour build schedule.
 - **Decision**: Adopt Google Cloud managed services (Secret Manager, Cloud Storage, Cloud Scheduler) and battle-tested standard libraries (Shapely, HTTPX, Pydantic) instead of rolling custom background daemons or hand-crafted security mechanisms.
 - **Consequences**:
-  - _Positive_: Eliminates credential leaks, prevents container memory exhaustion from audio buffering, guarantees reliable 30-minute polling triggers, and keeps total codebase focused strictly on core domain logic (hydrology, agronomy, and spatial reasoners).
+  - _Positive_: Eliminates credential leaks, prevents container memory exhaustion from audio buffering, guarantees reliable 15-minute polling triggers, and keeps total codebase focused strictly on core domain logic (hydrology, agronomy, and spatial reasoners).
   - _Negative_: Introduces dependency on Google Cloud IAM and service APIs.
 
 ---
@@ -686,7 +685,7 @@ with httpx.Client(timeout=10.0) as client:
 # File: scratch/spike_weather_forecast.py
 import httpx
 
-# Coordinates for Koh Thom District, Kandal: 11.266° N, 105.033° E
+# Demo point in Kandal: 11.266° N, 105.033° E (2025 MEF boundaries place it in Khpob commune, S'ang district)
 url = "https://api.open-meteo.com/v1/forecast?latitude=11.266&longitude=105.033&hourly=precipitation,soil_moisture_0_to_7cm&timezone=Asia%2FPhnom_Penh"
 
 with httpx.Client(timeout=10.0) as client:
@@ -702,9 +701,9 @@ with httpx.Client(timeout=10.0) as client:
 - [x] Python 3.12 runtime verified (uv workspace; `python:3.12-slim` in container images).
 - [x] Single-command local server boot verified (`cd projects/backend && uv run uvicorn mekong_backend.main:app --port 8080`; orchestrated by `./projects/scripts/run_dev.sh`).
 - [x] Verified live connectivity to MRC endpoint `api.mrcmekong.org` (HTTP 200; all 4 stations polled and persisted).
-- [ ] Live `TELEGRAM_BOT_TOKEN` / `GEMINI_API_KEY`: placeholders are wired through the `.env.*` presets; the bot runs in text-only preview mode until real values are entered.
+- [x] Live `TELEGRAM_BOT_TOKEN` / `GEMINI_API_KEY` wired through the gitignored `.env` presets; the bot, Gemini bulletin polish, and TTS voice notes verified live.
 - [x] 2025 MEF Cambodian administrative commune gazetteer built to `data/commune_gazetteer_2025.json` (1,661 communes with centroids + DEM elevations via `scripts/build_gazetteer.py`).
-- [ ] Google Cloud SDK re-authentication pending (`gcloud auth login`); `deploy_gcp.sh` dry-run verified end-to-end.
+- [ ] Cloud Run live deployment pending a GCP billing account; `deploy_gcp.sh` dry-run verified end-to-end, and the current public demo runs the same image self-hosted (Docker Compose + Cloudflare tunnel) with the console on Firebase Hosting.
 
 ---
 
@@ -718,11 +717,11 @@ with httpx.Client(timeout=10.0) as client:
 - **Milestone 2: Spatial Inundation & Agronomic Directive Engine (Hours 12–24)**
   - Scope: Ingestion of all 4 Cambodian stations, Open-Meteo rain forecast, 1,661 commune R-Tree index, and `AgriDecisionEngine` directives.
   - Verification: Replay test with 2022 Kandal flood telemetry data confirming accurate risk tiering.
-- **Milestone 3: Vernacular Khmer Speech & Web GIS Dashboard (Hours 24–36)**
-  - Scope: Gemini 2.0 Flash spoken Khmer audio generation, Telegram voice note delivery, and Google Maps Platform Web GIS dashboard.
+- **Milestone 3: Vernacular Khmer Speech & Console Dashboard (Hours 24–36)**
+  - Scope: Gemini TTS (`gemini-3.8-flash-tts`) spoken Khmer audio generation, Telegram voice note delivery, and the zero-tile SVG risk console.
   - Verification: Automated probe asserting valid MP3 audio stream and < 2.5s synthesis time.
 - **Milestone 4: Production Hardening & Cloud Run Deployment (Hours 36–48)**
-  - Scope: Google Cloud Run deployment (`asia-southeast1`), Cloud Scheduler 30-min polling cron, Secret Manager integration, and station failover testing.
+  - Scope: Google Cloud Run deployment (`asia-southeast1`), Cloud Scheduler 15-min polling cron, Secret Manager integration, and station failover testing.
   - Verification: Smoke test on production URL verifying `/health` and webhook response time < 3.0s.
 
 ### 8.2 Scope Swap Rule protocol
@@ -742,7 +741,7 @@ with httpx.Client(timeout=10.0) as client:
   - Implement async CRUD repository for Telegram chat subscriptions and alert deduplication.
   - Verification: Integration tests asserting subscription creation and deduplication query performance.
 - **Slice 5.3: MekongAdvisor Conversational ReAct Agent (`projects/bot`)**
-  - Integrate Google ADK `Agent` with Gemini 2.0 Flash in `projects/bot`.
+  - Integrate Google ADK `Agent` with `gemini-3.8-flash` in `projects/bot`.
   - Maintain multi-turn conversational session context per Telegram chat ID in PostgreSQL.
   - Support natural language Khmer/English dialogue, multi-step tool execution, and voice synthesis on demand.
   - Verification: Automated chat test verifying multi-turn tool-calling and response generation.
@@ -778,6 +777,8 @@ DRY_RUN=0 ./projects/scripts/deploy_web_firebase.sh https://<backend-url>
 
 The deploy script reads `projects/.env.production` directly (it never mutates the active `.env` symlink), requires the secret values to be present in that preset, and prompts nothing. The web dashboard ships as a static export (`NEXT_OUTPUT=export`, built against the deployed backend URL) to the Firebase Hosting site named by `FIREBASE_PROJECT` — `https://ai-builder-cup-9f8cd.web.app`.
 
+The current public demo does not run on Cloud Run. The API container runs self-hosted on the `labyrinth.ts` host via `projects/docker-compose.server.yml` behind that host's Cloudflare tunnel (`https://mekongpulse-api.labyrinth.buzz`), with `projects/scripts/server_sync.sh` on a 15-minute host cron standing in for Cloud Scheduler, and the Firebase console republished against the tunnel URL. The Cloud Run path above remains the deployment target when GCP billing is enabled.
+
 ### 9.2 Health verification
 
 ```bash
@@ -791,6 +792,9 @@ curl -sf "$BACKEND_URL/api/v1/health" | grep '"status":"HEALTHY"'
 
 # Firebase Hosting dashboard (static export)
 curl -sf https://ai-builder-cup-9f8cd.web.app/ | grep -q "MekongPulse" && echo "web OK"
+
+# Self-hosted public API behind the Cloudflare tunnel (current demo path)
+curl -sf https://mekongpulse-api.labyrinth.buzz/api/v1/health | grep '"status":"HEALTHY"'
 ```
 
 ### 9.3 Incident playbook: Upstream MRC station endpoint outage
@@ -822,12 +826,12 @@ curl -sf https://ai-builder-cup-9f8cd.web.app/ | grep -q "MekongPulse" && echo "
 
 | Category                          | Pass / Fail |  Checked Items   | Violations Found | Notes                                                     |
 | --------------------------------- | :---------: | :--------------: | :--------------: | --------------------------------------------------------- |
-| Functional Requirements (PRD/SRS) |  **PASS**   |      9 / 9       |        0         | All FRs (including FR-07, 08, 09) verified with Gherkin   |
-| Technology Stack & Tooling        |  **PASS**   |  17 components   |        0         | Google ADK (2.12.0), Gemini 2.0 Flash, asyncpg verified   |
+| Functional Requirements (PRD/SRS) |  **PASS**   |     10 / 10      |        0         | FR-01..09 verified with Gherkin; FR-10 by smoke check + demo checklist |
+| Technology Stack & Tooling        |  **PASS**   |  17 components   |        0         | Google ADK (2.12.0), gemini-3.8-flash + gemini-3.8-flash-tts, asyncpg verified |
 | High-Risk Domain Buy vs Build     |  **PASS**   |    6 domains     |        0         | Secret Manager, GCS, Cloud Scheduler, STRtree enforced    |
 | API Contract Compliance (OpenAPI) |  **PASS**   |     6 routes     |        0         | Validated OpenAPI 3.1.0 schema with Subscriptions & Patrol|
 | Database Schema Alignment (ERD)   |  **PASS**   |    7 entities    |        0         | PostgreSQL & Firestore subscriptions, sentinel runs/alerts|
-| Base UI Library & DESIGN Contract |  **PASS**   |   8 M3 states    |        0         | Google Material Design 3 tokens, WCAG 2.1 AA compliant    |
+| Design Tokens & UI Contract       |  **PASS**   | brand token set  |        0         | Light theme tokens in `globals.css`; no external UI library |
 | System Invariants Compliance      |  **PASS**   |   4 invariants   |        0         | Grounded telemetry and zero-hardware invariant confirmed  |
 | Scope Creep & Phantom Code        |  **PASS**   | 0 unspec'd items |        0         | Heavy 2D numerical hydrodynamic simulation deferred       |
 
@@ -844,12 +848,13 @@ curl -sf https://ai-builder-cup-9f8cd.web.app/ | grep -q "MekongPulse" && echo "
 | FR-07           | PRD / SRS     | `MekongSentinel Background`     | `shared/src/mekong_shared/sentinel.py`, backend `patrol.py` | `shared/tests/test_sentinel.py`, `backend/tests/test_patrol_api.py` | **PASS** |
 | FR-08           | PRD / SRS     | `MekongAdvisor ReAct Agent`     | `shared/src/mekong_shared/adk_agent.py`, `mekong_bot/`      | `shared/tests/test_advisor.py`                           | **PASS** |
 | FR-09           | PRD / SRS     | `Commune Subscriptions Store`   | `backend/src/mekong_backend/routers/subscriptions.py`       | `backend/tests/test_subscriptions_api.py`                | **PASS** |
+| FR-10           | PRD           | Read-only officials console     | `frontend/src/app/page.tsx`, `components/BasinMap.tsx`, `RiskList.tsx`, `VoicePlayer.tsx` | Firebase smoke check (`curl` grep) + demo checklist      | **PASS** |
 | INV-01          | SRS           | Grounded telemetry verification | `shared/src/mekong_shared/mrc.py`                           | `shared/tests/test_mrc.py`                               | **PASS** |
 | INV-02          | SRS           | Fail-safe station fallback      | `shared/src/mekong_shared/mrc.py`, `pipeline.py`            | `shared/tests/test_failover.py`                          | **PASS** |
 
 ### 10.3 Discrepancies and audit findings
 
 1. **Telegram Audio Format Compatibility**: Telegram clients on older Android devices fail to render `.ogg` Opus audio notes unless properly formatted with specific container flags.
-   - _Mitigation_: Specified Gemini audio output stream to produce standard `.mp3` with explicit MIME type `audio/mpeg` to ensure 100% device compatibility.
+   - _Mitigation_: Gemini TTS returns 24 kHz PCM WAV; the service transcodes every bulletin to standard `.mp3` (`lameenc`) with MIME type `audio/mpeg`, so no Opus container flags are involved.
 2. **Station Inundation Lag**: Upstream river flood crests take approximately 18–36 hours to travel from Kampong Cham (`019802`) to Chaktomuk / Bassac (`033401`).
    - _Mitigation_: Built hydraulic wave travel time equations into `SpatialRiskClassifier` to calculate accurate arrival windows.
