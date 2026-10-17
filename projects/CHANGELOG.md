@@ -2,6 +2,12 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.1.3] — 2026-10-17
+
+### Fixed
+
+- `shared` — the Khmer bulletin polish prompt now forbids preamble/meta text and markdown. A live smoke test showed the model prefixing the bulletin with "Below is the revised message…" plus `**`/`---` formatting, and that exact text was what the TTS voice note spoke; the polished output now starts with the bulletin itself.
+
 ## [0.1.2] — 2026-10-17
 
 Security hardening: transport loggers no longer print request URLs.
@@ -25,6 +31,7 @@ Web deployment moves to Firebase Hosting (static export); Cloud Run stays the ba
 
 - `scripts` — `deploy_gcp.sh` no longer deploys a web Cloud Run service; its step 6 now invokes the Firebase web deploy after capturing the backend URL, and CORS defaults to `https://ai-builder-cup-9f8cd.web.app`. `frontend/cloudbuild.yaml` removed.
 - `repo` — environment presets (`.env.development`, `.env.staging`, `.env.production`) are no longer tracked in git; they now hold real secrets and live only on the operator's machine (`.env.*` is gitignored).
+- `repo` — production Gemini runs on the API-key path (`USE_VERTEX_AI=false`): no Vertex project, no cross-project IAM. `technical-report.md` updated to match.
 - `frontend` — version 0.2.0.
 
 ## [0.1.1] — 2026-10-17

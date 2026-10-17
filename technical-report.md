@@ -22,7 +22,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
   - Telemetry integration with Mekong River Commission (MRC) REST API (`api.mrcmekong.org`) for 4 permanent Cambodian stations: Prek Kdam (`020102`), Chaktomuk (`033401`), Koh Khel (`033402`), and Kampong Cham (`019802`).
   - Weather forecast integration with Open-Meteo API for 7-day hourly precipitation and 0–7cm soil moisture.
   - Spatial in-memory R-Tree index over the official 2025 MEF Cambodian administrative gazetteer (1,661 communes).
-  - Vertex AI / Gemini 2.0 Flash integration for respectful Khmer language synthesis and vernacular audio voice notes (MP3 format).
+  - Gemini 2.0 Flash integration (Gemini API) for respectful Khmer language synthesis and vernacular audio voice notes (MP3 format).
   - Telegram Bot webhook processing for GPS location pin queries and automated broadcast dispatches.
   - Firestore for time-series observation snapshots, commune risk profiles, and alert history; Cloud Storage for audio caching.
 - **Deferred / out-of-scope**:
@@ -42,7 +42,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 | Schema & Settings Validation | Pydantic, pydantic-settings        | 2.10.x            | Request/response data validation and type enforcement              |
 | Async HTTP Client            | HTTPX                              | 0.28.x            | Non-blocking telemetry ingestion client with connection pooling    |
 | Spatial & Geometry Engine    | Shapely, Rtree / STRtree           | 2.0.x             | Sub-15ms in-memory spatial geocoding for 1,661 MEF communes        |
-| AI Reasoning & Synthesis     | google-genai (Vertex AI)           | 0.8.x             | Gemini 2.0 Flash agronomic directives and Khmer audio generation   |
+| AI Reasoning & Synthesis     | google-genai (Gemini API)          | 0.8.x             | Gemini 2.0 Flash agronomic directives and Khmer audio generation   |
 | Time-Series & State Store    | google-cloud-firestore             | 2.19.x            | Real-time observation snapshots and commune risk index             |
 | Audio Object Storage         | google-cloud-storage               | 2.18.x            | Direct streaming upload and hosting for synthesized MP3 notes      |
 | Secret Management            | google-cloud-secret-manager        | 2.20.x            | Zero-leak credential injection for Telegram and Gemini keys        |
@@ -59,7 +59,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | **Secret management & API keys**        | Hardcoded env files in Git repositories leak API tokens; container layer leaks expose credentials in image registries.     | Google Cloud Secret Manager injected via Cloud Run runtime metadata (`--set-secrets`).      |
 | **Object storage & audio delivery**     | Buffering multi-megabyte synthesized audio streams in memory crashes lightweight Cloud Run instances with OOM errors.      | Direct stream pipe to Google Cloud Storage (`google-cloud-storage`) with public CDN URLs.   |
-| **Spoken Khmer speech synthesis**       | Hand-rolled phoneme synthesizers or rule-based TTS lack Khmer tone sandhi, honorifics, and dialect nuances.                | Google Vertex AI Gemini 2.0 Flash multimodal synthesis with agronomic context prompting.    |
+| **Spoken Khmer speech synthesis**       | Hand-rolled phoneme synthesizers or rule-based TTS lack Khmer tone sandhi, honorifics, and dialect nuances.                | Google Gemini 2.0 Flash multimodal synthesis with agronomic context prompting (Gemini API).    |
 | **Spatial point-in-polygon resolution** | Iterating 1,661 commune polygon boundaries sequentially yields O(N) lookup times exceeding 450ms.                          | In-memory Shapely STRtree index over 2025 MEF gazetteer GeoJSON yielding < 15ms lookups.    |
 | **Scheduled telemetry synchronization** | In-process `while True: await asyncio.sleep(1800)` loops crash silently on unhandled exceptions and fail across instances. | Google Cloud Scheduler firing authenticated HTTP POST triggers to `/api/v1/telemetry/sync`. |
 | **Webhook authentication**              | Blindly processing incoming webhooks leaves bots open to spoofed payload injection and replay attacks.                     | HMAC token verification via standard `X-Telegram-Bot-Api-Secret-Token` header validation.   |
@@ -71,7 +71,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 | -------------------------------------------- | ---------------------- | ----------------------------- | -------------------------------------- |
 | Telegram Location Webhook Latency (p95)      | < 3,000ms              | > 5,000ms for 5 mins          | Cloud Run Request Latency Metric       |
 | Telemetry Polling Execution (All 4 stations) | < 4,000ms              | > 10,000ms                    | Ingestion Worker Timer Metric          |
-| Spoken Khmer Audio Synthesis Time            | < 2,200ms              | > 4,500ms                     | Vertex AI Gemini Client Span Tracing   |
+| Spoken Khmer Audio Synthesis Time            | < 2,200ms              | > 4,500ms                     | Gemini client span tracing             |
 | Memory Footprint (per instance)              | < 600MB steady-state   | > 1.4GB (OOM warning)         | Cloud Run Container Memory Utilization |
 | Spatial Gazette Geocoding Query              | < 15ms                 | > 50ms                        | In-Memory Shapely R-Tree Lookup Timer  |
 | Cold-Start Response Time                     | < 1,500ms              | > 3,500ms                     | Cloud Monitoring Startup Latency       |
@@ -99,7 +99,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
     "duration_ms": 2420
   }
   ```
-- **OpenTelemetry Tracing**: W3C `traceparent` context propagated across Cloud Run instances, background workers, and Vertex AI calls.
+- **OpenTelemetry Tracing**: W3C `traceparent` context propagated across Cloud Run instances, background workers, and Gemini API calls.
 - **Health Verification**: Exposes `/health` returning status `HEALTHY`, MRC station connectivity check, and Firestore connection state.
 
 ---
@@ -129,7 +129,7 @@ flowchart TD
   subgraph GoogleCloudData["Google Cloud Managed Platform"]
     Firestore[("Cloud Firestore\n(Stations, Observations, Commune Risk)")]
     GCS[("Cloud Storage\n(Generated Khmer MP3 Voice Notes)")]
-    VertexAI["Google Vertex AI\n(Gemini 2.0 Flash Model)"]
+    Gemini["Google Gemini API\n(Gemini 2.0 Flash Model)"]
   end
 
   subgraph ExternalAPIs["External Telemetry & Forecasting"]
@@ -146,7 +146,7 @@ flowchart TD
 
   IngestAgent -->|Poll Every 30m| MRC
   IngestAgent -->|Query Forecast| OpenMeteo
-  VernacularAgent -->|Inference & Speech| VertexAI
+  VernacularAgent -->|Inference & Speech| Gemini
 
   IngestAgent --> Firestore
   SpatialAgent --> Firestore
@@ -170,7 +170,7 @@ flowchart TD
 ### 2.3 Failure modes and resilience
 
 - **Adjacent station failover**: If Prek Kdam (`020102`) times out or returns HTTP 500, the ingestion service automatically falls back to Chaktomuk (`033401`) — or Koh Khel (`033402`) when Chaktomuk is also unavailable — applying an empirically derived hydraulic offset (median stage difference over the overlapping historical window, recomputed on every refresh; see `compute_hydraulic_offset`).
-- **Gemini audio synthesis timeout**: If Vertex AI audio generation exceeds 2,500ms, the webhook immediately returns a text-only emergency warning card and telephone helpline number, guaranteeing the Telegram webhook responds well within its 5-second deadline.
+- **Gemini audio synthesis timeout**: The Telegram webhook never blocks on audio: location/share replies are text-only risk cards, and voice notes are attached only on the alert push path, so the webhook always responds within Telegram's deadline. When synthesis is unavailable, alerts degrade to text (audio is best-effort; text is always delivered).
 - **Cold cache resilience**: The spatial gazetteer is bundled in the container image (`data/commune_gazetteer_2025.json`, ~0.8 MB centroids + DEM elevations, plus `data/raw/mef_commune_boundaries.geojson`, ~6.3 MB polygons), requiring zero external network calls during cold start.
 
 ---
@@ -640,7 +640,7 @@ def test_fertilizer_hold_during_heavy_rain_forecast():
 
 - **Status**: Accepted
 - **Context**: Generating natural spoken Khmer alerts for rural farmers.
-- **Decision**: Use Google Vertex AI Gemini 2.0 Flash multimodal synthesis.
+- **Decision**: Use Google Gemini 2.0 Flash multimodal synthesis via the Gemini API (API-key path; Vertex AI remains supported by the client when `USE_VERTEX_AI=true`).
 - **Consequences**:
   - _Positive_: Unified SDK and billing for Khmer reasoning and audio synthesis. Culturally respectful honorifics and correct agricultural vocabulary.
   - _Negative_: Audio generation takes 1.8–2.2 seconds round-trip.
@@ -649,7 +649,7 @@ def test_fertilizer_hold_during_heavy_rain_forecast():
 
 - **Status**: Accepted
 - **Context**: Critical project areas (credential management, audio object storage, scheduled background polling, and Khmer voice synthesis) require high reliability under a 48-hour build schedule.
-- **Decision**: Adopt Google Cloud managed services (Secret Manager, Cloud Storage, Cloud Scheduler, Vertex AI) and battle-tested standard libraries (Shapely, HTTPX, Pydantic) instead of rolling custom background daemons or hand-crafted security mechanisms.
+- **Decision**: Adopt Google Cloud managed services (Secret Manager, Cloud Storage, Cloud Scheduler) and battle-tested standard libraries (Shapely, HTTPX, Pydantic) instead of rolling custom background daemons or hand-crafted security mechanisms.
 - **Consequences**:
   - _Positive_: Eliminates credential leaks, prevents container memory exhaustion from audio buffering, guarantees reliable 30-minute polling triggers, and keeps total codebase focused strictly on core domain logic (hydrology, agronomy, and spatial reasoners).
   - _Negative_: Introduces dependency on Google Cloud IAM and service APIs.
