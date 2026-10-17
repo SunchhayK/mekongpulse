@@ -1,0 +1,11 @@
+**/node_modules
+**/.next
+**/__pycache__
+**/.venv
+**/.pytest_cache
+**/*.pyc
+data/audio
+*.mp3
+.env
+.env.local
+.git

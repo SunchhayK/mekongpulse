@@ -1,0 +1,100 @@
+// Minimal inline icons (no icon-font dependency; works offline).
+
+const base = {
+  width: 20,
+  height: 20,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  "aria-hidden": true,
+};
+
+export function WaveIcon() {
+  return (
+    <svg {...base} width={22} height={22}>
+      <path d="M2 12c2.5 0 2.5-3 5-3s2.5 3 5 3 2.5-3 5-3 2.5 3 5 3" />
+      <path d="M2 18c2.5 0 2.5-3 5-3s2.5 3 5 3 2.5-3 5-3 2.5 3 5 3" />
+    </svg>
+  );
+}
+
+export function MapPinIcon() {
+  return (
+    <svg {...base}>
+      <path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z" />
+      <circle cx="12" cy="10" r="2.5" />
+    </svg>
+  );
+}
+
+export function MapIcon() {
+  return (
+    <svg {...base}>
+      <path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z" />
+      <path d="M9 4v14M15 6v14" />
+    </svg>
+  );
+}
+
+export function SearchIcon() {
+  return (
+    <svg {...base}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
+export function PlayIcon() {
+  return (
+    <svg {...base} width={22} height={22} fill="currentColor" stroke="none">
+      <path d="M8 5.5v13l11-6.5-11-6.5z" />
+    </svg>
+  );
+}
+
+export function PauseIcon() {
+  return (
+    <svg {...base} width={22} height={22} fill="currentColor" stroke="none">
+      <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" />
+    </svg>
+  );
+}
+
+export function VolumeIcon() {
+  return (
+    <svg {...base}>
+      <path d="M11 5 6 9H3v6h3l5 4V5z" />
+      <path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a8 8 0 0 1 0 11" />
+    </svg>
+  );
+}
+
+export function CloseIcon() {
+  return (
+    <svg {...base}>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
+export function InfoIcon() {
+  return (
+    <svg {...base}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v6M12 7.5v.5" />
+    </svg>
+  );
+}
+
+export function RefreshIcon() {
+  return (
+    <svg {...base}>
+      <path d="M20 11a8 8 0 1 0-2.5 6.5" />
+      <path d="M20 5v6h-6" />
+    </svg>
+  );
+}

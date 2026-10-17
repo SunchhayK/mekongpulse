@@ -119,6 +119,8 @@ class SpatialRiskClassifier:
             commune_name_kh=commune.name_kh,
             commune_name_en=commune.name_en,
             province=commune.province_en,
+            lat=commune.lat,
+            lng=commune.lng,
             tier=tier,
             score=score,
             reason=reason,

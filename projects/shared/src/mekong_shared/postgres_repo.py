@@ -598,6 +598,8 @@ def _risk_from_row(row: asyncpg.Record) -> CommuneRisk:
         commune_name_kh=row["name_kh"],
         commune_name_en=row["name_en"],
         province=row["province_en"],
+        lat=row["lat"],
+        lng=row["lng"],
         tier=RiskTier(row["current_risk_tier"]),
         score=int(row["risk_score"] or 0),
         reason=FloodReason(row["risk_reason"]) if row["risk_reason"] else FloodReason.NONE,

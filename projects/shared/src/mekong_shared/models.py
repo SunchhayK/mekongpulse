@@ -157,6 +157,8 @@ class CommuneRisk(BaseModel):
     commune_name_kh: str
     commune_name_en: str
     province: str | None = None
+    lat: float | None = None  # centroid, used by the web GIS map
+    lng: float | None = None
     tier: RiskTier
     score: int = Field(ge=0, le=100)
     reason: FloodReason = FloodReason.NONE
