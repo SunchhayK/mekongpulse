@@ -43,6 +43,11 @@ def configure_logging(service: str, level: int = logging.INFO) -> logging.Logger
     root.setLevel(level)
     logger = logging.getLogger("mekongpulse")
     logger.setLevel(level)
+    # httpx logs full request URLs at INFO. Telegram API URLs embed the bot
+    # token (`/bot<token>/getMe`), so keep transport loggers out of the logs;
+    # warnings and errors still surface.
+    for transport_logger in ("httpx", "httpcore"):
+        logging.getLogger(transport_logger).setLevel(logging.WARNING)
     # Make `service` visible on every record.
     old_factory = logging.getLogRecordFactory()
 

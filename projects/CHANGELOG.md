@@ -2,6 +2,15 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.1.2] — 2026-10-17
+
+Security hardening: transport loggers no longer print request URLs.
+
+### Fixed
+
+- `shared` — `configure_logging` now keeps `httpx`/`httpcore` at WARNING. httpx logs full request URLs at INFO, and Telegram API URLs embed the bot token (`/bot<token>/getMe`), which leaked the token into service logs (and would have reached Cloud Logging in production). Found while verifying the dev boot.
+- `shared` — regression test in `tests/test_logging_utils.py` asserts the transport loggers stay silenced.
+
 ## [0.2.0] — 2026-10-17
 
 Web deployment moves to Firebase Hosting (static export); Cloud Run stays the backend runtime.
