@@ -159,7 +159,9 @@ export const api = {
   assess: (communeCode: string, cropStage: CropStage = "RIPENING") =>
     request<Assessment>(`/api/v1/communes/${communeCode}/assess`, {
       method: "POST",
-      body: JSON.stringify({ crop_stage: cropStage }),
+      // The Khmer voice bulletin is the product's core output for low-literacy
+      // listeners; synthesis adds ~20-40s and the dialog waits for it.
+      body: JSON.stringify({ crop_stage: cropStage, with_audio: true }),
     }),
   search: (query: string) =>
     request<SearchHit[]>(`/api/v1/communes/search?q=${encodeURIComponent(query)}`),

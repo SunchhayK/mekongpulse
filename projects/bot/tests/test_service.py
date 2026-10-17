@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from mekong_shared.adk_agent import ScriptedLLM, StepResult
-from mekong_shared.models import CropStage, RiskTier
+from mekong_shared.models import AudioRef, CropStage, RiskTier
 
 from mekong_bot.service import BotService
 
@@ -198,3 +198,34 @@ async def test_estimated_telemetry_noted_in_card(settings, pipeline, repo):
     reply = await service.risk("1", COMMUNE)
     assert "estimated" in reply.text.lower()
     assert RiskTier.DANGER.value in reply.text  # escalated conservatively
+
+
+async def test_risk_reply_attaches_voice_bytes(service, settings, pipeline, repo):
+    """Risk lookups ask for audio and ship clip bytes — Telegram can't fetch localhost URLs."""
+    await seed_warning_observations(repo)
+    key = "030502/warning_test.mp3"
+    (settings.audio_dir / "030502").mkdir(parents=True, exist_ok=True)
+    (settings.audio_dir / key).write_bytes(b"MP3DATA")
+
+    real_assess = pipeline.assess_commune
+
+    async def fake_assess(commune_code, crop_stage, *, with_audio=False):
+        assert with_audio is True
+        result = await real_assess(commune_code, crop_stage)
+        return result.model_copy(
+            update={
+                "audio": AudioRef(
+                    uri=f"local:{key}", url=f"http://localhost:8080/audio/{key}"
+                )
+            }
+        )
+
+    pipeline.assess_commune = fake_assess
+    reply = await service.risk("1", COMMUNE)
+    assert reply.audio_bytes == b"MP3DATA"
+
+
+async def test_risk_reply_without_tts_is_text_only(service, repo):
+    await seed_warning_observations(repo)
+    reply = await service.risk("1", COMMUNE)
+    assert reply.audio_bytes is None

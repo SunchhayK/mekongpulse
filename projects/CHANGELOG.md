@@ -14,6 +14,15 @@ All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https:
 
 - `docs` — free-tier live demo path (local API + `cloudflared` tunnel + Firebase Hosting) in `README.md`, for running without a GCP billing account.
 
+## [0.2.1] — 2026-10-17
+
+Voice bulletins now actually reach users — both interactive paths never requested them.
+
+### Fixed
+
+- `frontend` — 0.2.1: assessments now send `with_audio: true`. The dashboard never requested audio, so `assessment.audio` was always null and the voice player's controls were permanently disabled. The dialog copy now sets expectations for the ~minute TTS takes.
+- `bot` — 0.2.0: `/risk`, location, and callback lookups reply with the Khmer voice bulletin, uploaded as voice bytes (Telegram's servers cannot fetch dev URLs like `http://localhost:8080`), with a typing indicator while synthesis runs.
+
 ## [0.1.2] — 2026-10-17
 
 Security hardening: transport loggers no longer print request URLs.

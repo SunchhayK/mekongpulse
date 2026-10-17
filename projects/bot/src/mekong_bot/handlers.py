@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import logging
 from functools import wraps
+from io import BytesIO
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputFile, Update
+from telegram.constants import ChatAction
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -38,9 +40,12 @@ def _markup(reply: BotReply) -> InlineKeyboardMarkup | None:
 async def _respond(update: Update, reply: BotReply) -> None:
     chat = update.effective_chat
     text = reply.text[:4096]
-    if reply.audio_url:
+    if reply.audio_bytes:
         try:
-            await chat.send_voice(voice=reply.audio_url, caption=text[:1024])
+            await chat.send_voice(
+                voice=InputFile(BytesIO(reply.audio_bytes), filename="bulletin.mp3"),
+                caption=text[:1024],
+            )
             return
         except Exception as exc:  # noqa: BLE001 - fall back to text
             log.warning("voice send failed, falling back to text: %s", exc)
@@ -53,6 +58,9 @@ def _safe(handler):
     @wraps(handler)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
+            if update.effective_chat is not None:
+                # Assessments synthesize a voice clip server-side; keep the chat lively.
+                await update.effective_chat.send_action(ChatAction.TYPING)
             await handler(update, context)
         except Exception:  # noqa: BLE001
             log.exception("telegram handler failure")

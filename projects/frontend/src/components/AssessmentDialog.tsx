@@ -101,7 +101,7 @@ export function AssessmentDialog({ communeCode, onClose, onAssessment }: Assessm
                   Commune {communeCode}
                 </h2>
                 <p className="body-medium muted" style={{ margin: "4px 0 0" }}>
-                  Evaluating flood risk…
+                  Evaluating flood risk and recording the Khmer voice bulletin — up to a minute…
                 </p>
               </>
             )}

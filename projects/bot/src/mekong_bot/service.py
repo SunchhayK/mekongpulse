@@ -7,6 +7,7 @@ code that tests can drive without any network.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from mekong_shared.adk_agent import AdvisorUnavailable, StepLLM, answer
@@ -16,6 +17,8 @@ from mekong_shared.models import AssessmentResult, Commune, CropStage
 from mekong_shared.pipeline import AssessmentUnavailable, CommuneNotFound, Pipeline
 from mekong_shared.repository import Repository
 from mekong_shared.spatial import OutsideBasinError
+
+log = logging.getLogger("mekongpulse.bot")
 
 WELCOME = (
     "🌊 MekongPulse — ជំនួយការជំនន់ទឹក និងកសិកម្ម\n"
@@ -35,7 +38,7 @@ WELCOME = (
 class BotReply:
     text: str
     buttons: list[list[tuple[str, str]]] | None = None  # (label, callback_data)
-    audio_url: str | None = None
+    audio_bytes: bytes | None = None  # Khmer voice bulletin, sent as a Telegram voice note
 
 
 class BotService:
@@ -230,7 +233,7 @@ class BotService:
                 if sub.crop_stage:
                     stage = sub.crop_stage
         try:
-            result = await self.pipeline.assess_commune(code, stage)
+            result = await self.pipeline.assess_commune(code, stage, with_audio=True)
         except (CommuneNotFound, AssessmentUnavailable):
             return BotReply(
                 f"⚠️ មិនទាន់អាចវាយតម្លៃឃុំ {code} បានទេ (មិនមានទិន្នន័យស្ថានីយ)\n"
@@ -239,7 +242,21 @@ class BotService:
         buttons = None
         if not subscribed:
             buttons = [[("🔔 ចុះឈ្មោះតាមដាន / Subscribe to alerts", f"sub:{code}")]]
-        return BotReply(self._risk_card(result), buttons=buttons)
+        return BotReply(
+            self._risk_card(result),
+            buttons=buttons,
+            audio_bytes=await self._voice_bytes(result),
+        )
+
+    async def _voice_bytes(self, result: AssessmentResult) -> bytes | None:
+        """Fetch the clip bytes for Telegram; its servers cannot reach dev URLs (localhost)."""
+        if result.audio is None or self.pipeline.audio_store is None:
+            return None
+        try:
+            return await self.pipeline.audio_store.get(result.audio.uri)
+        except Exception:  # noqa: BLE001 - audio is best-effort; the text card always goes out
+            log.warning("voice clip fetch failed; sending text only", exc_info=True)
+            return None
 
     async def _commune(self, code: str) -> Commune | None:
         return self.pipeline.gazetteer.get(code) or await self.repo.get_commune(code)
