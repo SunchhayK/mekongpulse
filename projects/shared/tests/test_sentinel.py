@@ -21,11 +21,17 @@ ALARM, FLOOD = 15.2, 16.2
 
 class RecordingDispatcher:
     def __init__(self) -> None:
-        self.calls: list[tuple[str, RiskTier, int, bool]] = []
+        self.calls: list[tuple[str, RiskTier, int, bool, bool]] = []
 
-    async def __call__(self, alert, subscribers) -> int:
+    async def __call__(self, alert, subscribers, post_to_channel=True) -> int:
         self.calls.append(
-            (alert.commune_id, alert.risk_tier, len(subscribers), alert.audio_url is not None)
+            (
+                alert.commune_id,
+                alert.risk_tier,
+                len(subscribers),
+                alert.audio_url is not None,
+                post_to_channel,
+            )
         )
         return len(subscribers)
 
@@ -88,6 +94,40 @@ async def test_ac03_escalation_dispatches_with_debounce(
     # Patrol run audit rows
     assert len(repo.patrol_runs) == 3
     assert repo.patrol_runs[-1].communes_evaluated > 1000
+
+
+async def test_escalation_personalizes_by_stored_stage(repo, settings, make_pipeline):
+    """FR-09: push alerts use each subscriber's stored stage; one channel post total."""
+    stations = load_stations(str(settings.data_dir))
+    await repo.seed_stations(list(stations.values()))
+    await repo.upsert_subscription("12345", COMMUNE, "RIPENING")
+    await repo.upsert_subscription("67890", COMMUNE, "VEGETATIVE")
+    dispatcher = RecordingDispatcher()
+
+    await _patrol(
+        repo, settings, make_pipeline, healthy_handlers(levels={STATION: 12.5}), dispatcher
+    )
+    summary = await _patrol(
+        repo,
+        settings,
+        make_pipeline,
+        healthy_handlers(levels={STATION: 15.5}, rates={STATION: 0.02}),
+        dispatcher,
+    )
+
+    escalated = [a for a in summary.alerts if a.commune_id == COMMUNE]
+    # Ripening group is dispatched first and carries the public-channel post;
+    # the vegetative group gets its own directive set and no second channel post.
+    assert [a.directive_title for a in escalated] == [
+        "Emergency harvest acceleration",
+        "Prepare sluice gates and field drainage",
+    ]
+    assert [a.recipients_count for a in escalated] == [1, 1]
+    commune_calls = [c for c in dispatcher.calls if c[0] == COMMUNE]
+    assert [(c[2], c[4]) for c in commune_calls] == [(1, True), (1, False)]
+    for chat_id in ("12345", "67890"):
+        assert repo.subscriptions[(chat_id, COMMUNE)].last_notified_risk_tier is RiskTier.WARNING
+    assert len([d for d in repo.dispatches if d["commune_id"] == COMMUNE]) == 2
 
 
 async def test_patrol_without_subscribers_records_zero_recipients(

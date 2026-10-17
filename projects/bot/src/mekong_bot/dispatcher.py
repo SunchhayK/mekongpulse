@@ -54,7 +54,11 @@ def make_telegram_dispatcher(pipeline: Pipeline, bot):
                 return
         await bot.send_message(chat_id=chat_id, text=text)
 
-    async def dispatch(alert: SentinelAlert, subscribers: list[Subscription]) -> int:
+    async def dispatch(
+        alert: SentinelAlert,
+        subscribers: list[Subscription],
+        post_to_channel: bool = True,
+    ) -> int:
         delivered = 0
         for sub in subscribers:
             try:
@@ -63,7 +67,7 @@ def make_telegram_dispatcher(pipeline: Pipeline, bot):
             except Exception as exc:  # noqa: BLE001 - one bad chat must not stop the run
                 log.warning("alert delivery failed for chat %s: %s", sub.telegram_chat_id, exc)
 
-        channel = settings.telegram_broadcast_channel_id
+        channel = settings.telegram_broadcast_channel_id if post_to_channel else None
         if channel:
             try:
                 await bot.send_message(
