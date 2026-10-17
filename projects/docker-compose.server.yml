@@ -1,0 +1,82 @@
+# labyrinth.ts deployment: MekongPulse API + its own Postgres.
+#
+# The web dashboard stays on Firebase Hosting; this stack serves the public API
+# that the dashboard calls. Public ingress is the server's existing Cloudflare
+# tunnel (Public hostname → http://localhost:8080), so the port binds to
+# loopback only.
+#
+# First run (from the server):
+#   cd ~/mekongpulse/projects
+#   docker compose -f docker-compose.server.yml up -d --build
+#
+# Optional Telegram poller (only if no webhook is registered):
+#   docker compose -f docker-compose.server.yml --profile bot up -d
+name: mekongpulse-server
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mekongpulse
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mekongpulse"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file: .env.staging
+    environment:
+      ENVIRONMENT: staging
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/mekongpulse
+      # Public origin of this API; used for audio URLs (/audio/<key>).
+      PUBLIC_BASE_URL: https://mekongpulse-api.labyrinth.buzz
+      CORS_ORIGINS: https://ai-builder-cup-9f8cd.web.app,https://ai-builder-cup-9f8cd.firebaseapp.com
+    ports:
+      # Loopback only: the Cloudflare tunnel on this host is the sole ingress.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data/audio:/app/data/audio
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v1/health')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  bot:
+    profiles: ["bot"]
+    build:
+      context: .
+      dockerfile: bot/Dockerfile
+    restart: unless-stopped
+    env_file: .env.staging
+    environment:
+      ENVIRONMENT: staging
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/mekongpulse
+    volumes:
+      - ./data/audio:/app/data/audio
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:

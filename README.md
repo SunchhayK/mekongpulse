@@ -142,7 +142,37 @@ cd projects && set -a && source .env.development && set +a
 cd bot && uv run python -m mekong_bot.main
 ```
 
-Caveats: the API is reachable only while this machine is awake and the tunnel is running; the tunnel URL changes per session, so after a tunnel restart re-run steps 2–3 (the API must learn the new `PUBLIC_BASE_URL` and the dashboard must be republished against it).
+Caveats: the API is reachable only while this machine is awake and the tunnel is running; the tunnel URL changes per session, so after a tunnel restart re-run steps 2–3 (the API must learn the new `PUBLIC_BASE_URL` and the dashboard must be republished against it). For a stable URL without GCP billing, prefer the self-hosted API below.
+
+### 5. Self-Hosted API (labyrinth.ts)
+
+The dashboard stays on Firebase Hosting; the API runs on the `labyrinth.ts` host (Docker Compose, its own PostgreSQL) behind that host's existing Cloudflare tunnel. The container publishes `127.0.0.1:8080`, so the tunnel is the only ingress.
+
+```bash
+# From the Mac (this repo has no git remote): copy the project
+rsync -az --exclude node_modules --exclude .venv --exclude .next --exclude out \
+  --exclude .git projects/ labyrinth-ts:~/mekongpulse/projects/
+
+# Start (or update) the stack on the server
+ssh labyrinth-ts
+cd ~/mekongpulse/projects
+docker compose -f docker-compose.server.yml up -d --build
+```
+
+One-time ingress and schedule (already configured for `labyrinth.ts`):
+
+- Cloudflare Zero Trust → Networks → Tunnels → public hostname `mekongpulse-api.labyrinth.buzz` → `http://localhost:8080`.
+- Cron every 15 minutes mirrors the Cloud Scheduler jobs: `scripts/server_sync.sh` (telemetry sync + sentinel patrol).
+
+```bash
+# Publish the dashboard against the hosted API
+cd projects && DRY_RUN=0 ./scripts/deploy_web_firebase.sh https://mekongpulse-api.labyrinth.buzz
+
+# Optional Telegram poller (one process per bot token!)
+ssh labyrinth-ts 'cd ~/mekongpulse/projects && docker compose -f docker-compose.server.yml --profile bot up -d'
+```
+
+Caveats: the stack runs with `ENVIRONMENT=staging` (PostgreSQL + local audio; no GCS needed), `restart: unless-stopped` keeps it up across server reboots, and updates are applied by re-running the rsync plus `up -d --build`.
 
 ---
 
