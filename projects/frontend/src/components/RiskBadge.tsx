@@ -16,17 +16,15 @@ export function RiskBadge({ tier, leadTimeHours, lang = "en", size = "small" }: 
   const meta = TIER_META[tier];
   return (
     <span
-      className={`risk-badge ${size === "large" ? "risk-badge--large" : ""} ${
-        size === "large" ? "label-large" : "label-medium"
-      }`}
+      className={`risk-badge ${size === "large" ? "risk-badge--large label-large" : "label-medium"}`}
       data-tier={tier}
       role="status"
     >
-      <span aria-hidden="true">{meta.emoji}</span>
+      <span className="dot" aria-hidden="true" />
       {lang === "km" ? meta.labelKh : meta.labelEn}
       {leadTimeHours != null && (
         <span className="lead-time">
-          · ~{leadTimeHours}h{lang === "km" ? " ទៀត" : ""}
+          ~{leadTimeHours}h{lang === "km" ? " ទៀត" : ""}
         </span>
       )}
     </span>

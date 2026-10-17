@@ -6,11 +6,41 @@ const base = {
   viewBox: "0 0 24 24",
   fill: "none",
   stroke: "currentColor",
-  strokeWidth: 2,
+  strokeWidth: 1.8,
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
   "aria-hidden": true,
 };
+
+/** Roundel brand mark: stacked river waves on navy, with a sky accent dot. */
+export function BrandMark({ size = 38 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
+      <rect width="40" height="40" rx="11" fill="var(--navy)" />
+      <path
+        d="M8 15.5c3 0 3-2.6 6-2.6s3 2.6 6 2.6 3-2.6 6-2.6 3 2.6 6 2.6"
+        fill="none"
+        stroke="#ffffff"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8 23.5c3 0 3-2.6 6-2.6s3 2.6 6 2.6 3-2.6 6-2.6 3 2.6 6 2.6"
+        fill="none"
+        stroke="#7cc7f2"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8 31.5c3 0 3-2.6 6-2.6s3 2.6 6 2.6 3-2.6 6-2.6 3 2.6 6 2.6"
+        fill="none"
+        stroke="#3f5f94"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 export function WaveIcon() {
   return (
@@ -66,7 +96,7 @@ export function PauseIcon() {
 
 export function VolumeIcon() {
   return (
-    <svg {...base}>
+    <svg {...base} width={16} height={16}>
       <path d="M11 5 6 9H3v6h3l5 4V5z" />
       <path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a8 8 0 0 1 0 11" />
     </svg>
@@ -90,9 +120,18 @@ export function InfoIcon() {
   );
 }
 
-export function RefreshIcon() {
+export function AlertIcon() {
   return (
     <svg {...base}>
+      <path d="M12 3.5 2.5 20h19L12 3.5z" />
+      <path d="M12 10v4.5M12 17.4v.1" />
+    </svg>
+  );
+}
+
+export function RefreshIcon() {
+  return (
+    <svg {...base} width={18} height={18}>
       <path d="M20 11a8 8 0 1 0-2.5 6.5" />
       <path d="M20 5v6h-6" />
     </svg>

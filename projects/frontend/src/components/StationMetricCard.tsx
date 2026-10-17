@@ -73,11 +73,10 @@ export function StationMetricCard({
       </div>
       <div className="level">
         <span className="value mono">{formatMeters(currentWaterLevelM)}</span>
-        <span className="muted body-medium">m</span>
+        <span className="unit body-medium">m</span>
       </div>
       <div className="body-medium rate" data-direction={direction}>
         {direction === "rising" ? "▲" : direction === "falling" ? "▼" : "■"} {formatRate(rateOfRiseMPerHour)}
-        <span className="muted"> · ល្បឿនទឹកឡើង / rate of rise</span>
       </div>
       <div className="stage-track" aria-hidden="true">
         <div

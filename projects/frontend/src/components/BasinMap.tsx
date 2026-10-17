@@ -32,8 +32,8 @@ export function BasinMap({
         role="group"
         aria-label={`Cambodia basin map: ${positioned.length} monitored communes shaded by flood risk tier`}
       >
-        {/* sunken basin backdrop */}
-        <rect width={WIDTH} height={HEIGHT} fill="var(--md-sys-color-surface-container-lowest)" />
+        {/* basin backdrop */}
+        <rect width={WIDTH} height={HEIGHT} fill="var(--map-bg)" />
         {[...Array(7)].map((_, index) => (
           <line
             key={`grid-h-${index}`}
@@ -41,8 +41,8 @@ export function BasinMap({
             x2={WIDTH}
             y1={(HEIGHT / 7) * (index + 1)}
             y2={(HEIGHT / 7) * (index + 1)}
-            stroke="var(--md-sys-color-outline-variant)"
-            strokeOpacity={0.25}
+            stroke="var(--line)"
+            strokeOpacity={0.8}
           />
         ))}
         {[...Array(9)].map((_, index) => (
@@ -52,8 +52,8 @@ export function BasinMap({
             x2={(WIDTH / 9) * (index + 1)}
             y1={0}
             y2={HEIGHT}
-            stroke="var(--md-sys-color-outline-variant)"
-            strokeOpacity={0.25}
+            stroke="var(--line)"
+            strokeOpacity={0.8}
           />
         ))}
 
@@ -68,8 +68,8 @@ export function BasinMap({
                 cx={x}
                 cy={y}
                 r={2}
-                fill="var(--risk-normal)"
-                opacity={0.35}
+                fill="var(--tier-normal)"
+                opacity={0.3}
                 aria-hidden="true"
               />
             );
@@ -89,8 +89,8 @@ export function BasinMap({
                 cy={y}
                 r={5.5}
                 fill={meta.color}
-                stroke="var(--md-sys-color-surface-container-lowest)"
-                strokeWidth={1}
+                stroke="var(--paper)"
+                strokeWidth={1.5}
                 role="button"
                 tabIndex={0}
                 aria-label={`${row.commune_name_en} (${row.commune_code}), ${row.commune_name_kh}, ${meta.labelEn} tier${
@@ -145,14 +145,14 @@ export function BasinMap({
                 width={14}
                 height={14}
                 transform={`rotate(45 ${x} ${y})`}
-                fill={selected ? "var(--md-sys-color-primary)" : "var(--md-sys-color-primary-container)"}
-                stroke={selected ? "var(--md-sys-color-on-primary)" : "var(--md-sys-color-primary)"}
+                fill={selected ? "var(--sky)" : "var(--navy)"}
+                stroke="var(--paper)"
                 strokeWidth={1.5}
               />
               <text
                 x={x + 12}
                 y={y + 4}
-                fill="var(--md-sys-color-on-surface)"
+                fill="var(--ink)"
                 fontSize={13}
                 style={{ fontFamily: "var(--font-mono)" }}
               >
@@ -169,7 +169,9 @@ export function BasinMap({
             {TIER_META[tier].labelKh} · {TIER_META[tier].labelEn}
           </span>
         ))}
-        <span className="item">◆ station / ស្ថានីយ</span>
+        <span className="item">
+          <span className="station-mark" aria-hidden="true" /> station / ស្ថានីយ
+        </span>
       </div>
     </div>
   );

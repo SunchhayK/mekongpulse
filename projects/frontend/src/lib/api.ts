@@ -156,12 +156,14 @@ export const api = {
     request<CommuneRiskRow[]>(
       `/api/v1/communes/risk-map${province ? `?province=${encodeURIComponent(province)}` : ""}`,
     ),
-  assess: (communeCode: string, cropStage: CropStage = "RIPENING") =>
+  assess: (communeCode: string, cropStage?: CropStage) =>
     request<Assessment>(`/api/v1/communes/${communeCode}/assess`, {
       method: "POST",
       // The Khmer voice bulletin is the product's core output for low-literacy
       // listeners; synthesis adds ~20-40s and the dialog waits for it.
-      body: JSON.stringify({ crop_stage: cropStage, with_audio: true }),
+      // No crop_stage: the console is read-only, so the server applies its
+      // conservative ripening default instead of prompting officials (FR-10).
+      body: JSON.stringify({ ...(cropStage ? { crop_stage: cropStage } : {}), with_audio: true }),
     }),
   search: (query: string) =>
     request<SearchHit[]>(`/api/v1/communes/search?q=${encodeURIComponent(query)}`),

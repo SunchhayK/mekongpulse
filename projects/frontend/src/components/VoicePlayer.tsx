@@ -117,16 +117,16 @@ export function VoicePlayer({
             {showTranscript ? "Hide transcript / បិទអត្ថបទ" : "Show transcript / បង្ហាញអត្ថបទ"}
           </button>
         ) : (
-          <p className="label-small" style={{ margin: 0 }}>
+          <p className="label-small voice-note" style={{ margin: 0 }}>
             សារសម្លេងភ្ជាប់ជាមួយការជូនដំណឹងផ្ញើផ្ទាល់ · Voice note attaches when a Sentinel alert is
             dispatched (Gemini TTS).
           </p>
         )}
         {showTranscript && (
           <div lang="km">
-            <p className="body-medium transcript">{transcriptKhmer}</p>
+            <p className="body-medium transcript transcript-km">{transcriptKhmer}</p>
             {transcriptEnglish && (
-              <p className="body-small transcript" lang="en">
+              <p className="body-small transcript transcript-en" lang="en">
                 {transcriptEnglish}
               </p>
             )}

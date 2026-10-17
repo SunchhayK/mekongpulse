@@ -89,29 +89,30 @@ export function CommuneSearch({ onPick }: CommuneSearchProps) {
           if (results.length > 0) onPick(results[0].commune_code);
         }}
       >
-        <input
-          className="text-field"
-          type="search"
-          id="commune-search"
-          name="q"
-          value={query}
-          placeholder="Koh Thom, កោះធំ, 080404…"
-          aria-label="Search commune by Khmer or English name or 6-digit code"
-          aria-invalid={error != null}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <button type="submit" className="btn btn--tonal" disabled={busy} aria-busy={busy}>
-          <SearchIcon />
-          <span className="sr-only">Search</span>
-        </button>
+        <div className="search-field">
+          <span className="search-icon" aria-hidden="true">
+            <SearchIcon />
+          </span>
+          <input
+            className="text-field"
+            type="search"
+            id="commune-search"
+            name="q"
+            value={query}
+            placeholder="Koh Thom, កោះធំ, 080404…"
+            aria-label="Search commune by Khmer or English name or 6-digit code"
+            aria-invalid={error != null}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
       </form>
-      <div className="chip-row" style={{ marginTop: 8 }}>
+      <div className="chip-row" style={{ marginTop: 10 }}>
         <button type="button" className="chip label-medium" onClick={sendGpsLocation} disabled={busy}>
           <MapPinIcon /> Send GPS location · ផ្ញើទីតាំង GPS
         </button>
       </div>
       {error && (
-        <p className="body-small" style={{ color: "var(--md-sys-color-error)", marginTop: 8 }} role="alert">
+        <p className="body-small" style={{ color: "var(--error-ink)", marginTop: 10 }} role="alert">
           {error}
         </p>
       )}

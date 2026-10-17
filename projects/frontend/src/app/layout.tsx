@@ -1,25 +1,26 @@
 import type { Metadata, Viewport } from "next";
-import { Kantumruy_Pro, Roboto, Roboto_Mono } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Kantumruy_Pro } from "next/font/google";
 import "./globals.css";
 
-const roboto = Roboto({
+const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-roboto",
+  weight: ["400", "500", "600"],
+  variable: "--font-plex",
   display: "swap",
 });
 
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-plex-mono",
+  display: "swap",
+});
+
+// Khmer coverage; falls back for any glyphs IBM Plex Sans does not carry.
 const kantumruy = Kantumruy_Pro({
   subsets: ["khmer", "latin"],
   weight: ["400", "500", "600"],
   variable: "--font-kantumruy",
-  display: "swap",
-});
-
-const robotoMono = Roboto_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-roboto-mono",
   display: "swap",
 });
 
@@ -30,7 +31,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f1419",
+  themeColor: "#eef2f7",
   width: "device-width",
   initialScale: 1,
 };
@@ -39,7 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${roboto.variable} ${kantumruy.variable} ${robotoMono.variable}`}
+      className={`${plexSans.variable} ${plexMono.variable} ${kantumruy.variable}`}
     >
       <body>{children}</body>
     </html>

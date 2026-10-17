@@ -1,25 +1,18 @@
-// Shared design constants: risk tier metadata, crop stages, projections.
+// Shared design constants: risk tier metadata and projections.
 
-import type { CropStage, FloodRiskTier } from "./api";
+import type { FloodRiskTier } from "./api";
 
 export const TIER_ORDER: FloodRiskTier[] = ["NORMAL", "ADVISORY", "WARNING", "DANGER"];
 
 export const TIER_META: Record<
   FloodRiskTier,
-  { color: string; emoji: string; labelKh: string; labelEn: string }
+  { color: string; ink: string; labelKh: string; labelEn: string }
 > = {
-  NORMAL: { color: "#10b981", emoji: "🟢", labelKh: "ធម្មតា", labelEn: "NORMAL" },
-  ADVISORY: { color: "#fbbf24", emoji: "🟡", labelKh: "ប្រុងប្រយ័ត្ន", labelEn: "ADVISORY" },
-  WARNING: { color: "#f97316", emoji: "🟠", labelKh: "ព្រមាន", labelEn: "WARNING" },
-  DANGER: { color: "#ef4444", emoji: "🔴", labelKh: "គ្រោះថ្នាក់", labelEn: "DANGER" },
+  NORMAL: { color: "var(--tier-normal)", ink: "var(--tier-normal-ink)", labelKh: "ធម្មតា", labelEn: "Normal" },
+  ADVISORY: { color: "var(--tier-advisory)", ink: "var(--tier-advisory-ink)", labelKh: "ប្រុងប្រយ័ត្ន", labelEn: "Advisory" },
+  WARNING: { color: "var(--tier-warning)", ink: "var(--tier-warning-ink)", labelKh: "ព្រមាន", labelEn: "Warning" },
+  DANGER: { color: "var(--tier-danger)", ink: "var(--tier-danger-ink)", labelKh: "គ្រោះថ្នាក់", labelEn: "Danger" },
 };
-
-export const CROP_STAGES: { value: CropStage; labelKh: string; labelEn: string }[] = [
-  { value: "TILLERING", labelKh: "បែកកូន", labelEn: "Tillering" },
-  { value: "VEGETATIVE", labelKh: "លូតលាស់", labelEn: "Vegetative" },
-  { value: "FLOWERING", labelKh: "ចេញផ្កា", labelEn: "Flowering" },
-  { value: "RIPENING", labelKh: "ទុំ", labelEn: "Ripening" },
-];
 
 export function tierSeverity(tier: FloodRiskTier): number {
   return TIER_ORDER.indexOf(tier);

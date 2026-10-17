@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, type Assessment, type CropStage } from "@/lib/api";
-import { CROP_STAGES, formatDateTime } from "@/lib/design";
+import { api, ApiError, type Assessment } from "@/lib/api";
+import { formatDateTime } from "@/lib/design";
 import { CloseIcon } from "./icons";
 import { RiskBadge } from "./RiskBadge";
 import { VoicePlayer } from "./VoicePlayer";
@@ -17,7 +17,6 @@ export interface AssessmentDialogProps {
 
 export function AssessmentDialog({ communeCode, onClose, onAssessment }: AssessmentDialogProps) {
   const [assessment, setAssessment] = useState<Assessment | null>(null);
-  const [cropStage, setCropStage] = useState<CropStage>("RIPENING");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -33,7 +32,7 @@ export function AssessmentDialog({ communeCode, onClose, onAssessment }: Assessm
     setLoading(true);
     setError(null);
     api
-      .assess(communeCode, cropStage)
+      .assess(communeCode)
       .then((result) => {
         if (requestId.current !== id) return;
         setAssessment(result);
@@ -53,7 +52,7 @@ export function AssessmentDialog({ communeCode, onClose, onAssessment }: Assessm
       .finally(() => {
         if (requestId.current === id) setLoading(false);
       });
-  }, [communeCode, cropStage, onAssessment]);
+  }, [communeCode, onAssessment]);
 
   useEffect(() => {
     if (!communeCode) return;
@@ -111,19 +110,10 @@ export function AssessmentDialog({ communeCode, onClose, onAssessment }: Assessm
           </button>
         </div>
 
-        <div className="crop-stage-row" role="group" aria-label="Rice growth stage">
-          {CROP_STAGES.map((stage) => (
-            <button
-              key={stage.value}
-              type="button"
-              className="chip label-medium"
-              aria-pressed={cropStage === stage.value}
-              onClick={() => setCropStage(stage.value)}
-            >
-              {stage.labelKh} · {stage.labelEn}
-            </button>
-          ))}
-        </div>
+        <p className="body-small muted" style={{ margin: 0 }}>
+          Read-only view — directives render the conservative ripening posture. Farmers set their
+          own rice stage once in the Telegram bot.
+        </p>
 
         {loading && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }} aria-busy="true">
@@ -149,7 +139,7 @@ export function AssessmentDialog({ communeCode, onClose, onAssessment }: Assessm
               />
               {assessment.estimated && (
                 <span className="status-pill label-medium">
-                  ⚠︎ ទិន្នន័យប៉ាន់ស្មាន / estimated telemetry — escalated conservatively
+                  ទិន្នន័យប៉ាន់ស្មាន / estimated telemetry — escalated conservatively
                 </span>
               )}
             </div>
@@ -173,12 +163,14 @@ export function AssessmentDialog({ communeCode, onClose, onAssessment }: Assessm
               ))}
             </ul>
 
-            <VoicePlayer
-              audioSrc={assessment.audio?.url}
-              durationSeconds={assessment.audio?.duration_seconds ?? undefined}
-              transcriptKhmer={assessment.khmer_bulletin}
-              transcriptEnglish={assessment.english_bulletin}
-            />
+            <div className="voice-card voice-card--inset">
+              <VoicePlayer
+                audioSrc={assessment.audio?.url}
+                durationSeconds={assessment.audio?.duration_seconds ?? undefined}
+                transcriptKhmer={assessment.khmer_bulletin}
+                transcriptEnglish={assessment.english_bulletin}
+              />
+            </div>
           </div>
         )}
       </div>

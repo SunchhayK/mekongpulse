@@ -70,12 +70,12 @@ export function HydrographChart({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
-    const primary = cssVar("--md-sys-color-primary", "#96ccff");
-    const outlineVariant = cssVar("--md-sys-color-outline-variant", "#41474d");
-    const onSurfaceVariant = cssVar("--md-sys-color-on-surface-variant", "#c1c7ce");
-    const tertiary = cssVar("--md-sys-color-tertiary", "#f3c03f");
-    const error = cssVar("--md-sys-color-error", "#ffb4ab");
-    const surfaceLowest = cssVar("--md-sys-color-surface-container-lowest", "#0a0f14");
+    const primary = cssVar("--navy", "#213a63");
+    const outlineVariant = cssVar("--line", "#e2e8f0");
+    const onSurfaceVariant = cssVar("--slate", "#526079");
+    const tertiary = cssVar("--tier-advisory", "#f59e0b");
+    const error = cssVar("--tier-danger", "#dc2626");
+    const surfaceLowest = cssVar("--map-bg", "#f7fafd");
 
     const plotW = WIDTH - PADDING.left - PADDING.right;
     const plotH = HEIGHT - PADDING.top - PADDING.bottom;
@@ -96,7 +96,7 @@ export function HydrographChart({
     ctx.fillRect(PADDING.left, PADDING.top, plotW, plotH);
 
     // horizontal grid + y labels
-    ctx.font = "12px 'Roboto Mono', monospace";
+    ctx.font = "12px 'IBM Plex Mono', ui-monospace, monospace";
     ctx.fillStyle = onSurfaceVariant;
     ctx.strokeStyle = outlineVariant;
     ctx.lineWidth = 1;
@@ -164,7 +164,7 @@ export function HydrographChart({
     ctx.stroke();
 
     // fill under the curve, flat low-opacity primary
-    ctx.globalAlpha = 0.12;
+    ctx.globalAlpha = 0.08;
     ctx.fillStyle = primary;
     ctx.beginPath();
     ctx.moveTo(xOf(times[0]), yOf(yMin));
