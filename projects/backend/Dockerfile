@@ -15,14 +15,16 @@ COPY pyproject.toml uv.lock .python-version ./
 COPY shared/pyproject.toml shared/
 COPY backend/pyproject.toml backend/
 COPY bot/pyproject.toml bot/
-RUN uv sync --frozen --no-dev --no-install-workspace --package mekong-backend
+RUN uv sync --frozen --no-dev --no-install-workspace --package mekong-backend \
+    && rm -rf /root/.cache/uv
 
 # Sources + bundled data (station roster, commune gazetteer).
 COPY shared/src/ shared/src/
 COPY backend/src/ backend/src/
 COPY bot/src/ bot/src/
 COPY data/ data/
-RUN uv sync --frozen --no-dev --package mekong-backend
+RUN uv sync --frozen --no-dev --package mekong-backend \
+    && rm -rf /root/.cache/uv
 
 ENV PATH="/app/.venv/bin:$PATH" \
     DATA_DIR=/app/data \

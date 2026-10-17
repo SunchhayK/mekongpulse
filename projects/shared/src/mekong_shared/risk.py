@@ -19,6 +19,11 @@ RAIN_HEAVY_48H_MM = 60.0
 RAIN_ADVISORY_48H_MM = 40.0
 RAIN_FLASH_24H_MM = 80.0
 LEVEE_MARGIN_M = 0.30  # empirical buffer: water surface this close to ground = concern
+# The nearest gauge's water surface is only a valid inundation proxy inside the
+# flat backwater corridor; 50 km covers the Cambodian Mekong/Bassac floodplain.
+# Beyond it a distant gauge says nothing about local ground and must not
+# fabricate risk (INV-01). Unknown distance stays conservative (rule applies).
+WATER_SURFACE_PROXY_MAX_KM = 50.0
 
 _TIER_SCORE = {RiskTier.NORMAL: 15, RiskTier.ADVISORY: 40, RiskTier.WARNING: 70, RiskTier.DANGER: 95}
 _ESCALATE = {
@@ -74,7 +79,11 @@ class SpatialRiskClassifier:
 
         # --- elevation-based inundation (DEM elevation vs gauge water surface) ---
         zero = _zero_gauge_elevation(station)
-        if ground_elevation_m is not None and zero is not None:
+        if (
+            ground_elevation_m is not None
+            and zero is not None
+            and _near_station(commune.distance_to_station_km)
+        ):
             water_surface = level + zero
             head = ground_elevation_m - water_surface
             if head <= 0:
@@ -109,7 +118,9 @@ class SpatialRiskClassifier:
                 tier = _ESCALATE[tier]
             drivers.append(f"estimated telemetry ({station.source}); conservative escalation")
 
-        lead_time = self._lead_time_hours(level, flood, rate, ground_elevation_m, station)
+        lead_time = self._lead_time_hours(
+            level, flood, rate, ground_elevation_m, station, commune.distance_to_station_km
+        )
         score = _TIER_SCORE[tier]
         if rain48 is not None and rain48 >= RAIN_HEAVY_48H_MM:
             score = min(100, score + 5)
@@ -139,6 +150,7 @@ class SpatialRiskClassifier:
         rate: float,
         ground_elevation_m: float | None,
         station: StationSnapshot,
+        distance_km: float | None = None,
     ) -> int | None:
         if level >= flood:
             return 0
@@ -146,7 +158,7 @@ class SpatialRiskClassifier:
             return None  # receding or flat: no meaningful arrival estimate
         hours_stage = (flood - level) / rate
         zero = _zero_gauge_elevation(station)
-        if ground_elevation_m is not None and zero is not None:
+        if ground_elevation_m is not None and zero is not None and _near_station(distance_km):
             head = ground_elevation_m - (level + zero)
             if head <= 0:
                 return 0
@@ -167,6 +179,16 @@ _ZERO_GAUGE: dict[str, float] = {
 
 def _zero_gauge_elevation(station: StationSnapshot) -> float | None:
     return _ZERO_GAUGE.get(station.station_id)
+
+
+def _near_station(distance_km: float | None) -> bool:
+    """True when the gauge's water surface is a valid proxy for local ground.
+
+    Unknown distance stays conservative (rule applies); beyond the corridor
+    radius the elevation rule is suppressed so distant gauges cannot
+    fabricate inundation risk (INV-01).
+    """
+    return distance_km is None or distance_km <= WATER_SURFACE_PROXY_MAX_KM
 
 
 def classify_batch(

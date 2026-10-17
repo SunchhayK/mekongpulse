@@ -19,7 +19,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 - **In-scope**:
   - Python 3.11 FastAPI microservice deployed on Google Cloud Run in Singapore (`asia-southeast1`).
   - Google Cloud Agent Development Kit (ADK) multi-agent pipeline: Ingestion Agent, Spatial Reasoner, Agronomic Advisor, Khmer Vernacular Dispatcher.
-  - Telemetry integration with Mekong River Commission (MRC) REST API (`api.mrcmekong.org`) for 4 permanent Cambodian stations: Prek Kdam (`020102`), Chaktomuk (`033401`), Koh Khel (`019803`), and Kampong Cham (`019806`).
+  - Telemetry integration with Mekong River Commission (MRC) REST API (`api.mrcmekong.org`) for 4 permanent Cambodian stations: Prek Kdam (`020102`), Chaktomuk (`033401`), Koh Khel (`033402`), and Kampong Cham (`019802`).
   - Weather forecast integration with Open-Meteo API for 7-day hourly precipitation and 0–7cm soil moisture.
   - Spatial in-memory R-Tree index over the official 2025 MEF Cambodian administrative gazetteer (1,661 communes).
   - Vertex AI / Gemini 2.0 Flash integration for respectful Khmer language synthesis and vernacular audio voice notes (MP3 format).
@@ -133,7 +133,7 @@ flowchart TD
   end
 
   subgraph ExternalAPIs["External Telemetry & Forecasting"]
-    MRC["Mekong River Commission API\n(Stations 020102, 033401, 019803, 019806)"]
+    MRC["Mekong River Commission API\n(Stations 020102, 033401, 033402, 019802)"]
     OpenMeteo["Open-Meteo Weather API\n(7-Day Rain & Soil Moisture)"]
   end
 
@@ -156,21 +156,22 @@ flowchart TD
 ### 2.2 Dependency boundaries and directory layout
 
 - **Inward dependency rule**: `Domain` core has zero external framework dependencies. `Application` imports `Domain`. `Infrastructure` and `Presentation` import `Application` and `Domain`.
-- **Directory layout**:
+- **Directory layout** (uv workspace under `projects/`):
   ```text
-  src/
-  ├── domain/             # HydroStation, CommuneRisk, AgronomicDirective models
-  ├── application/        # IngestAgent, SpatialReasoner, AgriAdvisor, VernacularDispatcher
-  ├── infrastructure/     # MRCTelemetryClient, OpenMeteoClient, MEFGazetteer, FirestoreRepo
-  ├── presentation/       # telegram_webhook.py, telemetry_api.py, dashboard_api.py
-  └── main.py             # FastAPI entrypoint, scheduled background workers, DI wiring
+  projects/
+  ├── shared/src/mekong_shared/    # Domain engine: models, MRC + Open-Meteo clients, SpatialRiskClassifier,
+  │                                # AgriDecisionEngine, MekongSentinel, TTS, repositories (memory/Postgres/Firestore)
+  ├── backend/src/mekong_backend/  # FastAPI gateway: routers/, deps.py, problems.py, app.py, main.py
+  ├── bot/src/mekong_bot/          # Telegram service, dispatcher, PTB handlers, polling entrypoint
+  ├── frontend/src/app/            # Next.js 14 (M3) dashboard, client-rendered
+  └── scripts/                     # switch_env.sh, run_dev.sh, init_db.sh, deploy_gcp.sh, build_gazetteer.py
   ```
 
 ### 2.3 Failure modes and resilience
 
-- **Adjacent station failover**: If Prek Kdam (`020102`) times out or returns HTTP 500, the ingestion service automatically falls back to Chaktomuk (`033401`) using an empirical hydraulic offset equation ($H_{\text{Prek Kdam}} \approx H_{\text{Chaktomuk}} - 2.48\text{m}$).
+- **Adjacent station failover**: If Prek Kdam (`020102`) times out or returns HTTP 500, the ingestion service automatically falls back to Chaktomuk (`033401`) — or Koh Khel (`033402`) when Chaktomuk is also unavailable — applying an empirically derived hydraulic offset (median stage difference over the overlapping historical window, recomputed on every refresh; see `compute_hydraulic_offset`).
 - **Gemini audio synthesis timeout**: If Vertex AI audio generation exceeds 2,500ms, the webhook immediately returns a text-only emergency warning card and telephone helpline number, guaranteeing the Telegram webhook responds well within its 5-second deadline.
-- **Cold cache resilience**: The in-memory spatial gazetteer is bundled in the container image (`data/mef_gazetteer_2025.json`, ~18MB), requiring zero external network calls during cold start.
+- **Cold cache resilience**: The spatial gazetteer is bundled in the container image (`data/commune_gazetteer_2025.json`, ~0.8 MB centroids + DEM elevations, plus `data/raw/mef_commune_boundaries.geojson`, ~6.3 MB polygons), requiring zero external network calls during cold start.
 
 ---
 
@@ -189,7 +190,7 @@ erDiagram
   SENTINEL_PATROL_RUN ||--o{ SENTINEL_ALERT : records
 
   HYDRO_STATION {
-    string id PK "020102|033401|019803|019806"
+    string id PK "020102|033401|033402|019802"
     string name
     string river_name
     float latitude
@@ -301,7 +302,7 @@ info:
   description: OpenAPI 3.1.0 Specification for MekongPulse Autonomous Hydrological Telemetry & Agronomic Preservation Platform.
   version: 1.0.0
 servers:
-  - url: https://mekongpulse-api-32948293.asia-southeast1.run.app
+  - url: https://mekongpulse-backend-<hash>-as.a.run.app  # from `gcloud run services describe`; see §9.1
     description: Production Google Cloud Run (Singapore)
   - url: http://localhost:8080
     description: Local Development Environment
@@ -432,7 +433,7 @@ components:
       properties:
         station_id:
           type: string
-          example: "019803"
+          example: "033402"
         station_name:
           type: string
           example: "Koh Khel"
@@ -632,7 +633,7 @@ def test_fertilizer_hold_during_heavy_rain_forecast():
 - **Context**: Resolving user GPS coordinates to one of 1,661 Cambodian administrative communes.
 - **Decision**: Load 2025 MEF gazetteer GeoJSON into an in-memory Shapely R-Tree spatial index.
 - **Consequences**:
-  - _Positive_: Sub-15ms spatial point-in-polygon resolution. Zero PostGIS container hosting costs. Total dataset is < 18MB RAM.
+  - _Positive_: Sub-15ms spatial point-in-polygon resolution. Zero PostGIS container hosting costs. Total dataset is < 10 MB RAM.
   - _Negative_: Adds ~1.2s of GeoJSON parsing during container startup.
 
 ### ADR-0005: Gemini 2.0 Flash Audio Generation vs. External Specialized TTS
@@ -698,12 +699,12 @@ with httpx.Client(timeout=10.0) as client:
 
 ### 7.2 Definition of Ready (DoR) checklist
 
-- [x] Python 3.11 runtime verified.
-- [x] Single-command local server boot verified (`uv run uvicorn src.main:app --port 8080`).
-- [x] Verified live connectivity to MRC endpoint `api.mrcmekong.org` (HTTP 200).
-- [x] Valid `TELEGRAM_BOT_TOKEN` and `GEMINI_API_KEY` configured in `.env`.
-- [x] 2025 MEF Cambodian administrative commune gazetteer GeoJSON located in `data/mef_gazetteer_2025.json`.
-- [x] Google Cloud SDK (`gcloud`) authenticated and configured for project in `asia-southeast1`.
+- [x] Python 3.12 runtime verified (uv workspace; `python:3.12-slim` in container images).
+- [x] Single-command local server boot verified (`cd projects/backend && uv run uvicorn mekong_backend.main:app --port 8080`; orchestrated by `./projects/scripts/run_dev.sh`).
+- [x] Verified live connectivity to MRC endpoint `api.mrcmekong.org` (HTTP 200; all 4 stations polled and persisted).
+- [ ] Live `TELEGRAM_BOT_TOKEN` / `GEMINI_API_KEY`: placeholders are wired through the `.env.*` presets; the bot runs in text-only preview mode until real values are entered.
+- [x] 2025 MEF Cambodian administrative commune gazetteer built to `data/commune_gazetteer_2025.json` (1,661 communes with centroids + DEM elevations via `scripts/build_gazetteer.py`).
+- [ ] Google Cloud SDK re-authentication pending (`gcloud auth login`); `deploy_gcp.sh` dry-run verified end-to-end.
 
 ---
 
@@ -713,7 +714,7 @@ with httpx.Client(timeout=10.0) as client:
 
 - **Milestone 1: The Walking Skeleton (Hours 0–12)**
   - Scope: End-to-end slice connecting live MRC water polling, mock GPS webhook, basic threshold comparison, and Telegram bot text reply (`"Prek Kdam water level is 6.42m. Risk: Normal"`).
-  - Verification: Automated integration test `tests/test_walking_skeleton.py` passes end-to-end.
+  - Verification: Automated integration tests (`shared/tests/test_mrc.py`, `shared/tests/test_pipeline_assess.py`, `backend/tests/test_health.py`) pass end-to-end.
 - **Milestone 2: Spatial Inundation & Agronomic Directive Engine (Hours 12–24)**
   - Scope: Ingestion of all 4 Cambodian stations, Open-Meteo rain forecast, 1,661 commune R-Tree index, and `AgriDecisionEngine` directives.
   - Verification: Replay test with 2022 Kandal flood telemetry data confirming accurate risk tiering.
@@ -759,42 +760,30 @@ with httpx.Client(timeout=10.0) as client:
 ### 9.1 Local and production boot commands
 
 ```bash
-# Local development boot
-uv sync
-export TELEGRAM_BOT_TOKEN="your-token"
-export GEMINI_API_KEY="your-key"
-export ENVIRONMENT="development"
-uv run uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload
+# Local development boot (from the repository root)
+./projects/scripts/switch_env.sh development   # point projects/.env at the dev preset
+./projects/scripts/run_dev.sh                  # backend :8080 + frontend :3000 (add --bot for polling)
 
-# Production deployment to Google Cloud Run
-gcloud run deploy mekongpulse-api \
-  --image gcr.io/bytelab-ai-cup-2026/mekongpulse-api:v1.0.0 \
-  --platform managed \
-  --region asia-southeast1 \
-  --allow-unauthenticated \
-  --min-instances 1 \
-  --max-instances 10 \
-  --cpu 2 \
-  --memory 2Gi \
-  --concurrency 80 \
-  --set-secrets="TELEGRAM_BOT_TOKEN=mekongpulse-telegram-token:latest,GEMINI_API_KEY=mekongpulse-gemini-key:latest"
-
-# Cloud Scheduler 30-minute cron configuration
-gcloud scheduler jobs create http mekongpulse-telemetry-sync \
-  --location asia-southeast1 \
-  --schedule "*/30 * * * *" \
-  --uri "https://mekongpulse-api-32948293.asia-southeast1.run.app/api/v1/telemetry/sync" \
-  --http-method POST
+# Production deployment (DRY-RUN BY DEFAULT; prints every gcloud command)
+./projects/scripts/deploy_gcp.sh               # review the plan
+DRY_RUN=0 ./projects/scripts/deploy_gcp.sh     # execute: Artifact Registry + Cloud Build, Cloud Run
+                                               # (mekongpulse-backend, mekongpulse-web), Cloud Scheduler
+                                               # (15-min sync + sentinel patrol), Secret Manager,
+                                               # Telegram webhook registration
 ```
+
+The deploy script reads `projects/.env.production` directly (it never mutates the active `.env` symlink), requires the secret values to be present in that preset, and prompts nothing.
 
 ### 9.2 Health verification
 
 ```bash
-# Verify basic service liveness
-curl -sf https://mekongpulse-api-32948293.asia-southeast1.run.app/api/v1/health | grep '"status":"HEALTHY"'
+# Local
+curl -sf http://localhost:8080/api/v1/health | grep '"status":"HEALTHY"'
+curl -sf http://localhost:8080/api/v1/telemetry/latest | jq .
 
-# Test latest cached telemetry across all 4 stations
-curl -sf https://mekongpulse-api-32948293.asia-southeast1.run.app/api/v1/telemetry/latest | jq .
+# Cloud Run (URL via: gcloud run services describe mekongpulse-backend \
+#   --region asia-southeast1 --format='value(status.url)')
+curl -sf "$BACKEND_URL/api/v1/health" | grep '"status":"HEALTHY"'
 ```
 
 ### 9.3 Incident playbook: Upstream MRC station endpoint outage
@@ -812,12 +801,11 @@ curl -sf https://mekongpulse-api-32948293.asia-southeast1.run.app/api/v1/telemet
      ```
   3. Trigger manual synchronization with forced fallback:
      ```bash
-     curl -X POST https://mekongpulse-api-32948293.asia-southeast1.run.app/api/v1/telemetry/sync?force_fallback=true
+     curl -X POST "http://localhost:8080/api/v1/telemetry/sync?force_fallback=true"   # local/dev
+     curl -X POST "$BACKEND_URL/api/v1/telemetry/sync?force_fallback=true" \
+       -H "Authorization: Bearer $ADMIN_TOKEN"                                       # Cloud Run (admin-gated)
      ```
-  4. If all MRC endpoints are unreachable, enable historical monsoon simulation mode:
-     ```bash
-     gcloud run services update mekongpulse-api --region asia-southeast1 --set-env-vars="ENABLE_HISTORICAL_2022_DATASET=true"
-     ```
+  4. If all MRC endpoints are unreachable, the pipeline serves the last persisted readings, marks them `estimated` (`is_stale_fallback`, `FALLBACK_USED`/`CACHE_USED` warnings) and escalates conservatively per INV-03. No action required; inspect `warnings[]` in the sync response.
 
 ---
 
@@ -838,23 +826,23 @@ curl -sf https://mekongpulse-api-32948293.asia-southeast1.run.app/api/v1/telemet
 
 ### 10.2 Requirement cross-reference matrix
 
-| Requirement ID  | Spec Document | Target Route / Function         | Implementation File Target         | Verification Test                     |  Status  |
-| --------------- | ------------- | ------------------------------- | ---------------------------------- | ------------------------------------- | :------: |
-| FR-01 / ING-001 | PRD / SRS     | `poll_mrc_telemetry`            | `src/services/mrc_telemetry.py`    | `tests/test_telemetry.py`             | **PASS** |
-| FR-02 / ING-004 | PRD / SRS     | `fetch_weather_forecast`        | `src/services/weather_forecast.py` | `tests/test_weather.py`               | **PASS** |
-| FR-03 / RSK-001 | PRD / SRS     | `classify_inundation_risk`      | `src/services/spatial_risk.py`     | `tests/test_spatial.py`               | **PASS** |
-| FR-04 / AGR-001 | PRD / SRS     | `evaluate_agronomic_directives` | `src/services/agri_decision.py`    | `tests/test_agri_directives.py`       | **PASS** |
-| FR-05 / DIS-001 | PRD / SRS     | `synthesize_khmer_voice`        | `src/services/gemini_khmer.py`     | `tests/test_vertex_ai.py`             | **PASS** |
-| FR-06           | PRD           | `POST /telegram/webhook`        | `src/presentation/telegram.py`     | `tests/test_application.py`           | **PASS** |
-| FR-07           | PRD / SRS     | `MekongSentinel Background`     | `backend/services/sentinel.py`     | `tests/test_sentinel.py`              | **PASS** |
-| FR-08           | PRD / SRS     | `MekongAdvisor ReAct Agent`     | `shared/adk_agent.py`, `bot`       | `tests/test_agent_and_subscriptions`  | **PASS** |
-| FR-09           | PRD / SRS     | `Commune Subscriptions Store`   | `backend/routers/subscriptions.py` | `tests/test_subscriptions.py`         | **PASS** |
-| INV-01          | SRS           | Grounded telemetry verification | `src/services/mrc_telemetry.py`    | `tests/test_telemetry.py`             | **PASS** |
-| INV-02          | SRS           | Fail-safe station fallback      | `src/services/mrc_telemetry.py`    | `tests/test_telemetry.py`             | **PASS** |
+| Requirement ID  | Spec Document | Target Route / Function         | Implementation File Target                                  | Verification Test                                        |  Status  |
+| --------------- | ------------- | ------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------- | :------: |
+| FR-01 / ING-001 | PRD / SRS     | `mrc.poll_mrc_telemetry`        | `shared/src/mekong_shared/mrc.py`                           | `shared/tests/test_mrc.py`                               | **PASS** |
+| FR-02 / ING-004 | PRD / SRS     | `OpenMeteoClient.fetch_forecast`| `shared/src/mekong_shared/weather.py`                       | `shared/tests/test_weather.py`                           | **PASS** |
+| FR-03 / RSK-001 | PRD / SRS     | `SpatialRiskClassifier.classify`| `shared/src/mekong_shared/risk.py`                          | `shared/tests/test_risk.py`, `test_spatial.py`           | **PASS** |
+| FR-04 / AGR-001 | PRD / SRS     | `evaluate_agronomic_directives` | `shared/src/mekong_shared/agronomy.py`                      | `shared/tests/test_agronomy.py`                          | **PASS** |
+| FR-05 / DIS-001 | PRD / SRS     | `synthesize_khmer_voice`        | `shared/src/mekong_shared/tts.py`, `bulletin.py`            | `shared/tests/test_tts.py`, `test_bulletin.py`           | **PASS** |
+| FR-06           | PRD           | `POST /api/v1/telegram/webhook` | `backend/src/mekong_backend/routers/telegram.py`            | `backend/tests/test_telegram_webhook.py`                 | **PASS** |
+| FR-07           | PRD / SRS     | `MekongSentinel Background`     | `shared/src/mekong_shared/sentinel.py`, backend `patrol.py` | `shared/tests/test_sentinel.py`, `backend/tests/test_patrol_api.py` | **PASS** |
+| FR-08           | PRD / SRS     | `MekongAdvisor ReAct Agent`     | `shared/src/mekong_shared/adk_agent.py`, `mekong_bot/`      | `shared/tests/test_advisor.py`                           | **PASS** |
+| FR-09           | PRD / SRS     | `Commune Subscriptions Store`   | `backend/src/mekong_backend/routers/subscriptions.py`       | `backend/tests/test_subscriptions_api.py`                | **PASS** |
+| INV-01          | SRS           | Grounded telemetry verification | `shared/src/mekong_shared/mrc.py`                           | `shared/tests/test_mrc.py`                               | **PASS** |
+| INV-02          | SRS           | Fail-safe station fallback      | `shared/src/mekong_shared/mrc.py`, `pipeline.py`            | `shared/tests/test_failover.py`                          | **PASS** |
 
 ### 10.3 Discrepancies and audit findings
 
 1. **Telegram Audio Format Compatibility**: Telegram clients on older Android devices fail to render `.ogg` Opus audio notes unless properly formatted with specific container flags.
    - _Mitigation_: Specified Gemini audio output stream to produce standard `.mp3` with explicit MIME type `audio/mpeg` to ensure 100% device compatibility.
-2. **Station Inundation Lag**: Upstream river flood crests take approximately 18–36 hours to travel from Kampong Cham (`019806`) to Chaktomuk / Bassac (`033401`).
+2. **Station Inundation Lag**: Upstream river flood crests take approximately 18–36 hours to travel from Kampong Cham (`019802`) to Chaktomuk / Bassac (`033401`).
    - _Mitigation_: Built hydraulic wave travel time equations into `SpatialRiskClassifier` to calculate accurate arrival windows.

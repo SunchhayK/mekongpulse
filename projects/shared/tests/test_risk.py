@@ -157,6 +157,13 @@ def test_elevation_water_above_ground_is_danger(classifier):
     assert risk.tier is RiskTier.DANGER
 
 
+def test_elevation_rule_keeps_working_with_unknown_distance(classifier):
+    """Missing distance data stays conservative (JRN-02): rule still applies."""
+    commune = make_commune(elevation=6.7).model_copy(update={"distance_to_station_km": None})
+    risk = classifier.classify(commune, make_station(8.0), make_weather())
+    assert risk.tier is RiskTier.DANGER
+
+
 def test_lead_time_from_stage_rise(classifier):
     risk = classifier.classify(make_commune(), make_station(10.0, rate=0.02), make_weather())
     assert risk.lead_time_hours == 100  # (12.0 - 10.0) / 0.02
@@ -176,6 +183,20 @@ def test_lead_time_uses_ground_head_when_lower(classifier):
     # ground 9.5, surface 8.98 => head 0.52 => 26h, earlier than stage-based 100h
     risk = classifier.classify(make_commune(elevation=9.5), make_station(10.0, rate=0.02), make_weather())
     assert risk.lead_time_hours == 26
+
+
+def test_elevation_rule_suppressed_far_from_station(classifier):
+    """INV-01: a gauge >50 km away must not fabricate local inundation risk."""
+    commune = make_commune(elevation=6.7).model_copy(update={"distance_to_station_km": 180.0})
+    risk = classifier.classify(commune, make_station(8.0), make_weather())
+    assert risk.tier is RiskTier.NORMAL
+    assert not any("water surface" in d for d in risk.drivers)
+
+
+def test_lead_time_ignores_ground_head_far_from_station(classifier):
+    commune = make_commune(elevation=9.5).model_copy(update={"distance_to_station_km": 180.0})
+    risk = classifier.classify(commune, make_station(10.0, rate=0.02), make_weather())
+    assert risk.lead_time_hours == 100  # stage-based estimate, not head-based
 
 
 def test_score_reflects_tier(classifier):

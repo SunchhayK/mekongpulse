@@ -15,12 +15,14 @@ COPY pyproject.toml uv.lock .python-version ./
 COPY shared/pyproject.toml shared/
 COPY backend/pyproject.toml backend/
 COPY bot/pyproject.toml bot/
-RUN uv sync --frozen --no-dev --no-install-workspace --package mekong-bot
+RUN uv sync --frozen --no-dev --no-install-workspace --package mekong-bot \
+    && rm -rf /root/.cache/uv
 
 COPY shared/src/ shared/src/
 COPY bot/src/ bot/src/
 COPY data/ data/
-RUN uv sync --frozen --no-dev --package mekong-bot
+RUN uv sync --frozen --no-dev --package mekong-bot \
+    && rm -rf /root/.cache/uv
 
 ENV PATH="/app/.venv/bin:$PATH" \
     DATA_DIR=/app/data \

@@ -167,6 +167,17 @@ _OBS_COLS = """
   o.fetched_at, s.id AS station_id, s.name, s.river, s.alarm_stage_m, s.flood_stage_m
 """
 
+# Latest gauge reading per risk row -> CommuneRisk.station_level_m. Keeps the
+# Postgres read path in parity with the in-memory repository, which retains the
+# classify-time level.
+_RISK_OBSERVATION_JOIN = """
+  LEFT JOIN LATERAL (
+    SELECT water_level_m FROM hydro_observations o
+    WHERE o.station_id = c.risk_station_id
+    ORDER BY o.recorded_at DESC LIMIT 1
+  ) o ON true
+"""
+
 
 def _snapshot_from_row(row: asyncpg.Record) -> StationSnapshot:
     fetched = row["fetched_at"] or row["recorded_at"]
@@ -410,14 +421,17 @@ class PostgresRepository:
             )
 
     async def risk_map(self, province: str | None = None) -> list[CommuneRisk]:
-        query = """
-            SELECT * FROM communes WHERE current_risk_tier IS NOT NULL
+        query = f"""
+            SELECT c.*, o.water_level_m AS station_level_m
+            FROM communes c
+            {_RISK_OBSERVATION_JOIN}
+            WHERE c.current_risk_tier IS NOT NULL
         """
         args: list = []
         if province:
-            query += " AND (province_en ILIKE $1 OR province_kh = $2)"
+            query += " AND (c.province_en ILIKE $1 OR c.province_kh = $2)"
             args = [f"%{province.strip()}%", province.strip()]
-        query += " ORDER BY risk_score DESC NULLS LAST, code"
+        query += " ORDER BY c.risk_score DESC NULLS LAST, c.code"
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(query, *args)
         return [_risk_from_row(r) for r in rows]
@@ -425,7 +439,13 @@ class PostgresRepository:
     async def get_commune_risk(self, code: str) -> CommuneRisk | None:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT * FROM communes WHERE code=$1 AND current_risk_tier IS NOT NULL", code
+                f"""
+                SELECT c.*, o.water_level_m AS station_level_m
+                FROM communes c
+                {_RISK_OBSERVATION_JOIN}
+                WHERE c.code=$1 AND c.current_risk_tier IS NOT NULL
+                """,
+                code,
             )
         return _risk_from_row(row) if row else None
 
@@ -598,15 +618,15 @@ def _risk_from_row(row: asyncpg.Record) -> CommuneRisk:
         commune_name_kh=row["name_kh"],
         commune_name_en=row["name_en"],
         province=row["province_en"],
-        lat=row["lat"],
-        lng=row["lng"],
+        lat=row["latitude"],
+        lng=row["longitude"],
         tier=RiskTier(row["current_risk_tier"]),
         score=int(row["risk_score"] or 0),
         reason=FloodReason(row["risk_reason"]) if row["risk_reason"] else FloodReason.NONE,
         lead_time_hours=row["lead_time_hours"],
         drivers=list(drivers or []),
         station_id=row["risk_station_id"],
-        station_level_m=None,
+        station_level_m=row["station_level_m"],
         estimated=bool(row["risk_estimated"]),
         updated_at=row["risk_updated_at"],
     )

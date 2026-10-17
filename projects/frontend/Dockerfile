@@ -5,7 +5,7 @@ FROM oven/bun:1
 WORKDIR /app
 
 COPY frontend/package.json frontend/bun.lock ./
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile && rm -rf /root/.bun/install/cache
 
 COPY frontend/ ./
 ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:8080

@@ -66,7 +66,7 @@ Use [`projects/scripts/switch_env.sh`](file:///Users/ruined/Home/Projects/AiBuil
 ./projects/scripts/switch_env.sh production
 ```
 
-The script automatically backs up your existing `.env`, configures all subprojects (`backend`, `bot`, `frontend`), and prints a summary table of active variables.
+The script points `projects/.env` at the chosen preset (a symlink — all services and Docker Compose read it) and prints the active environment.
 
 ---
 
@@ -81,18 +81,16 @@ Start the entire system with a single command:
 ```
 
 This launches:
+
 - **FastAPI Backend** on [`http://localhost:8080`](http://localhost:8080)
 - **Next.js Web GIS Dashboard** on [`http://localhost:3000`](http://localhost:3000)
-- **Telegram Bot** in live polling mode
 
-Press `Ctrl+C` at any time to gracefully terminate all three processes.
+Press `Ctrl+C` at any time to gracefully terminate all processes.
 
-You can also run individual services:
+Pass `--bot` to also start the **Telegram Bot** in live polling mode:
 
 ```bash
-./projects/scripts/run_dev.sh backend    # Only Backend
-./projects/scripts/run_dev.sh bot        # Only Telegram Bot
-./projects/scripts/run_dev.sh frontend   # Only Next.js Frontend
+./projects/scripts/run_dev.sh --bot
 ```
 
 ### 2. Containerized Staging Mode (Docker Compose)
@@ -108,11 +106,11 @@ docker compose -f projects/docker-compose.yml up --build
 
 ### 3. Production Deployment (Google Cloud)
 
-Deploy to Cloud Run, Cloud Firestore Native, and Cloud Storage:
+Deploy to Cloud Run, Cloud Firestore Native, and Cloud Storage (the script is dry-run by default — it prints every command for review before anything executes):
 
 ```bash
-./projects/scripts/switch_env.sh production
-./projects/scripts/deploy_gcp.sh
+./projects/scripts/deploy_gcp.sh             # review the plan
+DRY_RUN=0 ./projects/scripts/deploy_gcp.sh   # execute (requires gcloud auth + real secrets in .env.production)
 ```
 
 ---
@@ -122,13 +120,13 @@ Deploy to Cloud Run, Cloud Firestore Native, and Cloud Storage:
 Run automated test suites across all projects:
 
 ```bash
-# 1. Shared Domain Engine (41 tests)
+# 1. Shared Domain Engine (92 tests)
 cd projects/shared && uv run pytest
 
-# 2. Telegram Bot Service (29 tests)
-cd projects/bot && uv run --python 3.12 pytest
+# 2. Telegram Bot Service (26 tests)
+cd projects/bot && uv run pytest
 
-# 3. FastAPI Backend (25 tests)
+# 3. FastAPI Backend (24 tests)
 cd projects/backend && uv run pytest
 
 # 4. Frontend Compilation
