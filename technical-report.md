@@ -47,7 +47,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 | Audio Object Storage         | google-cloud-storage               | 2.18.x            | Direct streaming upload and hosting for synthesized MP3 notes      |
 | Secret Management            | google-cloud-secret-manager        | 2.20.x            | Zero-leak credential injection for Telegram and Gemini keys        |
 | Task Scheduling              | Google Cloud Scheduler             | Managed           | Scheduled 30-minute HTTP cron triggers to `/api/v1/telemetry/sync` |
-| Serverless Hosting           | Google Cloud Run                   | Gen 2 (Singapore) | Auto-scaling container deployment (`asia-southeast1`)              |
+| Serverless Hosting           | Google Cloud Run + Firebase Hosting | Gen 2 (Singapore) | Auto-scaling API containers (`asia-southeast1`) + static dashboard on Firebase Hosting |
 | Web GIS & Visuals            | Google Maps Platform (Maps JavaScript API), HTML5 Canvas | 3.x / @googlemaps/js-api-loader | GCP-native interactive basin GIS map, dark theme styling, and hydrograph curves |
 | UI Component Library         | Google Material Web (`@material/web`) | 1.5.x          | Official Google Material Design 3 Web Components (`<md-filled-button>`, `<md-outlined-card>`, `<md-filter-chip>`, `<md-slider>`) |
 | Design Tokens & UI Contract  | Google Material Design 3 (W3C DTCG) | M3 / v1.0         | Machine-actionable tokens and M3 state layers in root `DESIGN.md`  |
@@ -112,7 +112,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 flowchart TD
   subgraph ClientChannels["Client Presentation Channels"]
     Telegram["Telegram Bot Client\n(Mobile Farmers & Commune Chiefs)"]
-    WebDashboard["Web GIS Portal (Plain HTML/CSS/JS)\n(Provincial Committees & Cooperatives)"]
+    WebDashboard["Web GIS Portal (Next.js 14,\nstatic export on Firebase Hosting)\n(Provincial Committees & Cooperatives)"]
   end
 
   subgraph IngressPlatform["Google Cloud Run (asia-southeast1)"]
@@ -767,12 +767,16 @@ with httpx.Client(timeout=10.0) as client:
 # Production deployment (DRY-RUN BY DEFAULT; prints every gcloud command)
 ./projects/scripts/deploy_gcp.sh               # review the plan
 DRY_RUN=0 ./projects/scripts/deploy_gcp.sh     # execute: Artifact Registry + Cloud Build, Cloud Run
-                                               # (mekongpulse-backend, mekongpulse-web), Cloud Scheduler
+                                               # (mekongpulse-backend), Cloud Scheduler
                                                # (15-min sync + sentinel patrol), Secret Manager,
-                                               # Telegram webhook registration
+                                               # Telegram webhook registration, then the dashboard
+                                               # -> Firebase Hosting via deploy_web_firebase.sh
+
+# Dashboard-only redeploy (e.g. after the backend URL changes)
+DRY_RUN=0 ./projects/scripts/deploy_web_firebase.sh https://<backend-url>
 ```
 
-The deploy script reads `projects/.env.production` directly (it never mutates the active `.env` symlink), requires the secret values to be present in that preset, and prompts nothing.
+The deploy script reads `projects/.env.production` directly (it never mutates the active `.env` symlink), requires the secret values to be present in that preset, and prompts nothing. The web dashboard ships as a static export (`NEXT_OUTPUT=export`, built against the deployed backend URL) to the Firebase Hosting site named by `FIREBASE_PROJECT` — `https://ai-builder-cup-9f8cd.web.app`.
 
 ### 9.2 Health verification
 
@@ -784,6 +788,9 @@ curl -sf http://localhost:8080/api/v1/telemetry/latest | jq .
 # Cloud Run (URL via: gcloud run services describe mekongpulse-backend \
 #   --region asia-southeast1 --format='value(status.url)')
 curl -sf "$BACKEND_URL/api/v1/health" | grep '"status":"HEALTHY"'
+
+# Firebase Hosting dashboard (static export)
+curl -sf https://ai-builder-cup-9f8cd.web.app/ | grep -q "MekongPulse" && echo "web OK"
 ```
 
 ### 9.3 Incident playbook: Upstream MRC station endpoint outage

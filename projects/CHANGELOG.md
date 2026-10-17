@@ -2,6 +2,21 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.2.0] — 2026-10-17
+
+Web deployment moves to Firebase Hosting (static export); Cloud Run stays the backend runtime.
+
+### Added
+
+- `frontend` — `NEXT_OUTPUT=export` build mode (conditional in `next.config.mjs`; the containerized staging stack keeps `standalone`), plus `firebase.json` and `.firebaserc` targeting the `ai-builder-cup-9f8cd` Hosting site.
+- `scripts` — `deploy_web_firebase.sh`: builds the export against a backend URL (`NEXT_PUBLIC_API_BASE_URL`) and deploys to Firebase Hosting; dry-run by default.
+- `frontend` — `id`/`name` attributes on the commune search field, voice-note scrubber, and province filter (resolves the remaining console notice).
+
+### Changed
+
+- `scripts` — `deploy_gcp.sh` no longer deploys a web Cloud Run service; its step 6 now invokes the Firebase web deploy after capturing the backend URL, and CORS defaults to `https://ai-builder-cup-9f8cd.web.app`. `frontend/cloudbuild.yaml` is unused.
+- `frontend` — version 0.2.0.
+
 ## [0.1.1] — 2026-10-17
 
 Hardening pass after the first end-to-end runs against live MRC telemetry and PostgreSQL.

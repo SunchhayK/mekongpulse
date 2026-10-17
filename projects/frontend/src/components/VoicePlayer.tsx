@@ -90,6 +90,8 @@ export function VoicePlayer({
       <div className="scrub">
         <input
           type="range"
+          id="voice-scrub"
+          name="voice-scrub"
           min={0}
           max={duration || 1}
           step={0.1}

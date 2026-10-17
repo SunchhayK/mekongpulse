@@ -92,6 +92,8 @@ export function CommuneSearch({ onPick }: CommuneSearchProps) {
         <input
           className="text-field"
           type="search"
+          id="commune-search"
+          name="q"
           value={query}
           placeholder="Koh Thom, កោះធំ, 080404…"
           aria-label="Search commune by Khmer or English name or 6-digit code"

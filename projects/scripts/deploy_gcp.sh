@@ -17,7 +17,7 @@ AR_REPO="${AR_REPO:-mekongpulse}"
 DRY_RUN="${DRY_RUN:-1}"
 
 BACKEND_SERVICE="mekongpulse-backend"
-FRONTEND_SERVICE="mekongpulse-web"
+FIREBASE_PROJECT="${FIREBASE_PROJECT:-ai-builder-cup-9f8cd}"
 IMAGE_BASE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}"
 SECRETS=(TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET TELEGRAM_BROADCAST_CHANNEL_ID ADMIN_TOKEN LOG_SALT GEMINI_API_KEY)
 
@@ -55,7 +55,7 @@ echo "--- 1. enable services ---"
 run gcloud services enable \
   run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com \
   cloudscheduler.googleapis.com secretmanager.googleapis.com \
-  firestore.googleapis.com storage.googleapis.com \
+  firestore.googleapis.com storage.googleapis.com firebasehosting.googleapis.com \
   --project "$PROJECT_ID"
 
 echo
@@ -103,17 +103,9 @@ BACKEND_URL="$(capture gcloud run services describe "$BACKEND_SERVICE" \
 echo "backend url: ${BACKEND_URL}"
 
 echo
-echo "--- 6. build + deploy web dashboard against the backend url ---"
-run gcloud builds submit --project "$PROJECT_ID" \
-  --config frontend/cloudbuild.yaml \
-  --substitutions="_IMAGE=${IMAGE_BASE}/frontend:latest,_API_BASE=${BACKEND_URL}" .
-run gcloud run deploy "$FRONTEND_SERVICE" \
-  --project "$PROJECT_ID" --region "$REGION" \
-  --image "${IMAGE_BASE}/frontend:latest" \
-  --allow-unauthenticated --port 3000 --memory 256Mi --cpu 1 \
-  --min-instances 0 --max-instances 2
-FRONTEND_URL="$(capture gcloud run services describe "$FRONTEND_SERVICE" \
-  --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')"
+echo "--- 6. build + deploy the web dashboard (Firebase Hosting) ---"
+DRY_RUN="$DRY_RUN" ./scripts/deploy_web_firebase.sh "$BACKEND_URL"
+FRONTEND_URL="https://${FIREBASE_PROJECT}.web.app"
 echo "frontend url: ${FRONTEND_URL}"
 
 echo

@@ -49,7 +49,7 @@ MekongPulse supports three operating environments out-of-the-box. All scripts, e
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`development`** | Local PostgreSQL (`pg_db:5432`) | Local | Polling | Localhost (`:8080`, `:3000`) | Rapid local code changes with auto-reload |
 | **`staging`** | Host PostgreSQL (`host.docker.internal`) | Local / GCS | Polling | Docker Network | Containerized multi-service integration |
-| **`production`** | Cloud Firestore Native | GCS Audio Bucket | Webhook | Google Cloud Run (`:8080`) | Scalable serverless cloud deployment |
+| **`production`** | Cloud Firestore Native | GCS Audio Bucket | Webhook | Cloud Run API (`:8080`) + Firebase Hosting | Scalable serverless cloud deployment |
 
 ### Switching Environments with 1 Command
 
@@ -104,14 +104,20 @@ docker compose -f projects/docker-compose.yml up --build
 
 > **Note**: Uses the existing local PostgreSQL container (`pg_db` on port 5432) via `host.docker.internal:5432`. No duplicate PostgreSQL container is created.
 
-### 3. Production Deployment (Google Cloud)
+### 3. Production Deployment (Google Cloud + Firebase)
 
-Deploy to Cloud Run, Cloud Firestore Native, and Cloud Storage (the script is dry-run by default — it prints every command for review before anything executes):
+The backend, scheduler jobs, and secrets deploy to Google Cloud; the dashboard deploys to Firebase Hosting. Both scripts are dry-run by default — they print every command for review before anything executes:
 
 ```bash
-./projects/scripts/deploy_gcp.sh             # review the plan
+./projects/scripts/deploy_gcp.sh             # review the plan (backend + infra, then web)
 DRY_RUN=0 ./projects/scripts/deploy_gcp.sh   # execute (requires gcloud auth + real secrets in .env.production)
+
+# Dashboard-only redeploy (e.g. after the backend URL changes)
+./projects/scripts/deploy_web_firebase.sh https://<backend-url>
+DRY_RUN=0 ./projects/scripts/deploy_web_firebase.sh   # requires: bunx firebase-tools login
 ```
+
+The dashboard is built as a static export (`NEXT_OUTPUT=export`) with the backend URL baked in, and served from `ai-builder-cup-9f8cd.web.app` (`FIREBASE_PROJECT` in `.env.production`).
 
 ---
 

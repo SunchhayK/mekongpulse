@@ -46,6 +46,8 @@ export function RiskList({ rows, onSelect }: RiskListProps) {
           <span className="sr-only">Filter by province</span>
           <select
             className="province-select label-medium"
+            id="province-filter"
+            name="province"
             value={province}
             onChange={(event) => setProvince(event.target.value)}
           >
