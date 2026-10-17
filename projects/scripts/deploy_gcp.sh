@@ -11,7 +11,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PROJECT_ID="${GCP_PROJECT:-ai-builder-cup-511603}"
+PROJECT_ID="${GCP_PROJECT:-ai-builder-cup-9f8cd}"
 REGION="${GCP_REGION:-asia-southeast1}"
 AR_REPO="${AR_REPO:-mekongpulse}"
 DRY_RUN="${DRY_RUN:-1}"
@@ -22,10 +22,18 @@ IMAGE_BASE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}"
 SECRETS=(TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET TELEGRAM_BROADCAST_CHANNEL_ID ADMIN_TOKEN LOG_SALT GEMINI_API_KEY)
 
 run() {
+  # Print the command with secret values redacted; execute it untouched.
+  local printable="$*" secret value
+  for secret in "${SECRETS[@]}"; do
+    value="${!secret:-}"
+    if [[ -n "$value" ]]; then
+      printable="${printable//$value/<redacted>}"
+    fi
+  done
   if [[ "$DRY_RUN" == "1" ]]; then
-    printf '+ %s\n' "$*"
+    printf '+ %s\n' "$printable"
   else
-    printf '> %s\n' "$*"
+    printf '> %s\n' "$printable"
     "$@"
   fi
 }
@@ -48,6 +56,8 @@ fi
 # shellcheck disable=SC1091
 set -a && source .env.production && set +a
 
+AUDIO_BUCKET="${GCS_BUCKET:-mekongpulse-audio}"
+
 echo "=== MekongPulse deploy → project ${PROJECT_ID}, region ${REGION} (DRY_RUN=${DRY_RUN}) ==="
 
 echo
@@ -59,13 +69,20 @@ run gcloud services enable \
   --project "$PROJECT_ID"
 
 echo
-echo "--- 2. artifact registry ---"
+echo "--- 2. one-time resources: Firestore database + audio bucket ---"
+run gcloud firestore databases create --location="$REGION" --project "$PROJECT_ID" || true
+run gcloud storage buckets create "gs://${AUDIO_BUCKET}" --location="$REGION" --project "$PROJECT_ID" || true
+run gcloud storage buckets add-iam-policy-binding "gs://${AUDIO_BUCKET}" \
+  --member=allUsers --role=roles/storage.objectViewer --project "$PROJECT_ID" || true
+
+echo
+echo "--- 3. artifact registry ---"
 run gcloud artifacts repositories create "$AR_REPO" \
   --repository-format=docker --location="$REGION" --project "$PROJECT_ID" \
   --description "MekongPulse service images" || true
 
 echo
-echo "--- 3. secrets (values pulled from the local production env file) ---"
+echo "--- 4. secrets (values pulled from the local production env file) ---"
 for secret in "${SECRETS[@]}"; do
   value="${!secret:-}"
   if [[ "$DRY_RUN" == "1" ]]; then
@@ -84,35 +101,35 @@ for secret in "${SECRETS[@]}"; do
 done
 
 echo
-echo "--- 4. build images (Cloud Build) ---"
+echo "--- 5. build images (Cloud Build) ---"
 run gcloud builds submit --project "$PROJECT_ID" \
   --tag "${IMAGE_BASE}/backend:latest" --file backend/Dockerfile .
 run gcloud builds submit --project "$PROJECT_ID" \
   --tag "${IMAGE_BASE}/bot:latest" --file bot/Dockerfile .
 
 echo
-echo "--- 5. deploy backend (Cloud Run) ---"
+echo "--- 6. deploy backend (Cloud Run) ---"
 run gcloud run deploy "$BACKEND_SERVICE" \
   --project "$PROJECT_ID" --region "$REGION" \
   --image "${IMAGE_BASE}/backend:latest" \
   --allow-unauthenticated --port 8080 --memory 512Mi --cpu 1 \
   --min-instances 0 --max-instances 3 --timeout 300 \
-  --set-env-vars "ENVIRONMENT=production,FIRESTORE_PROJECT=${PROJECT_ID},USE_VERTEX_AI=true,VERTEX_PROJECT=${PROJECT_ID},VERTEX_LOCATION=${REGION}"
+  --set-env-vars "ENVIRONMENT=production,FIRESTORE_PROJECT=${PROJECT_ID},USE_VERTEX_AI=false"
 BACKEND_URL="$(capture gcloud run services describe "$BACKEND_SERVICE" \
   --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')"
 echo "backend url: ${BACKEND_URL}"
 
 echo
-echo "--- 6. build + deploy the web dashboard (Firebase Hosting) ---"
+echo "--- 7. build + deploy the web dashboard (Firebase Hosting) ---"
 DRY_RUN="$DRY_RUN" ./scripts/deploy_web_firebase.sh "$BACKEND_URL"
 FRONTEND_URL="https://${FIREBASE_PROJECT}.web.app"
 echo "frontend url: ${FRONTEND_URL}"
 
 echo
-echo "--- 7. wire public urls + scheduler ---"
+echo "--- 8. wire public urls + scheduler ---"
 run gcloud run services update "$BACKEND_SERVICE" \
   --project "$PROJECT_ID" --region "$REGION" \
-  --update-env-vars "PUBLIC_BASE_URL=${BACKEND_URL},CORS_ORIGINS=${FRONTEND_URL},GCS_PUBLIC_BASE=https://storage.googleapis.com/${GCS_BUCKET:-mekongpulse-audio}" \
+  --update-env-vars "PUBLIC_BASE_URL=${BACKEND_URL},CORS_ORIGINS=${FRONTEND_URL},GCS_BUCKET=${AUDIO_BUCKET},GCS_PUBLIC_BASE=https://storage.googleapis.com/${AUDIO_BUCKET}" \
   --set-secrets "TELEGRAM_BOT_TOKEN=TELEGRAM_BOT_TOKEN:latest,TELEGRAM_WEBHOOK_SECRET=TELEGRAM_WEBHOOK_SECRET:latest,TELEGRAM_BROADCAST_CHANNEL_ID=TELEGRAM_BROADCAST_CHANNEL_ID:latest,ADMIN_TOKEN=ADMIN_TOKEN:latest,LOG_SALT=LOG_SALT:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest"
 
 create_or_update_job() {
@@ -133,8 +150,8 @@ create_or_update_job "mekongpulse-telemetry-sync" "${BACKEND_URL}/api/v1/telemet
 create_or_update_job "mekongpulse-sentinel-patrol" "${BACKEND_URL}/api/v1/patrol/run"
 
 echo
-echo "--- 8. register the Telegram webhook ---"
-run curl -fsS "https://api.telegram.org/bot\${TELEGRAM_BOT_TOKEN}/setWebhook" \
+echo "--- 9. register the Telegram webhook ---"
+run curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
   --data-urlencode "url=${BACKEND_URL}/api/v1/telegram/webhook" \
   --data-urlencode "secret_token=${TELEGRAM_WEBHOOK_SECRET:-REPLACE_ME}"
 

@@ -8,6 +8,7 @@ All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https:
 
 - `shared` — the Khmer bulletin polish prompt now forbids preamble/meta text and markdown. A live smoke test showed the model prefixing the bulletin with "Below is the revised message…" plus `**`/`---` formatting, and that exact text was what the TTS voice note spoke; the polished output now starts with the bulletin itself.
 - `scripts` — `run_dev.sh` now loads the active `.env` preset into the environment before starting services; previously the backend/bot ran without `ADMIN_TOKEN`, `LOG_SALT`, or the bot token (defaults only), so admin routes returned 401 in dev.
+- `scripts` — `deploy_gcp.sh` corrected for the API-key path and hardened before its first live run: Cloud Run now gets `USE_VERTEX_AI=false` (the stale `VERTEX_*` env would have broken the first production boot), `GCS_BUCKET` is passed to the service, and a new step 2 provisions the Firestore database plus the public-read audio bucket. Command printing now redacts secret values in both dry and real modes, and the Telegram webhook step expands the bot token (it previously sent a literal `${TELEGRAM_BOT_TOKEN}`).
 
 ### Added
 
