@@ -124,22 +124,25 @@ The dashboard is built as a static export (`NEXT_OUTPUT=export`) with the backen
 The full GCP stack (Cloud Run, Firestore, Cloud Scheduler) requires a billing account on the project. Without one, the dashboard still goes public on Firebase Hosting (free tier) with the API served from this machine through a free Cloudflare tunnel:
 
 ```bash
-# 1. Start the API locally (loads the dev preset: tokens, salts, CORS)
-set -a && source projects/.env.development && set +a
-cd projects/backend && uv run uvicorn mekong_backend.main:app --port 8080
+# 1. Start the free tunnel FIRST (no account needed; the URL changes every run).
+#    HTTP/2 is more reliable than the default QUIC on flaky networks.
+cloudflared tunnel --url http://localhost:8080 --protocol http2
+#    note the https://<name>.trycloudflare.com URL it prints
 
-# 2. In another terminal: free tunnel (no account; the URL changes every run)
-cloudflared tunnel --url http://localhost:8080 --protocol http2  # note the https://<name>.trycloudflare.com URL
+# 2. In another terminal: the API, told its public URL so audio links point at the tunnel
+cd projects && set -a && source .env.development && set +a
+export PUBLIC_BASE_URL=https://<name>.trycloudflare.com
+cd backend && uv run uvicorn mekong_backend.main:app --port 8080
 
 # 3. Publish the dashboard against that URL
 cd projects && DRY_RUN=0 ./scripts/deploy_web_firebase.sh https://<name>.trycloudflare.com
 
-# Telegram bot (polling, works with or without the tunnel):
-#   same env exported as step 1, then:
-cd projects/bot && uv run python -m mekong_bot.main
+# 4. Optional: the Telegram bot (polling — keep a single bot process per token)
+cd projects && set -a && source .env.development && set +a
+cd bot && uv run python -m mekong_bot.main
 ```
 
-Caveats: the API is reachable only while this machine is awake and the tunnel is running, and the tunnel URL changes per session — re-run step 3 after each restart.
+Caveats: the API is reachable only while this machine is awake and the tunnel is running; the tunnel URL changes per session, so after a tunnel restart re-run steps 2–3 (the API must learn the new `PUBLIC_BASE_URL` and the dashboard must be republished against it).
 
 ---
 
