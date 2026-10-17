@@ -9,6 +9,13 @@ if [[ ! -e .env ]]; then
   ./scripts/switch_env.sh development
 fi
 
+# Load the active preset into this shell so every child process (backend, bot,
+# next dev) sees DATABASE_URL, ADMIN_TOKEN, LOG_SALT, GEMINI_API_KEY, etc.
+set -a
+# shellcheck disable=SC1091
+source .env
+set +a
+
 with_bot="${1:-}"
 backend_port="${BACKEND_PORT:-8080}"
 web_port="${FRONTEND_PORT:-3000}"

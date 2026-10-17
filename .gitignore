@@ -21,5 +21,8 @@ out/
 projects/data/audio/
 *.mp3
 
+# --- Firebase CLI local state ---
+.firebase/
+
 # --- OS ---
 .DS_Store

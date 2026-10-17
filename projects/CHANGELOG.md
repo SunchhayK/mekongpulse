@@ -7,6 +7,11 @@ All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https:
 ### Fixed
 
 - `shared` — the Khmer bulletin polish prompt now forbids preamble/meta text and markdown. A live smoke test showed the model prefixing the bulletin with "Below is the revised message…" plus `**`/`---` formatting, and that exact text was what the TTS voice note spoke; the polished output now starts with the bulletin itself.
+- `scripts` — `run_dev.sh` now loads the active `.env` preset into the environment before starting services; previously the backend/bot ran without `ADMIN_TOKEN`, `LOG_SALT`, or the bot token (defaults only), so admin routes returned 401 in dev.
+
+### Added
+
+- `docs` — free-tier live demo path (local API + `cloudflared` tunnel + Firebase Hosting) in `README.md`, for running without a GCP billing account.
 
 ## [0.1.2] — 2026-10-17
 
