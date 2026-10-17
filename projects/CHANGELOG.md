@@ -14,7 +14,8 @@ Web deployment moves to Firebase Hosting (static export); Cloud Run stays the ba
 
 ### Changed
 
-- `scripts` — `deploy_gcp.sh` no longer deploys a web Cloud Run service; its step 6 now invokes the Firebase web deploy after capturing the backend URL, and CORS defaults to `https://ai-builder-cup-9f8cd.web.app`. `frontend/cloudbuild.yaml` is unused.
+- `scripts` — `deploy_gcp.sh` no longer deploys a web Cloud Run service; its step 6 now invokes the Firebase web deploy after capturing the backend URL, and CORS defaults to `https://ai-builder-cup-9f8cd.web.app`. `frontend/cloudbuild.yaml` removed.
+- `repo` — environment presets (`.env.development`, `.env.staging`, `.env.production`) are no longer tracked in git; they now hold real secrets and live only on the operator's machine (`.env.*` is gitignored).
 - `frontend` — version 0.2.0.
 
 ## [0.1.1] — 2026-10-17

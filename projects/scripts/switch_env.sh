@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Point projects/.env at one of the committed environment presets.
+# Point projects/.env at one of the environment presets (kept local; never committed).
 # Usage: ./scripts/switch_env.sh {development|staging|production}
 set -euo pipefail
 cd "$(dirname "$0")/.."

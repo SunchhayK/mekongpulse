@@ -66,7 +66,7 @@ Use [`projects/scripts/switch_env.sh`](file:///Users/ruined/Home/Projects/AiBuil
 ./projects/scripts/switch_env.sh production
 ```
 
-The script points `projects/.env` at the chosen preset (a symlink — all services and Docker Compose read it) and prints the active environment.
+The script points `projects/.env` at the chosen preset (a symlink — all services and Docker Compose read it) and prints the active environment. The presets live only on your machine (`.env.*` is gitignored — they carry real secrets).
 
 ---
 

@@ -6,9 +6,10 @@ __pycache__/
 .coverage
 htmlcov/
 
-# --- Secrets: only the environment presets are committed ---
+# --- Secrets: environment files are never committed (locals only) ---
 .env
-.env.local
+.env.*
+!.env.example
 
 # --- Node / Next.js ---
 node_modules/
