@@ -13,6 +13,7 @@ from .models import (
     Commune,
     CommuneRisk,
     ConversationTurn,
+    FieldReport,
     PatrolRun,
     RiskTier,
     SentinelAlert,
@@ -38,6 +39,7 @@ class MemoryRepository:
         self.dispatches: list[dict] = []
         self.warnings: list[TelemetryWarning] = []
         self.turns: dict[str, list[ConversationTurn]] = {}
+        self.field_reports: list[FieldReport] = []
         self._sub_seq = 0
 
     async def init(self) -> None:  # pragma: no cover - trivially in-memory
@@ -225,3 +227,18 @@ class MemoryRepository:
 
     async def recent_turns(self, chat_id: str, limit: int = 12) -> list[ConversationTurn]:
         return (self.turns.get(chat_id) or [])[-limit:]
+
+    # --- field reports ---------------------------------------------------------------------
+    async def add_field_report(self, report: FieldReport) -> FieldReport:
+        self.field_reports.append(report)
+        return report
+
+    async def list_field_reports(
+        self, commune_code: str | None = None, limit: int = 20
+    ) -> list[FieldReport]:
+        reports = [
+            r for r in self.field_reports
+            if commune_code is None or r.commune_code == commune_code
+        ]
+        reports.sort(key=lambda r: r.reported_at, reverse=True)  # newest first
+        return reports[:limit]

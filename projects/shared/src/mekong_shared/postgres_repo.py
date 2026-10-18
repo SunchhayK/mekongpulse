@@ -16,6 +16,8 @@ from .models import (
     Commune,
     CommuneRisk,
     ConversationTurn,
+    FieldReport,
+    FieldReportStatus,
     FloodReason,
     PatrolRun,
     RiskTier,
@@ -160,6 +162,17 @@ CREATE TABLE IF NOT EXISTS conversation_turns(
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_turns_chat ON conversation_turns(chat_id, id DESC);
+CREATE TABLE IF NOT EXISTS field_reports(
+  id text PRIMARY KEY,
+  commune_code text NOT NULL REFERENCES communes(code),
+  status text NOT NULL,
+  note text,
+  reporter_label text,
+  source text NOT NULL DEFAULT 'web',
+  reported_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_field_reports_commune_time
+  ON field_reports(commune_code, reported_at DESC);
 """
 
 _OBS_COLS = """
@@ -593,6 +606,34 @@ class PostgresRepository:
             for r in reversed(rows)
         ]
 
+    # --- field reports ------------------------------------------------------------
+    async def add_field_report(self, report: FieldReport) -> FieldReport:
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO field_reports(id, commune_code, status, note, reporter_label,
+                  source, reported_at)
+                VALUES($1,$2,$3,$4,$5,$6,$7)
+                """,
+                report.id, report.commune_code, report.status.value, report.note,
+                report.reporter_label, report.source, report.reported_at,
+            )
+        return report
+
+    async def list_field_reports(
+        self, commune_code: str | None = None, limit: int = 20
+    ) -> list[FieldReport]:
+        query = "SELECT * FROM field_reports"
+        args: list = []
+        if commune_code:
+            query += " WHERE commune_code=$1"
+            args.append(commune_code)
+        query += f" ORDER BY reported_at DESC LIMIT ${len(args) + 1}"
+        args.append(limit)
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(query, *args)
+        return [_field_report_from_row(r) for r in rows]
+
 
 def _commune_from_row(row: asyncpg.Record) -> Commune:
     return Commune(
@@ -651,4 +692,13 @@ def _sentinel_alert_from_row(row: asyncpg.Record) -> SentinelAlert:
         lead_time_hours=row["lead_time_hours"], directive_title=row["directive_title"] or "",
         bulletin_text=row["bulletin_text"] or "", audio_url=row["audio_url"],
         dispatched_at=row["dispatched_at"], recipients_count=row["recipients_count"],
+    )
+
+
+def _field_report_from_row(row: asyncpg.Record) -> FieldReport:
+    return FieldReport(
+        id=row["id"], commune_code=row["commune_code"],
+        status=FieldReportStatus(row["status"]), note=row["note"],
+        reporter_label=row["reporter_label"], source=row["source"],
+        reported_at=row["reported_at"],
     )

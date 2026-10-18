@@ -1,14 +1,24 @@
-"""Commune endpoints: risk map, GPS resolve, search, on-demand assessment."""
+"""Commune endpoints: risk map, GPS resolve, search, on-demand assessment,
+evidence payloads, and ground-truth field reports."""
 
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
+from uuid import uuid4
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
+from mekong_shared.evidence import EvidencePayload, build_evidence
 from mekong_shared.logging_utils import log_event
-from mekong_shared.models import AssessmentResult, CommuneRisk, CropStage
+from mekong_shared.models import (
+    AssessmentResult,
+    CommuneRisk,
+    CropStage,
+    FieldReport,
+    FieldReportStatus,
+)
 from mekong_shared.pipeline import CommuneNotFound
 
 log = logging.getLogger("mekongpulse.backend")
@@ -19,6 +29,16 @@ router = APIRouter(prefix="/api/v1/communes", tags=["communes"])
 class AssessRequest(BaseModel):
     crop_stage: CropStage = CropStage.RIPENING
     with_audio: bool = False
+
+
+class FieldReportCreate(BaseModel):
+    status: FieldReportStatus
+    note: str | None = None
+    reporter_label: str | None = None
+
+
+class FieldReportList(BaseModel):
+    reports: list[FieldReport]
 
 
 class CommuneSummary(BaseModel):
@@ -92,6 +112,60 @@ async def assess(commune_code: str, body: AssessRequest, request: Request) -> As
         crop_stage=body.crop_stage.value,
     )
     return result
+
+
+@router.get("/{commune_code}/evidence")
+async def evidence(commune_code: str, request: Request) -> EvidencePayload:
+    """Deterministic provenance for the commune's current risk (no field reports here)."""
+    pipeline = request.app.state.pipeline
+    payload = await build_evidence(pipeline, commune_code)
+    log_event(
+        log,
+        "EVIDENCE_BUILT",
+        trace_id=getattr(request.state, "trace_id", None),
+        commune=commune_code,
+        tier=payload.risk_tier.value,
+        confidence=payload.confidence,
+    )
+    return payload
+
+
+@router.post("/{commune_code}/reports", status_code=201)
+async def create_field_report(
+    commune_code: str, body: FieldReportCreate, request: Request
+) -> FieldReport:
+    """Ground truth from officials: did water reach the fields in this commune?"""
+    repo = request.app.state.repo
+    commune = await repo.get_commune(commune_code)
+    if commune is None:
+        raise CommuneNotFound(commune_code)
+    report = FieldReport(
+        id=uuid4().hex,
+        commune_code=commune_code,
+        status=body.status,
+        note=body.note,
+        reporter_label=body.reporter_label,
+        source="web",
+        reported_at=datetime.now(timezone.utc),
+    )
+    saved = await repo.add_field_report(report)
+    log_event(
+        log,
+        "FIELD_REPORT_ADDED",
+        trace_id=getattr(request.state, "trace_id", None),
+        commune=commune_code,
+        status=body.status.value,
+    )
+    return saved
+
+
+@router.get("/{commune_code}/reports")
+async def list_field_reports(
+    commune_code: str, request: Request, limit: int = 20
+) -> FieldReportList:
+    repo = request.app.state.repo
+    reports = await repo.list_field_reports(commune_code, limit=max(1, min(limit, 100)))
+    return FieldReportList(reports=reports)
 
 
 @router.get("/{commune_code}")

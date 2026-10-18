@@ -235,6 +235,26 @@ class SentinelAlert(BaseModel):
     recipients_count: int = 0
 
 
+class FieldReportStatus(StrEnum):
+    """Ground-truth follow-up from officials (verification layer)."""
+
+    WATER_REACHED = "water_reached"
+    NO_WATER = "no_water"
+    OTHER = "other"
+
+
+class FieldReport(BaseModel):
+    """One ground-truth report for a commune, filed by a person on the ground."""
+
+    id: str  # uuid4 hex
+    commune_code: str
+    status: FieldReportStatus
+    note: str | None = None
+    reporter_label: str | None = None
+    source: str  # telegram | web
+    reported_at: datetime
+
+
 class ConversationTurn(BaseModel):
     chat_id: str
     role: str  # user | assistant

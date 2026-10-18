@@ -15,6 +15,7 @@ from .models import (
     Commune,
     CommuneRisk,
     ConversationTurn,
+    FieldReport,
     FloodReason,
     PatrolRun,
     RiskTier,
@@ -427,3 +428,26 @@ class FirestoreRepository:
             )
             for d in reversed(docs)
         ]
+
+    # --- field reports ------------------------------------------------------------------------
+    async def add_field_report(self, report: FieldReport) -> FieldReport:
+        await _run(
+            self._col("field_reports").document(report.id).set,
+            report.model_dump(mode="json"),
+        )
+        return report
+
+    async def list_field_reports(
+        self, commune_code: str | None = None, limit: int = 20
+    ) -> list[FieldReport]:
+        query = self._col("field_reports")
+        if commune_code:
+            query = query.where(filter=self._fs.FieldFilter("commune_code", "==", commune_code))
+        docs = await _run(lambda: list(query.stream()))
+        reports = [
+            FieldReport(**{k: v for k, v in d.to_dict().items() if k in FieldReport.model_fields})
+            for d in docs
+        ]
+        # ponytail: sort client-side; where+order_by here would demand a composite index.
+        reports.sort(key=lambda r: r.reported_at, reverse=True)
+        return reports[:limit]

@@ -16,6 +16,7 @@ from .models import (
     Commune,
     CommuneRisk,
     ConversationTurn,
+    FieldReport,
     PatrolRun,
     RiskTier,
     SentinelAlert,
@@ -88,6 +89,12 @@ class Repository(Protocol):
     # --- advisor -------------------------------------------------------------
     async def append_turn(self, chat_id: str, role: str, content: str) -> None: ...
     async def recent_turns(self, chat_id: str, limit: int = 12) -> list[ConversationTurn]: ...
+
+    # --- field reports ---------------------------------------------------------
+    async def add_field_report(self, report: FieldReport) -> FieldReport: ...
+    async def list_field_reports(
+        self, commune_code: str | None = None, limit: int = 20
+    ) -> list[FieldReport]: ...
 
 
 class AudioStoreProtocol(Protocol):
