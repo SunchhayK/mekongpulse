@@ -255,6 +255,40 @@ class FieldReport(BaseModel):
     reported_at: datetime
 
 
+class AgentRunStatus(StrEnum):
+    """Watch-officer approval lifecycle."""
+
+    PENDING_APPROVAL = "pending_approval"
+    PUBLISHED = "published"
+    REJECTED = "rejected"
+    FAILED = "failed"
+
+
+class AgentRun(BaseModel):
+    """One autonomous watch pass: evidence check, draft, human approval."""
+
+    id: str  # uuid4 hex
+    commune_code: str
+    commune_name_kh: str | None = None
+    commune_name_en: str | None = None
+    trigger: str = "manual"  # manual | transition
+    previous_tier: RiskTier | None = None
+    current_tier: RiskTier
+    status: AgentRunStatus = AgentRunStatus.PENDING_APPROVAL
+    rationale: str = ""
+    draft_khmer: str
+    draft_english: str | None = None
+    tool_calls: list[dict] = Field(default_factory=list)
+    created_at: datetime
+    approved_at: datetime | None = None
+    approved_by: str | None = None
+    rejected_at: datetime | None = None
+    published_at: datetime | None = None
+    published_message_id: int | None = None
+    published_text: str | None = None
+    error: str | None = None
+
+
 class ConversationTurn(BaseModel):
     chat_id: str
     role: str  # user | assistant

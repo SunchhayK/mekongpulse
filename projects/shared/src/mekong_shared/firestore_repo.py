@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from .models import (
+    AgentRun,
     Commune,
     CommuneRisk,
     ConversationTurn,
@@ -451,3 +452,33 @@ class FirestoreRepository:
         # ponytail: sort client-side; where+order_by here would demand a composite index.
         reports.sort(key=lambda r: r.reported_at, reverse=True)
         return reports[:limit]
+
+    # --- watch runs ----------------------------------------------------------------
+    async def add_agent_run(self, run: AgentRun) -> AgentRun:
+        await _run(
+            self._col("agent_runs").document(run.id).set,
+            run.model_dump(mode="json"),
+        )
+        return run
+
+    async def update_agent_run(self, run: AgentRun) -> None:
+        await _run(
+            self._col("agent_runs").document(run.id).set,
+            run.model_dump(mode="json"),
+        )
+
+    async def get_agent_run(self, run_id: str) -> AgentRun | None:
+        doc = await _run(self._col("agent_runs").document(run_id).get)
+        if not getattr(doc, "exists", False):
+            return None
+        return AgentRun.model_validate(doc.to_dict())
+
+    async def list_agent_runs(
+        self, *, status: str | None = None, limit: int = 20
+    ) -> list[AgentRun]:
+        docs = await _run(lambda: list(self._col("agent_runs").stream()))
+        runs = [AgentRun.model_validate(d.to_dict()) for d in docs]
+        if status:
+            runs = [r for r in runs if r.status.value == status]
+        runs.sort(key=lambda r: r.created_at, reverse=True)
+        return runs[:limit]

@@ -19,7 +19,18 @@ def build_application(
     if not settings.telegram_bot_token:
         return None
     application = Application.builder().token(settings.telegram_bot_token).build()
-    service = BotService(settings, pipeline, repo)
+
+    async def _publish(text: str) -> dict:
+        channel = settings.telegram_broadcast_channel_id
+        if not channel:
+            return {"status": "unavailable"}
+        try:
+            message = await application.bot.send_message(chat_id=channel, text=text)
+        except Exception as exc:  # noqa: BLE001 - surfaced as a value to the officer
+            return {"status": "error", "detail": str(exc)[:200]}
+        return {"message_id": getattr(message, "message_id", None)}
+
+    service = BotService(settings, pipeline, repo, publisher=_publish)
     register_handlers(application, service)
     application.bot_data["service"] = service
     return application

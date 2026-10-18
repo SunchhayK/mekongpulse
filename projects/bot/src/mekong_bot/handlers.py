@@ -111,6 +111,10 @@ def register_handlers(application: Application, service: BotService) -> None:
     async def digest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await _respond(update, await service.digest(update.effective_chat.id))
 
+    async def watch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = " ".join(context.args or [])
+        await _respond(update, await service.watch(update.effective_chat.id, query))
+
     async def on_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         location = update.message.location
         await _respond(
@@ -138,6 +142,7 @@ def register_handlers(application: Application, service: BotService) -> None:
     application.add_handler(CommandHandler("risk", _safe(risk)))
     application.add_handler(CommandHandler("report", _safe(report)))
     application.add_handler(CommandHandler("digest", _safe(digest)))
+    application.add_handler(CommandHandler("watch", _safe(watch)))
     application.add_handler(MessageHandler(filters.LOCATION, _safe(on_location)))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _safe(on_text)))
     application.add_handler(CallbackQueryHandler(_safe(on_callback)))

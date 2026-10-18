@@ -105,6 +105,8 @@ The deployment now runs through Vertex AI (`global`) with the native ReAct advis
 | metric | value |
 |---|---:|
 | Advisor turn (one tool call) | 11.5 s |
+| Watch run (evidence + draft + 3 tool calls) | 17.8 s |
+| Approve → channel publish | immediate (`message_id` returned) |
 | Khmer STT (≈60 s clip) | 6.3 s |
 | New bulletin TTS — Flash-Lite, 58.6 s audio | 35.9 s |
 | Repeat assessment, cached audio + polish | 25 ms |

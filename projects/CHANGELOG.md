@@ -2,6 +2,21 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.14.0] — 2026-10-18
+
+Autonomous watch-officer runs with human approval.
+
+### Added
+
+- `shared` — 0.11.0: `AgentRun` (stored in `agent_runs`) plus `run_watch()`, which gathers evidence, builds the deterministic bilingual draft, records the agent rationale/tool trace, and stores a pending approval task. A provider outage still leaves the deterministic draft reviewable.
+- `backend` — 0.6.0: `GET/POST /api/v1/watch/runs` and `POST /api/v1/watch/runs/{id}/approve|reject` (officer auth). Approval publishes through the same Telegram channel publisher; rejection closes the task. Patrol queues up to `WATCH_AUTO_MAX_RUNS` runs for upward WARNING/DANGER transitions.
+- `frontend` — 0.9.0: watch inbox on the assistant page — run a watch on the focused (or highest-risk) commune, review the tool trace and draft, edit, approve/publish, or reject; polls every 30 seconds.
+- `bot` — 0.5.0: `/watch <commune>` returns the draft with inline approve/reject buttons for chat IDs in `OFFICER_TELEGRAM_IDS`; without the allowlist, Telegram approval stays disabled.
+
+### Changed
+
+- `technical-report.md` 1.10.0 → 1.11.0 and `product-report.md` 1.6.1 → 1.7.0 — watch-officer workflow documented; tests now 155 shared / 87 backend / 41 bot.
+
 ## [0.13.0] — 2026-10-18
 
 Shared links keep their voice note instead of regenerating it on every view.

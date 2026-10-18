@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 import asyncpg
 
 from .models import (
+    AgentRun,
+    AgentRunStatus,
     Commune,
     CommuneRisk,
     ConversationTurn,
@@ -173,6 +175,30 @@ CREATE TABLE IF NOT EXISTS field_reports(
 );
 CREATE INDEX IF NOT EXISTS idx_field_reports_commune_time
   ON field_reports(commune_code, reported_at DESC);
+CREATE TABLE IF NOT EXISTS agent_runs(
+  id text PRIMARY KEY,
+  commune_code text NOT NULL,
+  commune_name_kh text,
+  commune_name_en text,
+  trigger text NOT NULL,
+  previous_tier text,
+  current_tier text NOT NULL,
+  status text NOT NULL,
+  rationale text NOT NULL DEFAULT '',
+  draft_khmer text NOT NULL,
+  draft_english text,
+  tool_calls jsonb NOT NULL DEFAULT '[]'::jsonb,
+  created_at timestamptz NOT NULL,
+  approved_at timestamptz,
+  approved_by text,
+  rejected_at timestamptz,
+  published_at timestamptz,
+  published_message_id bigint,
+  published_text text,
+  error text
+);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_status_time
+  ON agent_runs(status, created_at DESC);
 """
 
 _OBS_COLS = """
@@ -634,6 +660,62 @@ class PostgresRepository:
             rows = await conn.fetch(query, *args)
         return [_field_report_from_row(r) for r in rows]
 
+    # --- watch runs ----------------------------------------------------------------
+    async def add_agent_run(self, run: AgentRun) -> AgentRun:
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO agent_runs(id, commune_code, commune_name_kh, commune_name_en,
+                  trigger, previous_tier, current_tier, status, rationale, draft_khmer,
+                  draft_english, tool_calls, created_at, approved_at, approved_by,
+                  rejected_at, published_at, published_message_id, published_text, error)
+                VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20)
+                """,
+                run.id, run.commune_code, run.commune_name_kh, run.commune_name_en,
+                run.trigger,
+                run.previous_tier.value if run.previous_tier else None,
+                run.current_tier.value, run.status.value, run.rationale, run.draft_khmer,
+                run.draft_english, json.dumps(run.tool_calls), run.created_at,
+                run.approved_at, run.approved_by, run.rejected_at, run.published_at,
+                run.published_message_id, run.published_text, run.error,
+            )
+        return run
+
+    async def update_agent_run(self, run: AgentRun) -> None:
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE agent_runs SET status=$2, rationale=$3, draft_khmer=$4,
+                  draft_english=$5, tool_calls=$6::jsonb, approved_at=$7, approved_by=$8,
+                  rejected_at=$9, published_at=$10, published_message_id=$11,
+                  published_text=$12, error=$13
+                WHERE id=$1
+                """,
+                run.id, run.status.value, run.rationale, run.draft_khmer,
+                run.draft_english, json.dumps(run.tool_calls), run.approved_at,
+                run.approved_by, run.rejected_at, run.published_at,
+                run.published_message_id, run.published_text, run.error,
+            )
+
+    async def get_agent_run(self, run_id: str) -> AgentRun | None:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT * FROM agent_runs WHERE id=$1", run_id)
+        return _agent_run_from_row(row) if row else None
+
+    async def list_agent_runs(
+        self, *, status: str | None = None, limit: int = 20
+    ) -> list[AgentRun]:
+        query = "SELECT * FROM agent_runs"
+        args: list = []
+        if status:
+            query += " WHERE status=$1"
+            args.append(status)
+        query += f" ORDER BY created_at DESC LIMIT ${len(args) + 1}"
+        args.append(limit)
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(query, *args)
+        return [_agent_run_from_row(r) for r in rows]
+
 
 def _commune_from_row(row: asyncpg.Record) -> Commune:
     return Commune(
@@ -701,4 +783,32 @@ def _field_report_from_row(row: asyncpg.Record) -> FieldReport:
         status=FieldReportStatus(row["status"]), note=row["note"],
         reporter_label=row["reporter_label"], source=row["source"],
         reported_at=row["reported_at"],
+    )
+
+
+def _agent_run_from_row(row: asyncpg.Record) -> AgentRun:
+    tool_calls = row["tool_calls"]
+    if isinstance(tool_calls, str):
+        tool_calls = json.loads(tool_calls)
+    return AgentRun(
+        id=row["id"],
+        commune_code=row["commune_code"],
+        commune_name_kh=row["commune_name_kh"],
+        commune_name_en=row["commune_name_en"],
+        trigger=row["trigger"],
+        previous_tier=RiskTier(row["previous_tier"]) if row["previous_tier"] else None,
+        current_tier=RiskTier(row["current_tier"]),
+        status=AgentRunStatus(row["status"]),
+        rationale=row["rationale"] or "",
+        draft_khmer=row["draft_khmer"],
+        draft_english=row["draft_english"],
+        tool_calls=list(tool_calls or []),
+        created_at=row["created_at"],
+        approved_at=row["approved_at"],
+        approved_by=row["approved_by"],
+        rejected_at=row["rejected_at"],
+        published_at=row["published_at"],
+        published_message_id=row["published_message_id"],
+        published_text=row["published_text"],
+        error=row["error"],
     )

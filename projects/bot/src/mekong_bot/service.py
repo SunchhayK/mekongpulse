@@ -11,15 +11,22 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
+from typing import Awaitable, Callable
 from uuid import uuid4
 
 from mekong_shared.adk_agent import AdvisorUnavailable, StepLLM, answer
-from mekong_shared.adk_tools import AdvisorToolContext, AdvisorTools
+from mekong_shared.adk_tools import TELEGRAM_MESSAGE_LIMIT, AdvisorToolContext, AdvisorTools
 from mekong_shared.config import Settings
-from mekong_shared.models import AssessmentResult, Commune, CropStage
+from mekong_shared.models import (
+    AgentRunStatus,
+    AssessmentResult,
+    Commune,
+    CropStage,
+)
 from mekong_shared.pipeline import AssessmentUnavailable, CommuneNotFound, Pipeline
 from mekong_shared.repository import Repository
 from mekong_shared.spatial import OutsideBasinError
+from mekong_shared.watch import run_watch
 
 try:  # concurrent workstream adds these to shared; bot codes to their contract
     from mekong_shared.models import FieldReport, FieldReportStatus
@@ -52,6 +59,7 @@ WELCOME = (
     "/risk [ឈ្មោះឃុំ] — កម្រិតហានិភ័យឥឡូវនេះ / current risk + advice\n"
     "/report — រាយការណ៍ទឹកនៅវាលរបស់អ្នក / report water at your fields\n"
     "/digest — របាយការណ៍ប្រចាំថ្ងៃ / daily digest\n"
+    "/watch <ឈ្មោះឃុំ> — 🛡 officer watch draft (allowlisted)\n"
     "📍 ផ្ញើទីតាំង — send your location to find your commune\n"
     "💬 សួរខ្ញុំជាខ្មែរ ឬអង់គ្លេស — ask the agronomy advisor anything\n"
     "\n"
@@ -67,6 +75,11 @@ FIELD_REPORT_CHOICES: tuple[tuple[str, str], ...] = (
 DIGEST_UNAVAILABLE = (
     "📰 របាយការណ៍ប្រចាំថ្ងៃមិនទាន់អាចប្រើបានទេ — សូមព្យាយាមម្តងទៀតនៅពេលក្រោយ។\n"
     "The daily digest is unavailable right now — please try again later."
+)
+
+WATCH_USAGE = (
+    "🛡 សូមសរសេរ៖ /watch <ឈ្មោះឃុំ ឬកូដ>\n"
+    "Usage: /watch <commune name or code>"
 )
 
 
@@ -86,11 +99,13 @@ class BotService:
         repo: Repository,
         *,
         llm: StepLLM | None = None,
+        publisher: Callable[[str], Awaitable[dict]] | None = None,
     ) -> None:
         self.settings = settings
         self.pipeline = pipeline
         self.repo = repo
         self.llm = llm  # scripted engine for tests; None = ADK/Gemini in prod
+        self.publisher = publisher
         self._tools: AdvisorTools | None = None
 
     @property
@@ -274,10 +289,127 @@ class BotService:
         await self.repo.append_turn(str(chat_id), "assistant", reply_text)
         return BotReply(reply_text)
 
+    def _officer_ids(self) -> set[int]:
+        raw = self.settings.officer_telegram_ids or ""
+        return {int(part.strip()) for part in raw.split(",") if part.strip().isdigit()}
+
+    def _is_officer(self, chat_id: str | int) -> bool:
+        try:
+            return int(chat_id) in self._officer_ids()
+        except (TypeError, ValueError):
+            return False
+
+    def _watch_disabled(self) -> str:
+        base = (self.settings.web_base_url or "").rstrip("/")
+        return (
+            "🛡 Telegram approval is not enabled for this chat.\n"
+            f"Use the web officer console: {base}/km/assistant\n"
+            "Set OFFICER_TELEGRAM_IDS to enable Telegram approval."
+        )
+
+    async def watch(self, chat_id: str | int, query: str) -> BotReply:
+        """Run a watch pass and offer inline approve/reject buttons (officers only)."""
+        if not self._is_officer(chat_id):
+            return BotReply(self._watch_disabled())
+        query = (query or "").strip()
+        if not query:
+            return BotReply(WATCH_USAGE)
+        commune = await self._commune(query)
+        if commune is None:
+            return BotReply(self._not_found(query))
+        try:
+            run = await run_watch(self.pipeline, commune.code, llm=self.llm)
+        except (CommuneNotFound, AssessmentUnavailable):
+            return BotReply(
+                "⚠️ មិនអាចបង្កើតការឃ្លាំមើលសម្រាប់ឃុំនេះបានទេ។\n"
+                "A watch run is not available for this commune right now."
+            )
+        except Exception:  # noqa: BLE001 - the bot must not crash on a provider failure
+            log.exception("watch run failed for commune %s", commune.code)
+            return BotReply("⚠️ ការឃ្លាំមើលបរាជ័យ — សូមព្យាយាមម្តងទៀត។\nWatch run failed — please try again.")
+
+        text = self._watch_text(run)[:TELEGRAM_MESSAGE_LIMIT]
+        return BotReply(
+            text,
+            buttons=[
+                [
+                    ("✅ Approve & publish", f"watch:approve:{run.id}"),
+                    ("❌ Reject", f"watch:reject:{run.id}"),
+                ]
+            ],
+        )
+
+    def _watch_text(self, run) -> str:
+        previous = run.previous_tier.value if run.previous_tier else "—"
+        return (
+            f"🛡 Watch run — {run.commune_name_en or run.commune_name_kh or run.commune_code} "
+            f"({run.commune_code})\n"
+            f"Tier: {previous} → {run.current_tier.value}\n\n"
+            f"{run.rationale}\n\n"
+            f"📝 Draft:\n{run.draft_khmer}"
+        )
+
+    async def _watch_action(self, chat_id: str | int, action: str, run_id: str) -> BotReply:
+        if not self._is_officer(chat_id):
+            return BotReply(self._watch_disabled(), edit=True)
+        run = await self.repo.get_agent_run(run_id)
+        if run is None:
+            return BotReply("Watch run not found.", edit=True)
+        if run.status is not AgentRunStatus.PENDING_APPROVAL:
+            return BotReply(f"This run is already {run.status.value}.", edit=True)
+
+        now = datetime.now(timezone.utc)
+        if action == "reject":
+            updated = run.model_copy(
+                update={
+                    "status": AgentRunStatus.REJECTED,
+                    "rejected_at": now,
+                    "approved_by": "telegram",
+                }
+            )
+            await self.repo.update_agent_run(updated)
+            return BotReply("❌ Watch run rejected. Nothing was published.", edit=True)
+
+        if self.publisher is None:
+            return BotReply(
+                "⚠️ Publishing is not configured for this bot.\n"
+                "Approve from the web officer console instead.",
+                edit=True,
+            )
+        text = run.draft_khmer
+        if run.draft_english:
+            text = f"{text}\n\n{run.draft_english}"
+        text = text[:TELEGRAM_MESSAGE_LIMIT]
+        result = await self.publisher(text)
+        if not isinstance(result, dict) or result.get("status") == "error" or "error" in result:
+            detail = str(
+                (result or {}).get("detail")
+                or (result or {}).get("error")
+                or "Telegram rejected the post"
+            )
+            return BotReply(f"❌ Publish failed: {detail}", edit=True)
+
+        updated = run.model_copy(
+            update={
+                "status": AgentRunStatus.PUBLISHED,
+                "approved_at": now,
+                "approved_by": "telegram",
+                "published_at": now,
+                "published_message_id": result.get("message_id"),
+                "published_text": text,
+            }
+        )
+        await self.repo.update_agent_run(updated)
+        message_id = updated.published_message_id
+        suffix = f" (message #{message_id})" if message_id else ""
+        return BotReply(f"✅ Published to the public channel{suffix}.", edit=True)
+
     async def callback(
         self, chat_id: str | int, data: str, *, reporter: str | None = None
     ) -> BotReply:
         parts = (data or "").split(":")
+        if parts[0] == "watch" and len(parts) == 3 and parts[1] in ("approve", "reject"):
+            return await self._watch_action(chat_id, parts[1], parts[2])
         if parts[0] == "sub" and len(parts) == 2:
             commune = await self._commune(parts[1])
             if commune is None:

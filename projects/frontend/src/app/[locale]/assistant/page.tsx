@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { AssistantChat, type ChatMessage } from "@/components/AssistantChat";
 import { CommuneSearch } from "@/components/CommuneSearch";
+import { WatchRuns } from "@/components/WatchRuns";
 import { ArrowLeftIcon, CloseIcon, MapPinIcon } from "@/components/icons";
 import { Link } from "@/i18n/navigation";
 import {
@@ -382,6 +383,14 @@ function AssistantView() {
               {t("focusCancel")}
             </button>
           </section>
+        )}
+
+        {activeSession && (
+          <WatchRuns
+            session={activeSession}
+            communeCode={communeCode || null}
+            onSessionInvalid={clearSession}
+          />
         )}
 
         <AssistantChat

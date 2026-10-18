@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable
 
@@ -46,6 +46,7 @@ class PatrolSummary:
     run: PatrolRun
     alerts: list[SentinelAlert]
     debounced: list[str]
+    transitions: list[RiskTransition] = field(default_factory=list)
 
 
 class SentinelPatrol:
@@ -176,4 +177,6 @@ class SentinelPatrol:
             debounced=len(debounced),
             duration_ms=run.execution_duration_ms,
         )
-        return PatrolSummary(run=run, alerts=alerts, debounced=debounced)
+        return PatrolSummary(
+            run=run, alerts=alerts, debounced=debounced, transitions=transitions
+        )

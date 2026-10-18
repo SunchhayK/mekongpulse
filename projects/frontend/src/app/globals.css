@@ -1684,3 +1684,46 @@ button.station-card[aria-pressed="true"] {
   .session-chip { display: none; }
   .assistant-clear { padding: 0 9px; }
 }
+
+/* --- Watch officer inbox -------------------------------------------------- */
+.watch-list { display: flex; flex-direction: column; }
+.watch-run { border-top: 1px solid var(--line); padding: 14px 0; }
+.watch-run:first-child { border-top: 0; padding-top: 4px; }
+.watch-run-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.watch-run-title { font-weight: 600; }
+.watch-meta { margin: 4px 0 8px; }
+.watch-section { margin: 8px 0; }
+.watch-rationale { margin: 4px 0 0; white-space: pre-wrap; line-height: 1.6; }
+.watch-tools { margin: 8px 0; }
+.watch-tools summary,
+.watch-draft summary { cursor: pointer; }
+.watch-tools ul { margin: 6px 0 0 18px; padding: 0; }
+.watch-tools li { margin: 2px 0; }
+.watch-draft { margin: 8px 0; }
+.watch-draft-text { margin: 6px 0; white-space: pre-wrap; line-height: 1.7; }
+.watch-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.watch-edit { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.watch-edit textarea { width: 100%; resize: vertical; }
+.watch-error { color: var(--error-ink); margin: 6px 0; white-space: pre-wrap; }
+.watch-status--pending {
+  color: var(--tier-warning-ink);
+  border-color: color-mix(in srgb, var(--tier-warning) 32%, var(--paper));
+  background: color-mix(in srgb, var(--tier-warning) 11%, var(--paper));
+}
+.watch-status--published {
+  color: var(--tier-normal-ink);
+  border-color: color-mix(in srgb, var(--tier-normal) 30%, var(--paper));
+  background: color-mix(in srgb, var(--tier-normal) 10%, var(--paper));
+}
+.watch-status--rejected,
+.watch-status--failed {
+  color: var(--error-ink);
+  border-color: var(--error-line);
+  background: var(--error-soft);
+}

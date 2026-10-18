@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     # ADK's GoogleLLM currently stalls on Vertex AI; the native ReAct loop is
     # the supported engine there. Keep ADK as the default for Gemini API keys.
     advisor_use_adk: bool = True
+    watch_auto_max_runs: int = 3
+    officer_telegram_ids: str | None = None
 
     # --- gateway / security ----------------------------------------------
     admin_token: str | None = None  # Bearer token for scheduler/admin endpoints

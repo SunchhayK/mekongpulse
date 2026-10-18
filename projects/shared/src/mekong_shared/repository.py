@@ -12,6 +12,7 @@ from typing import Protocol
 
 from .config import Settings
 from .models import (
+    AgentRun,
     AudioRef,
     Commune,
     CommuneRisk,
@@ -95,6 +96,14 @@ class Repository(Protocol):
     async def list_field_reports(
         self, commune_code: str | None = None, limit: int = 20
     ) -> list[FieldReport]: ...
+
+    # --- watch runs ------------------------------------------------------------
+    async def add_agent_run(self, run: AgentRun) -> AgentRun: ...
+    async def update_agent_run(self, run: AgentRun) -> None: ...
+    async def get_agent_run(self, run_id: str) -> AgentRun | None: ...
+    async def list_agent_runs(
+        self, *, status: str | None = None, limit: int = 20
+    ) -> list[AgentRun]: ...
 
 
 class AudioStoreProtocol(Protocol):

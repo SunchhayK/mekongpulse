@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from .models import (
+    AgentRun,
     Commune,
     CommuneRisk,
     ConversationTurn,
@@ -40,6 +41,7 @@ class MemoryRepository:
         self.warnings: list[TelemetryWarning] = []
         self.turns: dict[str, list[ConversationTurn]] = {}
         self.field_reports: list[FieldReport] = []
+        self.agent_runs: dict[str, AgentRun] = {}
         self._sub_seq = 0
 
     async def init(self) -> None:  # pragma: no cover - trivially in-memory
@@ -242,3 +244,23 @@ class MemoryRepository:
         ]
         reports.sort(key=lambda r: r.reported_at, reverse=True)  # newest first
         return reports[:limit]
+
+    async def add_agent_run(self, run: AgentRun) -> AgentRun:
+        self.agent_runs[run.id] = run
+        return run
+
+    async def update_agent_run(self, run: AgentRun) -> None:
+        self.agent_runs[run.id] = run
+
+    async def get_agent_run(self, run_id: str) -> AgentRun | None:
+        return self.agent_runs.get(run_id)
+
+    async def list_agent_runs(
+        self, *, status: str | None = None, limit: int = 20
+    ) -> list[AgentRun]:
+        runs = [
+            r for r in self.agent_runs.values()
+            if status is None or r.status.value == status
+        ]
+        runs.sort(key=lambda r: r.created_at, reverse=True)
+        return runs[:limit]

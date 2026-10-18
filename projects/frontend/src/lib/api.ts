@@ -248,6 +248,37 @@ export interface AdvisorRequest {
   commune_code?: string;
 }
 
+export type AgentRunStatus = "pending_approval" | "published" | "rejected" | "failed";
+
+export interface AgentRunToolCall {
+  name: string;
+  status: string;
+  summary: string;
+}
+
+export interface AgentRun {
+  id: string;
+  commune_code: string;
+  commune_name_kh: string | null;
+  commune_name_en: string | null;
+  trigger: "manual" | "transition" | string;
+  previous_tier: FloodRiskTier | null;
+  current_tier: FloodRiskTier;
+  status: AgentRunStatus;
+  rationale: string;
+  draft_khmer: string;
+  draft_english: string | null;
+  tool_calls: AgentRunToolCall[];
+  created_at: string;
+  approved_at: string | null;
+  approved_by: string | null;
+  rejected_at: string | null;
+  published_at: string | null;
+  published_message_id: number | null;
+  published_text: string | null;
+  error: string | null;
+}
+
 export class ApiError extends Error {
   status: number;
   problemType?: string;
@@ -333,5 +364,35 @@ export const api = {
     request<{ text: string }>("/api/v1/advisor/transcribe", {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+  watchRuns: (session: string, limit = 10) =>
+    request<{ runs: AgentRun[] }>(`/api/v1/watch/runs?limit=${limit}`, {
+      headers: { authorization: `Bearer ${session}` },
+    }),
+  watchRun: (session: string, communeCode?: string | null) =>
+    request<{ run: AgentRun }>("/api/v1/watch/runs", {
+      method: "POST",
+      body: JSON.stringify(communeCode ? { commune_code: communeCode } : {}),
+      headers: { authorization: `Bearer ${session}` },
+    }),
+  approveRun: (
+    session: string,
+    runId: string,
+    khmerText?: string,
+    englishText?: string,
+  ) =>
+    request<{ run: AgentRun }>(`/api/v1/watch/runs/${runId}/approve`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...(khmerText ? { khmer_text: khmerText } : {}),
+        ...(englishText ? { english_text: englishText } : {}),
+      }),
+      headers: { authorization: `Bearer ${session}` },
+    }),
+  rejectRun: (session: string, runId: string) =>
+    request<{ run: AgentRun }>(`/api/v1/watch/runs/${runId}/reject`, {
+      method: "POST",
+      body: JSON.stringify({}),
+      headers: { authorization: `Bearer ${session}` },
     }),
 };
