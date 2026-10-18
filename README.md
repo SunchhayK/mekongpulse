@@ -144,35 +144,68 @@ cd bot && uv run python -m mekong_bot.main
 
 Caveats: the API is reachable only while this machine is awake and the tunnel is running; the tunnel URL changes per session, so after a tunnel restart re-run steps 2–3 (the API must learn the new `PUBLIC_BASE_URL` and the dashboard must be republished against it). For a stable URL without GCP billing, prefer the self-hosted API below.
 
-### 5. Self-Hosted API (labyrinth.ts)
+### 5. Self-Hosted API (labyrinth.ts, blue-green)
 
-The dashboard stays on Firebase Hosting; the API runs on the `labyrinth.ts` host (Docker Compose, its own PostgreSQL) behind that host's existing Cloudflare tunnel. The container publishes `127.0.0.1:8080`, so the tunnel is the only ingress.
+The dashboard stays on Firebase Hosting; the API runs on the `labyrinth.ts` host (Docker Compose, its own PostgreSQL) behind that host's existing Cloudflare tunnel. The tunnel still targets `http://localhost:8080`, which is now the **Caddy** proxy in front of two API colors — nothing publishes beyond loopback:
+
+- `backend-blue` (`127.0.0.1:8081`) and `backend-green` (`127.0.0.1:8082`) — production slots. Caddy serves the active color and fails over to the other one the moment the active color stops answering `/api/v1/health`.
+- `backend-preview` (`127.0.0.1:8083`) — where PR builds land; never in the traffic pool.
+
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs the pipeline on every PR and merge:
+
+| Event | What happens |
+| :--- | :--- |
+| **PR opened or pushed** | Dashboard → a `pr-<n>` Firebase preview channel (the URL is commented on the PR); API → preview slot rebuilt and health-checked. Live traffic untouched. |
+| **Merged to main** | API → idle color rebuilt, verified, traffic switched to it; dashboard → built from main, deployed to the channel named after the new color, then promoted to live from it. |
+| **`deploy` workflow → `rollback`** | API traffic flips back to the color that served before (no rebuild) and its dashboard channel is promoted to live again. |
+
+The switch is zero-downtime: the script builds the idle color, health-checks it on its loopback port, rewrites `caddy/Caddyfile`, and hot-reloads Caddy. The color traffic just left keeps running as the rollback target until the next deploy rebuilds it. The Telegram bot is a singleton (one process per token), so it is rebuilt in place after the switch instead.
+
+```bash
+# Manual runs, on the server or over ssh (~/mekongpulse/projects)
+./scripts/deploy_blue_green.sh                # build the idle color and switch to it
+./scripts/deploy_blue_green.sh --preview      # rebuild the PR preview slot only
+./scripts/deploy_blue_green.sh --switch-only  # flip traffic, no rebuild (rollback)
+./scripts/deploy_blue_green.sh --status       # active color + slot health
+
+# Publish the dashboard by hand (PRs and merges normally do this)
+cd ~/mekongpulse/projects && DRY_RUN=0 ./scripts/deploy_web_firebase.sh https://mekongpulse-api.labyrinth.buzz
+```
+
+One-time setup for the workflow — repository secrets (`Settings → Secrets and variables → Actions`):
+
+| Secret | Value |
+| :--- | :--- |
+| `FIREBASE_SERVICE_ACCOUNT` | service-account JSON granted the Firebase Hosting Admin role |
+| `SSH_HOST` `SSH_USER` | the real `labyrinth.ts` address (`ssh -G labyrinth-ts` prints it) and the login user |
+| `SSH_PRIVATE_KEY` | key authorized on that host: `ssh-keygen -t ed25519 -f ~/.ssh/mekongpulse_deploy` then `ssh-copy-id -i ~/.ssh/mekongpulse_deploy.pub labyrinth-ts` |
+
+Seed both dashboard channels once so a rollback has somewhere to go — the workflow refreshes each channel's 30-day TTL (the CLI's maximum) on every merge, and a channel carries whatever `frontend/out/` held when it was deployed, so build first if that directory is stale:
+
+```bash
+cd projects/frontend
+NEXT_OUTPUT=export NEXT_PUBLIC_API_BASE_URL=https://mekongpulse-api.labyrinth.buzz bun run build
+bunx firebase-tools hosting:channel:deploy blue --expires 30d
+bunx firebase-tools hosting:channel:deploy green --expires 30d
+```
+
+The workflow ships the tree from the checked-out commit (rsync, no `--delete`, `.env*` excluded), so the server keeps its own `.env.staging`; the Mac rsync below is still how env changes get there.
 
 ```bash
 # From the Mac (source of truth: github.com/SunchhayK/mekongpulse): sync the tree
 rsync -az --exclude node_modules --exclude .venv --exclude .next --exclude out \
   --exclude .git projects/ labyrinth-ts:~/mekongpulse/projects/
-
-# Start (or update) the stack on the server; the bot runs under its profile
-ssh labyrinth-ts
-cd ~/mekongpulse/projects
-docker compose -f docker-compose.server.yml --profile bot up -d --build
 ```
 
 One-time ingress and schedule (already configured for `labyrinth.ts`):
 
-- Cloudflare Zero Trust → Networks → Tunnels → public hostname `mekongpulse-api.labyrinth.buzz` → `http://localhost:8080`.
+- Cloudflare Zero Trust → Networks → Tunnels → public hostname `mekongpulse-api.labyrinth.buzz` → `http://localhost:8080` (Caddy — unchanged by the color switch).
 - Cron every 15 minutes mirrors the Cloud Scheduler jobs: `scripts/server_sync.sh` (telemetry sync + sentinel patrol).
+- Daily 07:00 Asia/Phnom_Penh cron posts the bilingual digest: `scripts/server_digest.sh`.
+- The console's officer assistant publishes with the server's `ADMIN_TOKEN` entered as the officer token; `WEB_BASE_URL` (default the Firebase site) is what channel posts and drafts link (`{WEB_BASE_URL}/km/commune?code=...`).
+- Optional: route a second tunnel hostname to `http://localhost:8083` and set `PREVIEW_API_URL` in the workflow, so PR dashboards talk to PR code instead of the production API.
 
-```bash
-# Publish the dashboard against the hosted API
-cd projects && DRY_RUN=0 ./scripts/deploy_web_firebase.sh https://mekongpulse-api.labyrinth.buzz
-
-# Optional Telegram poller (one process per bot token!)
-ssh labyrinth-ts 'cd ~/mekongpulse/projects && docker compose -f docker-compose.server.yml --profile bot up -d'
-```
-
-Caveats: the stack runs with `ENVIRONMENT=staging` (PostgreSQL + local audio; no GCS needed), `restart: unless-stopped` keeps it up across server reboots, and updates are applied by re-running the rsync plus `up -d --build`.
+Caveats: the stack runs with `ENVIRONMENT=staging` (PostgreSQL + local audio; no GCS needed), `restart: unless-stopped` keeps it up across server reboots, and both colors share one database — schema changes must stay backward-compatible for the color still serving traffic. The first deploy removes the pre-blue-green `backend` container that held `:8080`, on its own.
 
 ---
 
@@ -181,13 +214,13 @@ Caveats: the stack runs with `ENVIRONMENT=staging` (PostgreSQL + local audio; no
 Run automated test suites across all projects:
 
 ```bash
-# 1. Shared Domain Engine (94 tests)
+# 1. Shared Domain Engine (126 tests)
 cd projects/shared && uv run pytest
 
-# 2. Telegram Bot Service (28 tests)
+# 2. Telegram Bot Service (37 tests)
 cd projects/bot && uv run pytest
 
-# 3. FastAPI Backend (28 tests)
+# 3. FastAPI Backend (45 tests)
 cd projects/backend && uv run pytest
 
 # 4. Frontend Compilation

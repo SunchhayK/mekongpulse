@@ -72,29 +72,20 @@ Verification and ground truth: a deterministic evidence layer, field reports, an
 - `technical-report.md` 1.3.0 → 1.4.0 — architecture, API spec, ERD, ADRs, and traceability matrix brought level with the shipped stack; `WEB_BASE_URL` and the self-hosted digest cron documented.
 - `README.md` — test counts refreshed (126 shared, 37 bot, 45 backend) and the self-hosted schedule notes the daily digest cron and `WEB_BASE_URL`.
 
-## [0.6.0] — 2026-10-18
+## [0.5.0] — 2026-10-18
 
-Verification and ground truth: a deterministic evidence layer, field reports, an officer assistant with real channel actions, a bilingual daily digest, and a Khmer-first bilingual web with a public commune page.
+Blue-green deployment for the self-hosted `labyrinth.ts` stack, driven by a GitHub Actions pipeline that runs on every PR and merge. No package versions changed — this release is deployment infrastructure and docs only.
 
 ### Added
 
-- `shared` — 0.4.0: `evidence.py` — deterministic QC over the stored station series (gaps, stuck values, spikes, range), heuristic cross-checks (rainfall agreement, upstream coherence), a confidence label with stable reason ids, a 5-step bilingual evidence chain, and the MRC-style limitations notice; no LLM in any verdict. `digest.py` — `build_digest(repo, settings) -> (khmer, english)` from persisted risk rows only.
-- `shared` — three officer tools in `adk_tools.py`: `get_commune_evidence`, `draft_status_update` (deterministic bilingual text from stored rows), and `publish_to_channel` (a real post to the public channel, gated by the officer token, statuses `denied`/`unavailable`/`posted`/`error`); tool-call tracing via `answer_detailed` → `AdvisorOutcome` with the recorded calls. `FieldReport` model + `field_reports` table with idempotent DDL and `add_field_report`/`list_field_reports` across the memory, PostgreSQL, and Firestore repositories; `WEB_BASE_URL` setting (defaults to the Firebase console) for commune-page links.
-- `backend` — 0.3.0: `GET /api/v1/communes/{code}/evidence` (provenance payload; 404/409 problems); `POST /api/v1/communes/{code}/reports` (201, source "web") and `GET .../reports` (limit 1..100); `POST /api/v1/advisor` returning `{reply, tool_calls, actions}`, with publishing driven by the `X-Officer-Token` header (the admin token); admin-guarded `POST /api/v1/digest/send` posting the bilingual digest to the public channel.
-- `bot` — 0.4.0: `/report` flow — pick a subscribed commune, answer `water_reached`/`no_water`/`other` with buttons, reporter label recorded, source "telegram"; `/digest` returns the bilingual digest in DM; escalation posts now append the commune-page link (`{WEB_BASE_URL}/km/commune?code=...`).
-- `frontend` — 0.5.0: next-intl 3.26.5 with Khmer-default `[locale]` routing (English toggle) across the console, static export with `trailingSlash` and the Firebase `/` rewrite to `/km/index.html`; new public commune page `/{locale}/commune?code=XXXXXX` (one-tap Listen with a text fallback when audio is null, crop-stage chips, evidence summary, field reports, share); `AssessmentDialog` shows the evidence panel, field reports and a link to the full page; officer assistant panel (chat UI, collapsible tool trace, channel-post status, token kept in localStorage); 316 message keys per locale.
-- `scripts` — `server_digest.sh`: daily 07:00 (Asia/Phnom_Penh) cron trigger for the digest, mirroring `server_sync.sh` and its admin bearer-token pattern.
-- `docs` — product and technical reports 1.4.0: FR-11..15 and AC-09..13; relay-mediated farmer reach with `research/farmer-reach.md`; ADR-0007 (Telegram as relay/broadcast surface, supersedes ADR-0003), ADR-0008 (deterministic verification layer), ADR-0009 (next-intl Khmer-first); new API paths and schemas, the `field_reports` ERD entry, and refreshed test counts (126 shared, 45 backend, 37 bot).
+- `ci` — `.github/workflows/deploy.yml`: a PR to `main` builds the dashboard into a `pr-<n>` Firebase preview channel (URL commented on the PR) and rebuilds the API preview slot; a merge builds the idle API color, switches traffic to it, then builds the dashboard from main, deploys it to the channel named after the new color and promotes that channel to live. `workflow_dispatch` runs the same pipeline or a `rollback` (color flip, no rebuild). Fork PRs are skipped — they get no secrets. Two CLI facts the pipeline encodes: firebase-tools 15 has no `hosting:channel:release`, so promoting is `hosting:clone <site>:<color> <site>:live`; and channels default to a 7-day TTL, so both the PR channel (14d) and the color channels (30d, refreshed every merge) set one.
+- `scripts` — `deploy_blue_green.sh`: build the idle color → health-check it on its loopback port (`/api/v1/health`) → rewrite the Caddyfile → `caddy reload`. Flags `--preview` (PR slot only), `--switch-only` (flip back, no rebuild) and `--status`; `flock` serializes concurrent deploys, a failed health check leaves the live color untouched and dumps the failed container's log tail.
+- `deploy` — `caddy/Caddyfile`: the proxy the Cloudflare tunnel already targets (`http://localhost:8080`). Both API colors are upstreams with `lb_policy first` (active color listed first) and active health checks, so a dead active color fails over to the other one without a redeploy.
 
 ### Changed
 
-- `product-report.md` 1.3.0 → 1.4.0 — farmers are reached through relay people and Telegram is repositioned as a broadcast/relay surface; extension advisors enter as persona PER-004; officials' console and officer assistant serve PER-001/PER-004; Tier 3 adds photo-attached reports and Facebook posting and labels existing roadmap items with their `research/features-scan.md` ranks.
-- `technical-report.md` 1.3.0 → 1.4.0 — architecture, API spec, ERD, ADRs, and traceability matrix brought level with the shipped stack; `WEB_BASE_URL` and the self-hosted digest cron documented.
-- `README.md` — test counts refreshed (126 shared, 37 bot, 45 backend) and the self-hosted schedule notes the daily digest cron and `WEB_BASE_URL`.
-
-# Changelog
-
-All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
+- `deploy` — `docker-compose.server.yml`: the single `backend` service is now `backend-blue` (`127.0.0.1:8081`), `backend-green` (`127.0.0.1:8082`) and `backend-preview` (`127.0.0.1:8083`) from one shared `x-api` anchor, with `caddy` owning `:8080`. The bot waits on `db` instead of the API: it reads the database and the public audio URL, not the API service name.
+- `docs` — README §5 documents the color slots, the workflow table, the four script flags, the repository secrets, and the one-time channel seed, plus the caveat that both colors share one database (schema changes must stay backward-compatible for the color still serving).
 
 ## [0.4.2] — 2026-10-18
 

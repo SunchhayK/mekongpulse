@@ -1,17 +1,53 @@
-# labyrinth.ts deployment: MekongPulse API + its own Postgres.
+# labyrinth.ts deployment: MekongPulse API (blue-green) + its own Postgres.
 #
 # The web dashboard stays on Firebase Hosting; this stack serves the public API
 # that the dashboard calls. Public ingress is the server's existing Cloudflare
-# tunnel (Public hostname → http://localhost:8080), so the port binds to
+# tunnel (Public hostname → http://localhost:8080); :8080 is now the Caddy
+# proxy that fronts the two API colors, so every published port binds to
 # loopback only.
+#
+# Deploys run through scripts/deploy_blue_green.sh, locally or from the GitHub
+# Actions `deploy` workflow: build the idle color → health-check it on its
+# loopback port → rewrite caddy/Caddyfile → hot-reload Caddy. --preview
+# refreshes the PR slot; --switch-only flips back with no rebuild (rollback).
 #
 # First run (from the server):
 #   cd ~/mekongpulse/projects
-#   docker compose -f docker-compose.server.yml up -d --build
+#   docker compose -f docker-compose.server.yml up -d db caddy
 #
 # Optional Telegram poller (only if no webhook is registered):
 #   docker compose -f docker-compose.server.yml --profile bot up -d
 name: mekongpulse-server
+
+x-api: &api
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  restart: unless-stopped
+  env_file: .env.staging
+  environment:
+    ENVIRONMENT: staging
+    DATABASE_URL: postgresql://postgres:postgres@db:5432/mekongpulse
+    # Public origin of this API; used for audio URLs (/audio/<key>).
+    PUBLIC_BASE_URL: https://mekongpulse-api.labyrinth.buzz
+    CORS_ORIGINS: https://ai-builder-cup-9f8cd.web.app,https://ai-builder-cup-9f8cd.firebaseapp.com
+  volumes:
+    - ./data/audio:/app/data/audio
+  depends_on:
+    db:
+      condition: service_healthy
+  healthcheck:
+    test:
+      [
+        "CMD",
+        "python",
+        "-c",
+        "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v1/health')",
+      ]
+    interval: 30s
+    timeout: 5s
+    retries: 5
+    start_period: 20s
 
 services:
   db:
@@ -29,38 +65,36 @@ services:
       timeout: 5s
       retries: 10
 
-  backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
+  # Two production colors, one config: Caddy serves the active one and fails
+  # over to the other; the idle color receives the next deploy, and the color
+  # traffic just left keeps running as the rollback target.
+  backend-blue:
+    <<: *api
+    ports:
+      - "127.0.0.1:8081:8080"
+
+  backend-green:
+    <<: *api
+    ports:
+      - "127.0.0.1:8082:8080"
+
+  # PR builds land here; never in the Caddy pool. Give it a second Cloudflare
+  # hostname if you want PR dashboards to talk to PR code.
+  backend-preview:
+    <<: *api
+    ports:
+      - "127.0.0.1:8083:8080"
+
+  caddy:
+    image: caddy:2-alpine
     restart: unless-stopped
-    env_file: .env.staging
-    environment:
-      ENVIRONMENT: staging
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/mekongpulse
-      # Public origin of this API; used for audio URLs (/audio/<key>).
-      PUBLIC_BASE_URL: https://mekongpulse-api.labyrinth.buzz
-      CORS_ORIGINS: https://ai-builder-cup-9f8cd.web.app,https://ai-builder-cup-9f8cd.firebaseapp.com
+    # The directory is mounted, not the single file: the deploy script rewrites
+    # caddy/Caddyfile on the host and `caddy reload` re-reads it from here.
+    volumes:
+      - ./caddy:/etc/caddy:ro
     ports:
       # Loopback only: the Cloudflare tunnel on this host is the sole ingress.
       - "127.0.0.1:8080:8080"
-    volumes:
-      - ./data/audio:/app/data/audio
-    depends_on:
-      db:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v1/health')",
-        ]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
 
   bot:
     profiles: ["bot"]
@@ -75,7 +109,8 @@ services:
     volumes:
       - ./data/audio:/app/data/audio
     depends_on:
-      backend:
+      # The bot reads the database and the public audio URL, not the API.
+      db:
         condition: service_healthy
 
 volumes:

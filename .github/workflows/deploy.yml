@@ -1,0 +1,201 @@
+# Blue-green deploys: the labyrinth.ts API (Docker Compose + Caddy color switch)
+# and the Firebase Hosting dashboard.
+#
+#   PR to main       → dashboard in a pr-<n> preview channel (URL is commented
+#                      on the PR) + the API preview slot rebuilt; live traffic
+#                      untouched.
+#   merged to main   → idle color built → verified → traffic switched → the
+#                      dashboard is built from main and promoted to live from
+#                      the channel named after the new color.
+#   workflow_dispatch → deploy (same as merge) or rollback (flip the colors
+#                      back, no rebuild).
+#
+# Fork PRs are skipped: they get no secrets, so nothing could be deployed.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   FIREBASE_SERVICE_ACCOUNT  service-account JSON with Firebase Hosting Admin
+#   SSH_HOST                  labyrinth.ts host (the real one, not the alias)
+#   SSH_USER                  login user on that host
+#   SSH_PRIVATE_KEY           key authorized there (one-time setup: README §5)
+name: deploy
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "deploy = build the idle color and switch to it · rollback = switch back, no rebuild"
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FIREBASE_PROJECT: ai-builder-cup-9f8cd
+  FIREBASE_SITE: ai-builder-cup-9f8cd
+  API_URL: https://mekongpulse-api.labyrinth.buzz
+  # Optional: a public URL routed to the preview slot (127.0.0.1:8083) so PR
+  # dashboards talk to PR code. Empty → previews use the production API.
+  PREVIEW_API_URL: ""
+
+jobs:
+  preview:
+    name: PR preview
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Load Firebase credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
+
+      - name: Build and deploy the PR channel
+        id: web
+        working-directory: projects/frontend
+        run: |
+          bun install --frozen-lockfile
+          NEXT_OUTPUT=export NEXT_PUBLIC_API_BASE_URL="${PREVIEW_API_URL:-$API_URL}" bun run build
+          bunx firebase-tools hosting:channel:deploy "pr-${{ github.event.number }}" \
+            --project "$FIREBASE_PROJECT" --expires 14d --json > "$RUNNER_TEMP/channel.json"
+          url="$(jq -r '.result | to_entries[0].value.url' "$RUNNER_TEMP/channel.json")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Comment the preview URL
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_URL: ${{ steps.web.outputs.url }}
+        run: |
+          cat > "$RUNNER_TEMP/comment.md" <<EOF
+          **Preview deployed** — dashboard: $PREVIEW_URL
+
+          The API preview slot is rebuilt and health-checked in this run too: traffic is untouched and the slot is not publicly routed.
+
+          Merging to main ships it: the API builds in the idle color and traffic switches to it, and the dashboard is rebuilt from main and promoted to live in step. Rollback after a bad merge: run the **deploy** workflow with action **rollback**.
+          EOF
+          gh pr comment "${{ github.event.number }}" --body-file "$RUNNER_TEMP/comment.md"
+
+      - name: Sync tree and refresh the API preview slot
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          rsync -az -e "ssh -i ~/.ssh/id_deploy" \
+            --exclude node_modules --exclude .venv --exclude .next --exclude out \
+            --exclude .git --exclude '.env*' --exclude .pytest_cache --exclude __pycache__ \
+            --exclude data/audio --exclude .firebase --exclude '*.tsbuildinfo' \
+            projects/ "$SSH_USER@$SSH_HOST:mekongpulse/projects/"
+          ssh -i ~/.ssh/id_deploy "$SSH_USER@$SSH_HOST" \
+            'cd mekongpulse/projects && ./scripts/deploy_blue_green.sh --preview'
+
+  promote-api:
+    name: API (blue-green)
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      color: ${{ steps.switch.outputs.color }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync tree to the server
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          rsync -az -e "ssh -i ~/.ssh/id_deploy" \
+            --exclude node_modules --exclude .venv --exclude .next --exclude out \
+            --exclude .git --exclude '.env*' --exclude .pytest_cache --exclude __pycache__ \
+            --exclude data/audio --exclude .firebase --exclude '*.tsbuildinfo' \
+            projects/ "$SSH_USER@$SSH_HOST:mekongpulse/projects/"
+
+      - name: Build, verify, and switch
+        id: switch
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ACTION: ${{ github.event_name == 'workflow_dispatch' && inputs.action || 'deploy' }}
+        run: |
+          args=""
+          [ "$ACTION" = rollback ] && args="--switch-only"
+          out="$(ssh -i ~/.ssh/id_deploy "$SSH_USER@$SSH_HOST" \
+            "cd mekongpulse/projects && ./scripts/deploy_blue_green.sh $args")"
+          printf '%s\n' "$out"
+          color="$(printf '%s\n' "$out" | sed -n 's/^active: //p' | tail -1)"
+          [ -n "$color" ] || { echo "::error::the deploy script reported no active color"; exit 1; }
+          echo "color=$color" >> "$GITHUB_OUTPUT"
+
+  promote-web:
+    name: Dashboard (Firebase)
+    needs: promote-api
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COLOR: ${{ needs.promote-api.outputs.color }}
+      ACTION: ${{ github.event_name == 'workflow_dispatch' && inputs.action || 'deploy' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Load Firebase credentials
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
+
+      - name: Build and deploy the dashboard to the ${{ needs.promote-api.outputs.color }} channel
+        if: ${{ env.ACTION != 'rollback' }}
+        working-directory: projects/frontend
+        run: |
+          [ -n "$COLOR" ] || { echo "::error::the API job reported no color"; exit 1; }
+          bun install --frozen-lockfile
+          NEXT_OUTPUT=export NEXT_PUBLIC_API_BASE_URL="$API_URL" bun run build
+          # 30d is the CLI's maximum; every merge refreshes it, and it only has
+          # to outlive the gap until the next deploy.
+          bunx firebase-tools hosting:channel:deploy "$COLOR" \
+            --project "$FIREBASE_PROJECT" --expires 30d
+
+      - name: Promote the channel to live
+        working-directory: projects/frontend
+        run: |
+          [ -n "$COLOR" ] || { echo "::error::the API job reported no color"; exit 1; }
+          bunx firebase-tools hosting:clone "$FIREBASE_SITE:$COLOR" "$FIREBASE_SITE:live" \
+            --project "$FIREBASE_PROJECT"
+
+      - name: Summary
+        run: |
+          if [ "$ACTION" = rollback ]; then verb="Rolled back"; else verb="Deployed"; fi
+          {
+            echo "## $verb"
+            echo
+            echo "- API color: $COLOR"
+            echo "- Dashboard: https://$FIREBASE_SITE.web.app"
+          } >> "$GITHUB_STEP_SUMMARY"
