@@ -8,9 +8,9 @@
 #   ~/mekongpulse/secrets/vertex-sa.json   (mode 600)
 # and is read through GOOGLE_APPLICATION_CREDENTIALS=/secrets/vertex-sa.json.
 #
-# When the blue-green compose (backend-blue/green/preview, caddy) is adopted,
-# add the same volume mount to those services; this override targets the
-# currently running `backend` and `bot` services.
+# The blue-green compose includes this mount directly on backend-blue/green/
+# preview and bot, so this override is only for the pre-blue-green services
+# (`backend`, `bot`) that are currently running.
 services:
   backend:
     volumes:
