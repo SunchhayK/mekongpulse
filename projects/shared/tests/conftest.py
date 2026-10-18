@@ -35,6 +35,10 @@ def gazetteer(data_dir):
 @pytest.fixture
 def settings(tmp_path):
     return Settings(
+        # Hermetic: never load a developer .env (real Gemini/Telegram keys
+        # would turn unit tests into live network calls when pytest runs
+        # from the projects/ root, where .env -> .env.staging).
+        _env_file=None,
         environment="development",
         repository_backend="memory",
         data_dir=DATA_DIR,
