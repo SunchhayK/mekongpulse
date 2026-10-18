@@ -187,6 +187,8 @@ function AssistantView() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationReady, setConversationReady] = useState(false);
   const [focusReady, setFocusReady] = useState(false);
+  const [view, setView] = useState<"chat" | "watch">("chat");
+  const [pendingRuns, setPendingRuns] = useState(0);
 
   useEffect(() => {
     setSession(readStoredSession());
@@ -277,15 +279,17 @@ function AssistantView() {
           </span>
         </span>
         <div className="spacer" />
-        <button
-          type="button"
-          className="btn assistant-signout assistant-clear label-small"
-          aria-label={t("clearConversationAria")}
-          title={t("clearConversationAria")}
-          onClick={clearConversation}
-        >
-          {t("clearConversation")}
-        </button>
+        {(!activeSession || view === "chat") && (
+          <button
+            type="button"
+            className="btn assistant-signout assistant-clear label-small"
+            aria-label={t("clearConversationAria")}
+            title={t("clearConversationAria")}
+            onClick={clearConversation}
+          >
+            {t("clearConversation")}
+          </button>
+        )}
         {activeSession && (
           <>
             <span className="session-chip label-small">
@@ -386,20 +390,72 @@ function AssistantView() {
         )}
 
         {activeSession && (
-          <WatchRuns
-            session={activeSession}
-            communeCode={communeCode || null}
-            onSessionInvalid={clearSession}
-          />
+          <div className="assistant-tabs" role="tablist" aria-label={t("tabs.aria")}>
+            <button
+              type="button"
+              role="tab"
+              id="assistant-chat-tab"
+              aria-controls="assistant-chat-panel"
+              aria-selected={view === "chat"}
+              className="assistant-tab label-medium"
+              onClick={() => setView("chat")}
+            >
+              {t("tabs.chat")}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="assistant-watch-tab"
+              aria-controls="assistant-watch-panel"
+              aria-selected={view === "watch"}
+              className="assistant-tab label-medium"
+              onClick={() => setView("watch")}
+            >
+              {t("tabs.watch")}
+              {pendingRuns > 0 && (
+                <span
+                  className="assistant-tab-badge"
+                  aria-label={t("tabs.pending", { count: pendingRuns })}
+                >
+                  {pendingRuns}
+                </span>
+              )}
+            </button>
+          </div>
         )}
 
-        <AssistantChat
-          communeCode={communeCode || null}
-          session={activeSession?.session ?? null}
-          onSessionInvalid={clearSession}
-          messages={messages}
-          setMessages={setMessages}
-        />
+        <div
+          id="assistant-chat-panel"
+          className="assistant-panel"
+          role={activeSession ? "tabpanel" : undefined}
+          aria-labelledby={activeSession ? "assistant-chat-tab" : undefined}
+          hidden={Boolean(activeSession) && view !== "chat"}
+        >
+          <AssistantChat
+            communeCode={communeCode || null}
+            session={activeSession?.session ?? null}
+            onSessionInvalid={clearSession}
+            messages={messages}
+            setMessages={setMessages}
+          />
+        </div>
+
+        {activeSession && (
+          <div
+            id="assistant-watch-panel"
+            className="assistant-panel"
+            role="tabpanel"
+            aria-labelledby="assistant-watch-tab"
+            hidden={view !== "watch"}
+          >
+            <WatchRuns
+              session={activeSession}
+              communeCode={communeCode || null}
+              onSessionInvalid={clearSession}
+              onPendingChange={setPendingRuns}
+            />
+          </div>
+        )}
       </main>
     </div>
   );

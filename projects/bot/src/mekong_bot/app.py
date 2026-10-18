@@ -18,7 +18,7 @@ def build_application(
     """Builds the bot application; None when no token is configured."""
     if not settings.telegram_bot_token:
         return None
-    application = Application.builder().token(settings.telegram_bot_token).build()
+    application = Application.builder().token(settings.telegram_bot_token).concurrent_updates(8).build()
 
     async def _publish(text: str) -> dict:
         channel = settings.telegram_broadcast_channel_id

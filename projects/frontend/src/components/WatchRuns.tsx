@@ -19,6 +19,7 @@ interface WatchRunsProps {
   session: OfficerSession | null;
   communeCode: string | null;
   onSessionInvalid: () => void;
+  onPendingChange?: (count: number) => void;
 }
 
 const STATUS_CLASS: Record<AgentRunStatus, string> = {
@@ -28,7 +29,12 @@ const STATUS_CLASS: Record<AgentRunStatus, string> = {
   failed: "watch-status--failed",
 };
 
-export function WatchRuns({ session, communeCode, onSessionInvalid }: WatchRunsProps) {
+export function WatchRuns({
+  session,
+  communeCode,
+  onSessionInvalid,
+  onPendingChange,
+}: WatchRunsProps) {
   const t = useTranslations("Watch");
   const locale = useLocale();
   const [runs, setRuns] = useState<AgentRun[]>([]);
@@ -39,6 +45,10 @@ export function WatchRuns({ session, communeCode, onSessionInvalid }: WatchRunsP
     null,
   );
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onPendingChange?.(runs.filter((run) => run.status === "pending_approval").length);
+  }, [runs, onPendingChange]);
 
   const formatTime = useCallback(
     (iso: string | null) => {

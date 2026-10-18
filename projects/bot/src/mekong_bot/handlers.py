@@ -6,7 +6,9 @@ Every handler funnels into a BotService method and ships back a BotReply
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import suppress
 from functools import wraps
 from io import BytesIO
 
@@ -64,10 +66,10 @@ def _safe(handler):
 
     @wraps(handler)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        typing_task: asyncio.Task | None = None
+        if update.effective_chat is not None:
+            typing_task = asyncio.create_task(_keep_typing(update.effective_chat))
         try:
-            if update.effective_chat is not None:
-                # Assessments synthesize a voice clip server-side; keep the chat lively.
-                await update.effective_chat.send_action(ChatAction.TYPING)
             await handler(update, context)
         except Exception:  # noqa: BLE001
             log.exception("telegram handler failure")
@@ -79,8 +81,23 @@ def _safe(handler):
                     )
                 except Exception:  # noqa: BLE001
                     pass
+        finally:
+            if typing_task is not None:
+                typing_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await typing_task
 
     return wrapper
+
+
+async def _keep_typing(chat) -> None:
+    """Telegram's typing action lasts ~5s; keep it alive during long LLM/TTS calls."""
+    while True:
+        try:
+            await chat.send_action(ChatAction.TYPING)
+        except Exception:  # noqa: BLE001 - a failed action must not break the handler
+            return
+        await asyncio.sleep(4)
 
 
 def register_handlers(application: Application, service: BotService) -> None:
@@ -113,6 +130,19 @@ def register_handlers(application: Application, service: BotService) -> None:
 
     async def watch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = " ".join(context.args or [])
+        if query:
+            placeholder = await update.effective_chat.send_message(
+                "⏳ កំពុងដំណើរការការឃ្លាំមើល…\nRunning the watch officer…"
+            )
+            reply = await service.watch(update.effective_chat.id, query)
+            try:
+                await placeholder.edit_text(
+                    reply.text[:4096], reply_markup=_markup(reply)
+                )
+            except Exception:  # noqa: BLE001 - fall back to a fresh message
+                log.warning("watch placeholder edit failed", exc_info=True)
+                await _respond(update, reply)
+            return
         await _respond(update, await service.watch(update.effective_chat.id, query))
 
     async def on_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -122,11 +152,38 @@ def register_handlers(application: Application, service: BotService) -> None:
         )
 
     async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        await _respond(update, await service.advisor(update.effective_chat.id, update.message.text))
+        placeholder = await update.effective_chat.send_message(
+            "🤖 កំពុងគិត…\nThinking…"
+        )
+        try:
+            reply = await service.advisor(
+                update.effective_chat.id, update.message.text
+            )
+        except Exception:  # noqa: BLE001 - replace the placeholder, never leave it hanging
+            log.exception("advisor handler failure")
+            await placeholder.edit_text(
+                "⚠️ មានបញ្ហាបច្ចេកទេស — សូមព្យាយាមម្តងទៀត។\n"
+                "Something went wrong on our side — please try again."
+            )
+            return
+        try:
+            await placeholder.edit_text(
+                reply.text[:4096], reply_markup=_markup(reply)
+            )
+        except Exception:  # noqa: BLE001 - fall back to a fresh message
+            log.warning("advisor placeholder edit failed", exc_info=True)
+            await _respond(update, reply)
 
     async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         await query.answer()
+        if query.data and query.data.startswith("watch:pick:"):
+            try:
+                await query.edit_message_text(
+                    "⏳ កំពុងដំណើរការការឃ្លាំមើល…\nRunning the watch officer…"
+                )
+            except Exception:  # noqa: BLE001 - stale message; the service will respond anyway
+                pass
         user = update.effective_user
         reporter = (user.first_name or user.username) if user else None
         await _respond(

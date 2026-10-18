@@ -380,6 +380,12 @@
     "actionFailed": "The action failed."
   },
   "Officer": {
+    "tabs": {
+      "aria": "Assistant views",
+      "chat": "Assistant",
+      "watch": "Watch inbox",
+      "pending": "{count} awaiting approval"
+    },
     "title": "Officer assistant",
     "subtitle": "Ask about risk, draft updates, publish to the channel",
     "back": "Back to dashboard",

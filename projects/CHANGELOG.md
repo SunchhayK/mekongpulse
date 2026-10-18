@@ -2,6 +2,22 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.16.0] — 2026-10-19
+
+The officer page separates chat from watch approvals; Telegram stops blocking on long turns.
+
+### Added
+
+- `frontend` — 0.10.0: **Assistant / Watch inbox** tabs on the officer page, with a pending-approval badge. Both views stay mounted so the chat draft and watch state are preserved; only one is visible.
+
+### Fixed
+
+- `bot` — 0.6.1: `concurrent_updates(8)` so a long advisor, TTS, or watch turn no longer blocks later messages; the typing action is refreshed every 4 seconds; free-text questions and `/watch <commune>` show an immediate Thinking/Running bubble that is edited into the answer; watch approvals are serialized so a double tap cannot publish twice.
+
+### Changed
+
+- `technical-report.md` 1.12.0 → 1.13.0 and `product-report.md` 1.7.1 → 1.7.2 — tabbed officer views and Telegram responsiveness documented.
+
 ## [0.15.0] — 2026-10-18
 
 Telegram usability: a command menu and a one-tap watch picker.

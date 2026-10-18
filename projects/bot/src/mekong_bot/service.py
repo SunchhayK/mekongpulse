@@ -7,6 +7,7 @@ code that tests can drive without any network.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -107,6 +108,7 @@ class BotService:
         self.llm = llm  # scripted engine for tests; None = ADK/Gemini in prod
         self.publisher = publisher
         self._tools: AdvisorTools | None = None
+        self._watch_lock = asyncio.Lock()
 
     @property
     def tools(self) -> AdvisorTools:
@@ -385,6 +387,13 @@ class BotService:
     async def _watch_action(self, chat_id: str | int, action: str, run_id: str) -> BotReply:
         if not self._is_officer(chat_id):
             return BotReply(self._watch_disabled(), edit=True)
+        # Serialize approvals so a double tap cannot publish twice.
+        async with self._watch_lock:
+            return await self._watch_action_locked(chat_id, action, run_id)
+
+    async def _watch_action_locked(
+        self, chat_id: str | int, action: str, run_id: str
+    ) -> BotReply:
         run = await self.repo.get_agent_run(run_id)
         if run is None:
             return BotReply("Watch run not found.", edit=True)

@@ -3,7 +3,7 @@ id: REPORT-TECH-002
 document_type: technical_report
 title: MekongPulse Technical Architecture and Engineering Report
 project_name: "MekongPulse"
-version: 1.12.0
+version: 1.13.0
 status: approved
 last_updated: 2026-10-18
 owners: ["@bytelab-lead", "@tech-lead", "@backend-lead"]
@@ -35,7 +35,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
   - Firestore for time-series observation snapshots, commune risk profiles, and alert history in production; PostgreSQL (asyncpg) in development, staging, and self-hosted modes; Cloud Storage for audio caching. Spoken bulletins are content-addressed from the deterministic briefing inputs — river level bucketed to 0.1 m, 48-hour rain to 5 mm, and the bulletin's fast/slow/stable rate wording — so repeated and shared commune views reuse one MP3 across 15-minute telemetry ticks. The commune page keeps the chosen crop stage in `?stage=`, so a shared link reproduces the same briefing.
   - Sync cost discipline: the 15-minute trigger calls `/patrol/run` only (patrol performs the sync itself), weather is refreshed hourly, unchanged commune-risk rows are not rewritten, and polished Khmer bulletins are cached by template digest. Reproducible measurements and scripts live in `projects/BENCHMARKS.md` and `projects/scripts/benchmark_*.py`.
   - Vertex AI mode: `USE_VERTEX_AI=true` routes bulletin polish, TTS, STT, and the advisor through Vertex AI (`VERTEX_PROJECT=ai-builder-cup-9f8cd`, `VERTEX_LOCATION=global`) using a read-only service-account key mounted at `/secrets/vertex-sa.json` (`docker-compose.vertex.yml`; the key lives outside the repository with mode 600). ADK's `GoogleLLM` stalls against Vertex in the current SDK, so `ADVISOR_USE_ADK=false` selects the equivalent native ReAct loop; ADK remains the default for Gemini API keys.
-  - Watch-officer runs: `POST /api/v1/watch/runs` builds a pending approval task (evidence, agent rationale, tool trace, deterministic bilingual draft) for a specified commune or the highest-risk commune. The officer inbox lists runs, edits the draft, approves (publishing through the channel publisher), or rejects; patrol queues up to `WATCH_AUTO_MAX_RUNS` runs for upward WARNING/DANGER transitions. Telegram `/watch` with no argument lists the five highest-risk communes as one-tap buttons (with refresh), registers a command menu at startup, and offers inline approval for IDs in `OFFICER_TELEGRAM_IDS`. Nothing publishes without an officer.
+  - Watch-officer runs: `POST /api/v1/watch/runs` builds a pending approval task (evidence, agent rationale, tool trace, deterministic bilingual draft) for a specified commune or the highest-risk commune. The officer inbox lists runs, edits the draft, approves (publishing through the channel publisher), or rejects; patrol queues up to `WATCH_AUTO_MAX_RUNS` runs for upward WARNING/DANGER transitions. The assistant page separates the conversation and the watch inbox into tabs with a pending-approval badge. Telegram `/watch` with no argument lists the five highest-risk communes as one-tap buttons (with refresh), registers a command menu at startup, offers inline approval for IDs in `OFFICER_TELEGRAM_IDS`, uses concurrent update processing, keeps the typing indicator alive, and replaces an immediate working bubble with the result. Nothing publishes without an officer.
 - **Deferred / out-of-scope**:
   - Custom physical river buoys or ultrasonic sensor hardware.
   - Heavy 2D hydrodynamic numerical fluid simulations.
