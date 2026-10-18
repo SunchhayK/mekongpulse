@@ -1,6 +1,6 @@
 [project]
 name = "mekong-bot"
-version = "0.5.0"
+version = "0.6.0"
 description = "MekongPulse Telegram bot: location queries, subscriptions, advisor chat, alert dispatch."
 requires-python = ">=3.12"
 dependencies = [

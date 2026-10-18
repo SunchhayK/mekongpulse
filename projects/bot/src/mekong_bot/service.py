@@ -59,7 +59,7 @@ WELCOME = (
     "/risk [ឈ្មោះឃុំ] — កម្រិតហានិភ័យឥឡូវនេះ / current risk + advice\n"
     "/report — រាយការណ៍ទឹកនៅវាលរបស់អ្នក / report water at your fields\n"
     "/digest — របាយការណ៍ប្រចាំថ្ងៃ / daily digest\n"
-    "/watch <ឈ្មោះឃុំ> — 🛡 officer watch draft (allowlisted)\n"
+    "/watch — 🛡 choose a commune / ជ្រើសរើសឃុំ\n"
     "📍 ផ្ញើទីតាំង — send your location to find your commune\n"
     "💬 សួរខ្ញុំជាខ្មែរ ឬអង់គ្លេស — ask the agronomy advisor anything\n"
     "\n"
@@ -307,26 +307,58 @@ class BotService:
             "Set OFFICER_TELEGRAM_IDS to enable Telegram approval."
         )
 
-    async def watch(self, chat_id: str | int, query: str) -> BotReply:
-        """Run a watch pass and offer inline approve/reject buttons (officers only)."""
+    async def watch(
+        self, chat_id: str | int, query: str, *, edit: bool = False
+    ) -> BotReply:
+        """Run a watch pass, or show the top-risk picker when no commune is given."""
         if not self._is_officer(chat_id):
-            return BotReply(self._watch_disabled())
+            return BotReply(self._watch_disabled(), edit=edit)
+
         query = (query or "").strip()
         if not query:
-            return BotReply(WATCH_USAGE)
+            risks = await self.repo.risk_map()
+            if not risks:
+                return BotReply(WATCH_USAGE, edit=edit)
+            ranked = sorted(
+                risks, key=lambda risk: (risk.tier.severity, risk.score), reverse=True
+            )[:5]
+            buttons = [
+                [
+                    (
+                        f"{risk.tier.emoji} {risk.commune_code} · "
+                        f"{(risk.commune_name_en or risk.commune_name_kh or '')[:32]}",
+                        f"watch:pick:{risk.commune_code}",
+                    )
+                ]
+                for risk in ranked
+            ]
+            buttons.append([("🔄 Refresh list", "watch:menu")])
+            text = (
+                "🛡 ជ្រើសរើសឃុំសម្រាប់ការឃ្លាំមើល (ហានិភ័យខ្ពស់បំផុត):\n"
+                "Choose a commune for the watch run (highest current risk):\n\n"
+                "ឬផ្ញើ /watch <ឈ្មោះឃុំ>\n"
+                "Or send /watch <commune name> — e.g. /watch Batheay"
+            )
+            return BotReply(text, buttons=buttons, edit=edit)
+
         commune = await self._commune(query)
         if commune is None:
-            return BotReply(self._not_found(query))
+            return BotReply(self._not_found(query), edit=edit)
         try:
             run = await run_watch(self.pipeline, commune.code, llm=self.llm)
         except (CommuneNotFound, AssessmentUnavailable):
             return BotReply(
                 "⚠️ មិនអាចបង្កើតការឃ្លាំមើលសម្រាប់ឃុំនេះបានទេ។\n"
-                "A watch run is not available for this commune right now."
+                "A watch run is not available for this commune right now.",
+                edit=edit,
             )
         except Exception:  # noqa: BLE001 - the bot must not crash on a provider failure
             log.exception("watch run failed for commune %s", commune.code)
-            return BotReply("⚠️ ការឃ្លាំមើលបរាជ័យ — សូមព្យាយាមម្តងទៀត។\nWatch run failed — please try again.")
+            return BotReply(
+                "⚠️ ការឃ្លាំមើលបរាជ័យ — សូមព្យាយាមម្តងទៀត។\n"
+                "Watch run failed — please try again.",
+                edit=edit,
+            )
 
         text = self._watch_text(run)[:TELEGRAM_MESSAGE_LIMIT]
         return BotReply(
@@ -337,6 +369,7 @@ class BotService:
                     ("❌ Reject", f"watch:reject:{run.id}"),
                 ]
             ],
+            edit=edit,
         )
 
     def _watch_text(self, run) -> str:
@@ -410,6 +443,10 @@ class BotService:
         parts = (data or "").split(":")
         if parts[0] == "watch" and len(parts) == 3 and parts[1] in ("approve", "reject"):
             return await self._watch_action(chat_id, parts[1], parts[2])
+        if parts[0] == "watch" and len(parts) == 3 and parts[1] == "pick":
+            return await self.watch(chat_id, parts[2], edit=True)
+        if parts[0] == "watch" and len(parts) == 2 and parts[1] == "menu":
+            return await self.watch(chat_id, "", edit=True)
         if parts[0] == "sub" and len(parts) == 2:
             commune = await self._commune(parts[1])
             if commune is None:

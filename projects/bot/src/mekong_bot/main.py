@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from telegram import BotCommand
+
 from mekong_shared.config import get_settings
 from mekong_shared.logging_utils import configure_logging, log_event
 from mekong_shared.pipeline import Pipeline
@@ -17,6 +19,17 @@ from mekong_shared.repository import create_audio_store, create_repository
 from .app import build_application
 
 log = logging.getLogger("mekongpulse.bot")
+
+BOT_COMMANDS = [
+    BotCommand("start", "Start / ចាប់ផ្តើម"),
+    BotCommand("watch", "🛡 Watch officer draft / ឃ្លាំមើល"),
+    BotCommand("risk", "Risk + advice / ហានិភ័យ"),
+    BotCommand("report", "Report water / រាយការណ៍ទឹក"),
+    BotCommand("mysubs", "Your communes / ឃុំតាមដាន"),
+    BotCommand("subscribe", "Follow a commune / តាមដានឃុំ"),
+    BotCommand("digest", "Daily digest / របាយការណ៍ប្រចាំថ្ងៃ"),
+    BotCommand("help", "Commands / ជំនួយ"),
+]
 
 
 async def run_polling() -> None:
@@ -32,6 +45,11 @@ async def run_polling() -> None:
         raise SystemExit("TELEGRAM_BOT_TOKEN is not set; cannot start polling.")
 
     await application.initialize()
+    try:
+        await application.bot.set_my_commands(BOT_COMMANDS)
+        log_event(logger, "BOT_COMMANDS_REGISTERED", count=len(BOT_COMMANDS))
+    except Exception as exc:  # noqa: BLE001 - the menu must never block polling
+        log.warning("could not register the command menu: %s", exc)
     await application.start()
     assert application.updater is not None
     await application.updater.start_polling(drop_pending_updates=True)

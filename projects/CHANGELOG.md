@@ -2,6 +2,18 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.15.0] — 2026-10-18
+
+Telegram usability: a command menu and a one-tap watch picker.
+
+### Added
+
+- `bot` — 0.6.0: registers the Telegram command menu at startup (`/start`, `/watch`, `/risk`, `/report`, `/mysubs`, `/subscribe`, `/digest`, `/help`). `/watch` with no arguments now lists the five highest-risk communes as inline buttons, plus a refresh action; picking one runs the watch and returns the approve/reject draft. `/watch <name or code>` still works for a specific commune.
+
+### Changed
+
+- `technical-report.md` 1.11.0 → 1.12.0 and `product-report.md` 1.7.0 → 1.7.1 — Telegram menu/picker documented; bot tests now 44.
+
 ## [0.14.0] — 2026-10-18
 
 Autonomous watch-officer runs with human approval.
