@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertLog } from "@/components/AlertLog";
 import { AssessmentDialog } from "@/components/AssessmentDialog";
 import { BasinMap } from "@/components/BasinMap";
 import { CommuneSearch } from "@/components/CommuneSearch";
 import { HydrographChart, type HydroObservation } from "@/components/HydrographChart";
-import { AlertIcon, BrandMark, MapIcon, RefreshIcon, WaveIcon } from "@/components/icons";
+import { AlertIcon, BrandMark, InfoIcon, MapIcon, RefreshIcon, WaveIcon } from "@/components/icons";
 import { RiskBadge } from "@/components/RiskBadge";
 import { RiskList } from "@/components/RiskList";
 import { StationMetricCard } from "@/components/StationMetricCard";
+import { StatusSummary } from "@/components/StatusSummary";
 import { VoicePlayer } from "@/components/VoicePlayer";
 import {
   api,
@@ -214,6 +216,12 @@ export default function DashboardPage() {
               ស្ថានភាពទឹកទន្លេឥឡូវនេះ · មេគង្គ · បាសាក់ · ទន្លេសាប
             </p>
             <nav className="hero-links" aria-label="Jump to section">
+              <a className="hero-link label-medium" href="#summary">
+                <InfoIcon /> Summary សេចក្តីសង្ខេប
+              </a>
+              <a className="hero-link label-medium" href="#alerts">
+                <AlertIcon /> Alert log កំណត់ហេតុ
+              </a>
               <a className="hero-link label-medium" href="#stations">
                 <WaveIcon /> River stations
               </a>
@@ -313,6 +321,10 @@ export default function DashboardPage() {
               {error}
             </p>
           )}
+
+          <StatusSummary riskRows={riskRows} stations={stations} lastSync={lastSync} />
+
+          <AlertLog />
 
           <section className="card" id="stations" aria-label="River stations">
             <div className="card-title-row">
@@ -447,7 +459,7 @@ export default function DashboardPage() {
             />
           </section>
 
-          <section aria-label="Station detail cards">
+          <section id="station-detail" aria-label="Station detail cards">
             <div className="section-label label-small">Station detail / ព័ត៌មានលម្អិត</div>
             {booting ? (
               <div className="station-grid">

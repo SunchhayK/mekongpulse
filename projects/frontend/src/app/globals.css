@@ -308,6 +308,8 @@ a { color: var(--sky-deep); }
   flex-wrap: wrap;
 }
 
+.card-actions { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
 .muted { color: var(--slate); }
 
 .empty-state {
@@ -808,6 +810,23 @@ button.station-card[aria-pressed="true"] {
 .province-select:hover { border-color: var(--navy); }
 
 /* ------------------------------------------------------------------ */
+/* Status summary (printable)                                          */
+/* ------------------------------------------------------------------ */
+
+.summary-table { width: 100%; border-collapse: collapse; }
+.summary-table th {
+  text-align: left;
+  color: var(--slate);
+  font-weight: 500;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.summary-table td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.summary-table .tier-cell { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.summary-table .tier-dot { width: 9px; height: 9px; border-radius: var(--radius-full); flex: 0 0 auto; }
+.summary-table-wrap { overflow-x: auto; }
+
+/* ------------------------------------------------------------------ */
 /* Bottom navigation (compact) + utilities                             */
 /* ------------------------------------------------------------------ */
 
@@ -903,6 +922,46 @@ button.station-card[aria-pressed="true"] {
   padding: 16px 0 20px;
   margin-top: 4px;
 }
+
+/* ------------------------------------------------------------------ */
+/* Print: the basin status report                                      */
+/* ------------------------------------------------------------------ */
+
+@media print {
+  /* Strip the interactive chrome; only the report survives. */
+  .top-app-bar .btn,
+  .hero-links,
+  .bottom-nav,
+  .rail,
+  #map,
+  .voice-card,
+  #stations .chip-row,
+  .shimmer,
+  .no-print { display: none !important; }
+
+  /* Station detail cards restate the summary's station table, so hide the
+     section (label included) instead of printing the same levels twice. */
+  #station-detail,
+  .station-grid { display: none !important; }
+
+  .app { padding-bottom: 0; }
+
+  /* With the rail gone the 2-column grid would tuck the report into the
+     320px sidebar track; let the main column span the page. */
+  .layout { display: block; padding: 0; }
+
+  /* The register is scroll-clipped on screen; let the printed copy run full length. */
+  .risk-table-wrap { max-height: none; overflow: visible; }
+
+  /* Tier colours and swatches are data, not decoration. */
+  * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+
+  .card,
+  .summary-table tr,
+  .risk-table tr { break-inside: avoid; }
+}
+
+@page { margin: 12mm; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }

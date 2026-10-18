@@ -108,6 +108,22 @@ export interface ResolvedCommune {
   method: string;
 }
 
+export interface AlertLogEntry {
+  id: number | null;
+  commune_code: string;
+  commune_name_kh: string;
+  commune_name_en: string;
+  province: string | null;
+  station_id: string | null;
+  risk_tier: FloodRiskTier;
+  lead_time_hours: number | null;
+  directive_title: string;
+  bulletin_text: string;
+  audio_url: string | null;
+  dispatched_at: string;
+  recipients_count: number;
+}
+
 export class ApiError extends Error {
   status: number;
   problemType?: string;
@@ -169,4 +185,6 @@ export const api = {
     request<SearchHit[]>(`/api/v1/communes/search?q=${encodeURIComponent(query)}`),
   resolve: (lat: number, lng: number) =>
     request<ResolvedCommune>(`/api/v1/communes/resolve?lat=${lat}&lng=${lng}`),
+  alertLog: (limit = 50) =>
+    request<AlertLogEntry[]>(`/api/v1/alerts/log?limit=${limit}`),
 };

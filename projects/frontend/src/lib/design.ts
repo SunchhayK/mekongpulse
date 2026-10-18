@@ -1,4 +1,4 @@
-// Shared design constants: risk tier metadata and projections.
+// Shared design constants: risk tier metadata and map bounds.
 
 import type { FloodRiskTier } from "./api";
 
@@ -18,19 +18,8 @@ export function tierSeverity(tier: FloodRiskTier): number {
   return TIER_ORDER.indexOf(tier);
 }
 
-// Approximate Cambodia basin bounding box for the offline SVG map.
+// Approximate Cambodia basin bounding box; centers the interactive Leaflet map.
 export const KH_BBOX = { minLat: 9.9, maxLat: 14.7, minLng: 102.3, maxLng: 107.7 };
-
-export function project(
-  lat: number,
-  lng: number,
-  width: number,
-  height: number,
-): { x: number; y: number } {
-  const x = ((lng - KH_BBOX.minLng) / (KH_BBOX.maxLng - KH_BBOX.minLng)) * width;
-  const y = (1 - (lat - KH_BBOX.minLat) / (KH_BBOX.maxLat - KH_BBOX.minLat)) * height;
-  return { x, y };
-}
 
 const dateTimeFormat = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Phnom_Penh",
