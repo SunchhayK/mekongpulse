@@ -77,6 +77,25 @@ async def advisor_tools(repo, settings, make_pipeline, gazetteer):
     return AdvisorTools(AdvisorToolContext(pipeline))
 
 
+async def test_react_preserves_raw_model_parts_for_vertex_thought_signatures(advisor_tools):
+    marker = {
+        "function_call": {"name": "get_station_telemetry", "args": {"station_id": "019802"}},
+        "thought_signature": b"signature",
+    }
+    scripted = ScriptedLLM(
+        [
+            StepResult(calls=[("get_station_telemetry", {"station_id": "019802"})], parts=[marker]),
+            StepResult(text="done"),
+        ]
+    )
+    reply = await run_react(advisor_tools, [], "status?", scripted)
+
+    assert reply == "done"
+    # The model turn must reuse the original parts (signature included), not a
+    # reconstructed function_call-only part.
+    assert scripted.contents_seen[1][-2] == {"role": "model", "parts": [marker]}
+
+
 async def test_ac04_scripted_agent_calls_tools_and_reasons(advisor_tools):
     scripted = ScriptedLLM(
         [

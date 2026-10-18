@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     use_vertex_ai: bool = False
     vertex_project: str | None = None
     vertex_location: str = "asia-southeast1"
+    # ADK's GoogleLLM currently stalls on Vertex AI; the native ReAct loop is
+    # the supported engine there. Keep ADK as the default for Gemini API keys.
+    advisor_use_adk: bool = True
 
     # --- gateway / security ----------------------------------------------
     admin_token: str | None = None  # Bearer token for scheduler/admin endpoints

@@ -3,7 +3,7 @@ id: REPORT-TECH-002
 document_type: technical_report
 title: MekongPulse Technical Architecture and Engineering Report
 project_name: "MekongPulse"
-version: 1.8.0
+version: 1.9.0
 status: approved
 last_updated: 2026-10-18
 owners: ["@bytelab-lead", "@tech-lead", "@backend-lead"]
@@ -34,6 +34,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
   - Bilingual Khmer-first web: next-intl `[locale]` routing (`km` default, `en` toggle) with static export (`trailingSlash`; Firebase `/` → `/km/index.html`), the dedicated officer assistant page at `/{locale}/assistant`, the public commune page at `/{locale}/commune?code=XXXXXX`, and `WEB_BASE_URL` driving the commune links appended to channel posts.
   - Firestore for time-series observation snapshots, commune risk profiles, and alert history in production; PostgreSQL (asyncpg) in development, staging, and self-hosted modes; Cloud Storage for audio caching. Spoken bulletins are content-addressed (digest of the deterministic briefing inputs) and served from the store when unchanged, so repeated commune views reuse one MP3.
   - Sync cost discipline: the 15-minute trigger calls `/patrol/run` only (patrol performs the sync itself), weather is refreshed hourly, unchanged commune-risk rows are not rewritten, and polished Khmer bulletins are cached by template digest. Reproducible measurements and scripts live in `projects/BENCHMARKS.md` and `projects/scripts/benchmark_*.py`.
+  - Vertex AI mode: `USE_VERTEX_AI=true` routes bulletin polish, TTS, STT, and the advisor through Vertex AI (`VERTEX_PROJECT=ai-builder-cup-9f8cd`, `VERTEX_LOCATION=global`) using a read-only service-account key mounted at `/secrets/vertex-sa.json` (`docker-compose.vertex.yml`; the key lives outside the repository with mode 600). ADK's `GoogleLLM` stalls against Vertex in the current SDK, so `ADVISOR_USE_ADK=false` selects the equivalent native ReAct loop; ADK remains the default for Gemini API keys.
 - **Deferred / out-of-scope**:
   - Custom physical river buoys or ultrasonic sensor hardware.
   - Heavy 2D hydrodynamic numerical fluid simulations.

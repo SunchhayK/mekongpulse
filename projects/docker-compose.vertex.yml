@@ -1,0 +1,20 @@
+# Vertex AI runtime mount for the self-hosted stack.
+#
+# Usage (live single-color compose):
+#   docker compose -f docker-compose.server.yml -f docker-compose.vertex.yml \
+#     --profile bot up -d --force-recreate backend bot
+#
+# The service-account key lives outside the repository:
+#   ~/mekongpulse/secrets/vertex-sa.json   (mode 600)
+# and is read through GOOGLE_APPLICATION_CREDENTIALS=/secrets/vertex-sa.json.
+#
+# When the blue-green compose (backend-blue/green/preview, caddy) is adopted,
+# add the same volume mount to those services; this override targets the
+# currently running `backend` and `bot` services.
+services:
+  backend:
+    volumes:
+      - /home/ruined/mekongpulse/secrets:/secrets:ro
+  bot:
+    volumes:
+      - /home/ruined/mekongpulse/secrets:/secrets:ro

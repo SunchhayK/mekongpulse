@@ -2,6 +2,20 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.12.0] — 2026-10-18
+
+Runtime switched to Vertex AI so the deployment bills through Google Cloud instead of a depleted Gemini prepay balance.
+
+### Added
+
+- Vertex AI mode across bulletin polish, TTS, STT, and the advisor (`USE_VERTEX_AI`, `VERTEX_PROJECT`, `VERTEX_LOCATION`); a read-only service-account key at `/secrets/vertex-sa.json` is supplied by `docker-compose.vertex.yml`, kept outside the repository with mode 600.
+- `ADVISOR_USE_ADK` (default `true`). ADK's `GoogleLLM` stalls indefinitely on Vertex AI in the current SDK, so the deployment sets it to `false` and uses the equivalent native ReAct loop, which works with Vertex and still records tool calls. The loop now replays the model's original parts (including Gemini 3 `thought_signature`) before tool responses; Vertex rejects reconstructed function calls otherwise.
+
+### Changed
+
+- `shared` — 0.9.0: engine selection is explicit; the advisor error now names both Gemini API and Vertex configuration.
+- `technical-report.md` 1.8.0 → 1.9.0 — Vertex deployment, credentials, and the ADK workaround documented.
+
 ## [0.11.0] — 2026-10-18
 
 Sync work is halved and repeat commune views stop re-billing Gemini quota.

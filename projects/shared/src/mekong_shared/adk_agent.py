@@ -91,6 +91,8 @@ def is_llm_failure(exc: BaseException) -> bool:
 class StepResult:
     text: str | None = None
     calls: list[tuple[str, dict]] = field(default_factory=list)
+    # Raw model parts, kept so Gemini 3 thought signatures survive the tool loop.
+    parts: list | None = None
 
 
 @dataclass
@@ -198,7 +200,7 @@ def _step_from_response(response) -> StepResult:
             text = getattr(part, "text", None)
             if text:
                 texts.append(text)
-    return StepResult(text="\n".join(texts).strip() or None, calls=calls)
+    return StepResult(text="\n".join(texts).strip() or None, calls=calls, parts=parts or None)
 
 
 _SUMMARY_PRIORITY_KEYS = (
@@ -306,7 +308,9 @@ async def run_react(
         contents.append(
             {
                 "role": "model",
-                "parts": [
+                "parts": step.parts
+                if step.parts
+                else [
                     {"function_call": {"name": name, "args": args}} for name, args in step.calls
                 ],
             }
@@ -458,13 +462,14 @@ async def _run_engine(
         if llm is not None:
             return await run_react(tools, history, user_text, llm)
         if not settings.has_gemini:
-            raise AdvisorUnavailable("advisor requires GEMINI_API_KEY")
-        agent = build_adk_agent(tools, settings)
-        if agent is not None:
-            try:
-                return await _run_adk(agent, history, user_text)
-            except Exception as exc:  # noqa: BLE001 - fall back to the native loop
-                log.warning("ADK run failed, falling back to native ReAct loop: %s", exc)
+            raise AdvisorUnavailable("advisor requires GEMINI_API_KEY or Vertex AI")
+        if settings.advisor_use_adk:
+            agent = build_adk_agent(tools, settings)
+            if agent is not None:
+                try:
+                    return await _run_adk(agent, history, user_text)
+                except Exception as exc:  # noqa: BLE001 - fall back to the native loop
+                    log.warning("ADK run failed, falling back to native ReAct loop: %s", exc)
         return await run_react(tools, history, user_text, GeminiFunctionCaller(settings))
     except AdvisorUnavailable:
         raise
