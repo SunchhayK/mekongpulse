@@ -2,6 +2,25 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.4.0] — 2026-10-18
+
+The officials' console gets its Tier 3 read-path tools: a printable status summary, CSV export, alert dispatch log, and an interactive basin map.
+
+### Added
+
+- `frontend` — 0.4.0: printable basin status summary (`StatusSummary`) with tier counts, a station status table, the top-10 elevated communes, and a print/PDF layout; client-side CSV export of the risk register (`lib/csv.ts`) with a UTF-8 BOM so Excel reads Khmer names correctly; alert dispatch log (`AlertLog`) reading `GET /api/v1/alerts/log` with commune names, tier, directive, recipients, bulletin details, and voice-note links; Leaflet basin map with switchable Esri Light Gray, OpenStreetMap, and OpenTopoMap basemaps, canvas-rendered commune markers, and station diamonds.
+- `backend` — 0.2.0: `GET /api/v1/alerts/log` — public, newest-first log of dispatched sentinel escalations with gazetteer-enriched commune names; `limit` defaults to 50 and clamps to 1..200.
+- `shared` — 0.3.0: `Repository.recent_sentinel_alerts(limit)` implemented across the memory, PostgreSQL, and Firestore adapters (newest escalation first); the Postgres row mapping is shared with `last_sentinel_alert`.
+
+### Changed
+
+- `frontend` — the static SVG basin map is replaced by Leaflet. The console now requests basemap tiles from Esri, OpenStreetMap, or OpenTopoMap, so the "no external map provider" claim no longer holds; the commune and station overlays still render over the neutral canvas when tiles are slow or blocked. The default Light style uses Esri Light Gray because CARTO's keyless Positron endpoint now serves watermarked "API KEY REQUIRED" tiles. The now-unused SVG projection helper (`project()`) is removed from `lib/design.ts`.
+- `docs` — product and technical reports 1.3.0: FR-10 and AC-08 cover the summary, CSV export, and alert log; the API spec includes `/api/v1/alerts/log`; the map stack and map claims match Leaflet and its tile providers; README test counts refreshed to 94 shared, 28 bot, 28 backend.
+
+### Fixed
+
+- `shared`, `backend`, `bot` — test settings are hermetic (`_env_file=None`). Running pytest from the `projects/` root previously loaded `.env` → `.env.staging`, so a real Gemini or Telegram key turned unit tests into live network calls: flaky failures when the provider rejected them, hangs when it was slow. All three suites now pass offline from any working directory.
+
 ## [0.3.3] — 2026-10-18
 
 Stage-personalized push alerts, a read-only console fix, and the technical report brought level with the shipped stack.

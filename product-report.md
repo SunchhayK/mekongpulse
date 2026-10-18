@@ -3,7 +3,7 @@ id: REPORT-PROD-002
 document_type: product_report
 title: MekongPulse Product Specification Report
 project_name: "MekongPulse"
-version: 1.2.0
+version: 1.3.0
 status: approved
 last_updated: 2026-10-18
 owners: ["@bytelab-lead", "@tech-lead", "@product-manager"]
@@ -129,7 +129,7 @@ The system MUST NOT attempt to solve the following items in this release:
 | FR-07          | Autonomous Sentinel Background Patrol | P0   | Sentinel Agent   | 15-minute background patrol trigger                      | Evaluates every station-mapped commune (1,544 of the 1,661-commune gazetteer; 117 have no mapped station) against risk escalation triggers; dispatches stage-grouped unsolicited broadcast alerts with voice |
 | FR-08          | Conversational ReAct Advisor Agent| P1       | Farmer           | Natural language text or voice query in Telegram         | Google ADK ReAct loop invokes domain tools dynamically; returns stateful bilingual agronomic counsel     |
 | FR-09          | Commune Subscription Management   | P1       | User, Chief      | Telegram `/subscribe <commune>` or inline button click   | Records chat ID to commune binding in PostgreSQL, stores the crop-stage profile, and pushes alerts scored with the stored stage |
-| FR-10          | Officials' Coordination Console   | P1       | PER-001, PER-003, public | Web browser (static export on Firebase Hosting)          | Renders basin risk map, station hydrographs, commune risk register, and playable Khmer bulletin, read-only; collects no per-farmer data |
+| FR-10          | Officials' Coordination Console   | P1       | PER-001, PER-003, public | Web browser (static export on Firebase Hosting)          | Renders basin risk map, station hydrographs, commune risk register, printable status summary, CSV export, alert dispatch log, and playable Khmer bulletin, read-only; collects no per-farmer data |
 
 ### 2.5 Acceptance criteria (Gherkin scenarios)
 
@@ -227,7 +227,7 @@ Scenario: Farmer subscribes without a stored crop stage
 Scenario: Commune chief and district officer coordinate from the web console
   Given a commune chief in Koh Thom district and a district disaster officer
   When either opens the web console during an escalation to WARNING
-  Then the console MUST render the basin risk map, station hydrographs, and the commune risk register, read-only
+  Then the console MUST render the basin risk map, station hydrographs, commune risk register, printable status summary, CSV export, and alert dispatch log, read-only
   And it MUST NOT prompt for a crop stage or any per-farmer data
   And the commune's Khmer voice bulletin MUST be playable for loudspeaker sharing
 ```
@@ -256,7 +256,7 @@ These invariants are immutable system rules. The implementation MUST NOT violate
 
 - **User Interfaces**:
   - Interactive Telegram Bot interface supporting inline keyboard navigation, location sharing, and direct audio note streaming. The bot is the only place rice-stage profiles are collected (once per season).
-  - Responsive web console for officials and the public, read-only: zero-tile SVG basin map (no external map provider, instant load on weak networks), station hydrographs, commune risk register, and Khmer voice bulletin playback.
+  - Responsive web console for officials and the public, read-only: Leaflet basin map with switchable Esri Light Gray, OpenStreetMap and OpenTopoMap basemaps (overlays render over the neutral canvas when tiles are slow), station hydrographs, commune risk register, and Khmer voice bulletin playback.
 - **Hardware Interfaces**: Google Cloud Run serverless execution container (2 vCPU, 2 GiB RAM, Generation 2 environment).
 - **Software Interfaces**:
   - Mekong River Commission Telemetry API: `https://api.mrcmekong.org/api/v1/time-series/telemetry/recent/measurement/{stationId}`.
@@ -277,8 +277,8 @@ These invariants are immutable system rules. The implementation MUST NOT violate
 ### 3.4 Delivery tiers (Scope Hammering)
 
 - **Tier 1 (Walking Skeleton / Hackathon MVP)**: Live MRC API polling for Prek Kdam and Chaktomuk stations; spatial elevation lookup for top 10 flood-prone communes in Kandal and Kampong Cham; Telegram bot responding to location pins with text risk card and agronomic advice; Cloud Run deployment with health probe.
-- **Tier 2 (Target Competition Scope)**: Full 1,661 commune MEF gazetteer integration; spoken Khmer voice note audio generation via Gemini 3 Flash TTS; Next.js web console with zero-tile SVG basin map; Cloud Scheduler cron job polling telemetry every 15 minutes.
-- **Tier 3 (Deferred / Phase 2 Roadmap)**: Officials' console add-ons, built with a government partner and over existing data only: printable commune status summary mirroring the SitRep field set (affected households, hectares, casualties, evacuations), CSV export of commune risk states, alert event log over existing dispatch records, and commune coverage shown as aggregate counts only. Public harvest-urgency layer (commune × ripening stage × 36–72h risk window, rendered from existing engine outputs) published to the broadcast channel and console — public signal, never a buyer feed. Planting-date onboarding (ask once, derive stage automatically through the season); upstream→downstream crest-arrival lag display (pairs existing station series); anticipatory-action readiness/activation triggers with a partner webhook (WFP-style 7-day readiness / 3-day activation); post-flood recovery directives; crowdsourced community dike-breach reporting with photo uploads, only with a named validation partner; subscription into official NCDM cell-broadcast dissemination once the standard lands; MFI portfolio credit scoring API for climate insurance underwriting. Rationale and sources: `research/features-scan.md`, `research/gov-workflow.md`, `research/sellers-market.md`.
+- **Tier 2 (Target Competition Scope)**: Full 1,661 commune MEF gazetteer integration; spoken Khmer voice note audio generation via Gemini 3 Flash TTS; Next.js web console with an interactive Leaflet basin map and switchable basemaps; Cloud Scheduler cron job polling telemetry every 15 minutes.
+- **Tier 3 (Deferred / Phase 2 Roadmap)**: Officials' console add-ons over existing data only. Shipped in 0.4.0: printable basin status summary (tier counts, station status, top elevated communes, limited to fields the engine actually holds), CSV export of commune risk states, and the alert dispatch log over existing escalation records. Remaining: SitRep household, hectare, casualty and evacuation fields (needs an official data partner) and commune subscriber coverage as aggregate counts only. Public harvest-urgency layer (commune × ripening stage × 36–72h risk window, rendered from existing engine outputs) published to the broadcast channel and console — public signal, never a buyer feed. Planting-date onboarding (ask once, derive stage automatically through the season); upstream→downstream crest-arrival lag display (pairs existing station series); anticipatory-action readiness/activation triggers with a partner webhook (WFP-style 7-day readiness / 3-day activation); post-flood recovery directives; crowdsourced community dike-breach reporting with photo uploads, only with a named validation partner; subscription into official NCDM cell-broadcast dissemination once the standard lands; MFI portfolio credit scoring API for climate insurance underwriting. Rationale and sources: `research/features-scan.md`, `research/gov-workflow.md`, `research/sellers-market.md`.
 
 ---
 
@@ -380,7 +380,7 @@ Two tracks share one engine. The farmer track (JRN-03..07) runs entirely in Tele
 | JRN-06  | Dispatch     | System  | Gemini synthesizes the text card and Khmer voice note        | Telegram Webhook        | Sends risk badge, directive, and audio note  | Sends raw text card if audio synthesis times out   |
 | JRN-07  | Listening    | PER-002 | Taps play on the 30–60s spoken Khmer voice note              | Telegram Audio Player   | Farmer hears the harvest or fertilizer directive in Khmer | Replay available; bot text fallback while audio loads |
 | JRN-08  | Mobilization | PER-001 | Verifies the escalation on the console, then plays the bulletin over the village loudspeaker | Web console + Loudspeaker Station | Community mobilizes combine harvesters | Telegram group announcement backup                 |
-| JRN-09  | Coordination | PER-001, PER-003 | Reviews escalating communes, station evidence, and subscriber coverage | Web console (`/`, read-only) | Risk map, hydrographs, and risk register rendered | Zero-tile SVG map renders on weak networks; no external map provider |
+| JRN-09  | Coordination | PER-001, PER-003 | Reviews escalating communes, station evidence, and subscriber coverage | Web console (`/`, read-only) | Risk map, hydrographs, and risk register rendered | Leaflet map renders commune and station overlays over a neutral canvas; basemaps switch between Esri Light Gray, OSM and OpenTopoMap |
 
 ---
 
@@ -395,7 +395,7 @@ MekongPulse is submitted to the Google Cloud AI Builder Cup 2026 (JAPAC region) 
 | Technical Merit & Gen AI Implementation (40%) | Autonomous multi-agent pipeline (ingestion, spatial reasoner, agronomic engine, sentinel patrol, ADK ReAct advisor); Gemini 3 Flash load-bearing in bulletin polish and TTS voice synthesis; deterministic validation bound by the four system invariants; GCP deployment path (Cloud Run + Cloud Scheduler + Firestore) with the live demo on Firebase Hosting; 15-minute scheduler. |
 | Problem Alignment & Impact (25%) | Named beneficiaries and targets: 30 early-adopter communes, 300 farmers with stored stage profiles, 2,500 ha protected in 90 days; quantified problem with cited flood losses; measurable 36–72 hour warning lead time; public signal for traders, officials and journalists without selling anyone a timing advantage. |
 | Innovation & Creativity (25%) | The hazard × stage × spoken Khmer combination, sourced as a market gap: Flood Hub and MRC stop at the hazard, Rice Crop Manager/RiceAdvice stop at agronomy with no hazard trigger, and no surveyed product delivers agronomic instructions as spoken Khmer. |
-| User Experience & Solution Design (10%) | Voice-first Telegram journey for farmers; read-only zero-tile console for officials that loads instantly on weak networks; Khmer-first labels throughout; staged fallbacks when audio or telemetry fails. |
+| User Experience & Solution Design (10%) | Voice-first Telegram journey for farmers; read-only officials' console with an interactive Leaflet map; risk overlays render even when basemap tiles are slow; Khmer-first labels throughout; staged fallbacks when audio or telemetry fails. |
 
 ### 5.2 Submission constraints checklist
 

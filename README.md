@@ -33,8 +33,8 @@
                    ▼
 ┌──────────────────────────────────────┐
 │       projects/frontend (Next.js 14) │
-│ • Material Design 3 Web GIS Map      │
-│ • Real-time Commune Risk Isochrones  │
+│ • Leaflet Web GIS Map                │
+│ • Risk Tiers, Alert Log, CSV Export  │
 │ • Audible Khmer Directives Player    │
 └──────────────────────────────────────┘
 ```
@@ -181,13 +181,13 @@ Caveats: the stack runs with `ENVIRONMENT=staging` (PostgreSQL + local audio; no
 Run automated test suites across all projects:
 
 ```bash
-# 1. Shared Domain Engine (92 tests)
+# 1. Shared Domain Engine (94 tests)
 cd projects/shared && uv run pytest
 
-# 2. Telegram Bot Service (26 tests)
+# 2. Telegram Bot Service (28 tests)
 cd projects/bot && uv run pytest
 
-# 3. FastAPI Backend (24 tests)
+# 3. FastAPI Backend (28 tests)
 cd projects/backend && uv run pytest
 
 # 4. Frontend Compilation
