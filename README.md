@@ -149,14 +149,14 @@ Caveats: the API is reachable only while this machine is awake and the tunnel is
 The dashboard stays on Firebase Hosting; the API runs on the `labyrinth.ts` host (Docker Compose, its own PostgreSQL) behind that host's existing Cloudflare tunnel. The container publishes `127.0.0.1:8080`, so the tunnel is the only ingress.
 
 ```bash
-# From the Mac (this repo has no git remote): copy the project
+# From the Mac (source of truth: github.com/SunchhayK/mekongpulse): sync the tree
 rsync -az --exclude node_modules --exclude .venv --exclude .next --exclude out \
   --exclude .git projects/ labyrinth-ts:~/mekongpulse/projects/
 
-# Start (or update) the stack on the server
+# Start (or update) the stack on the server; the bot runs under its profile
 ssh labyrinth-ts
 cd ~/mekongpulse/projects
-docker compose -f docker-compose.server.yml up -d --build
+docker compose -f docker-compose.server.yml --profile bot up -d --build
 ```
 
 One-time ingress and schedule (already configured for `labyrinth.ts`):
