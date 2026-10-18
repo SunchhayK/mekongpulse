@@ -361,6 +361,18 @@ class FirestoreRepository:
             return None
         return SentinelAlert(**{k: v for k, v in docs[0].to_dict().items() if k in SentinelAlert.model_fields})
 
+    async def recent_sentinel_alerts(self, limit: int = 50) -> list[SentinelAlert]:
+        query = (
+            self._col("sentinel_alerts")
+            .order_by("dispatched_at", direction=self._fs.Query.DESCENDING)
+            .limit(limit)
+        )
+        docs = await _run(lambda: list(query.stream()))
+        return [
+            SentinelAlert(**{k: v for k, v in doc.to_dict().items() if k in SentinelAlert.model_fields})
+            for doc in docs
+        ]
+
     async def save_alert_dispatch(
         self,
         commune_id: str,

@@ -1083,7 +1083,7 @@ wheels = [
 
 [[package]]
 name = "mekong-backend"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "backend" }
 dependencies = [
     { name = "fastapi" },
@@ -1145,7 +1145,7 @@ dev = [
 
 [[package]]
 name = "mekong-shared"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "shared" }
 dependencies = [
     { name = "asyncpg" },

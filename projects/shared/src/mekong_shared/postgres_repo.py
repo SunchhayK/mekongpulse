@@ -536,15 +536,14 @@ class PostgresRepository:
                 """,
                 commune_id,
             )
-        if not row:
-            return None
-        return SentinelAlert(
-            id=row["id"], patrol_run_id=row["patrol_run_id"], commune_id=row["commune_id"],
-            station_id=row["station_id"], risk_tier=RiskTier(row["risk_tier"]),
-            lead_time_hours=row["lead_time_hours"], directive_title=row["directive_title"] or "",
-            bulletin_text=row["bulletin_text"] or "", audio_url=row["audio_url"],
-            dispatched_at=row["dispatched_at"], recipients_count=row["recipients_count"],
-        )
+        return _sentinel_alert_from_row(row) if row else None
+
+    async def recent_sentinel_alerts(self, limit: int = 50) -> list[SentinelAlert]:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM sentinel_alerts ORDER BY dispatched_at DESC LIMIT $1", limit
+            )
+        return [_sentinel_alert_from_row(r) for r in rows]
 
     async def save_alert_dispatch(
         self,
@@ -642,4 +641,14 @@ def _subscription_from_row(row: asyncpg.Record) -> Subscription:
         last_notified_at=row["last_notified_at"],
         last_notified_risk_tier=RiskTier(row["last_notified_risk_tier"])
         if row["last_notified_risk_tier"] else None,
+    )
+
+
+def _sentinel_alert_from_row(row: asyncpg.Record) -> SentinelAlert:
+    return SentinelAlert(
+        id=row["id"], patrol_run_id=row["patrol_run_id"], commune_id=row["commune_id"],
+        station_id=row["station_id"], risk_tier=RiskTier(row["risk_tier"]),
+        lead_time_hours=row["lead_time_hours"], directive_title=row["directive_title"] or "",
+        bulletin_text=row["bulletin_text"] or "", audio_url=row["audio_url"],
+        dispatched_at=row["dispatched_at"], recipients_count=row["recipients_count"],
     )
