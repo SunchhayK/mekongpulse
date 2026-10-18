@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import { intlLocale } from "@/lib/design";
 
 export interface HydroObservation {
   timestamp: string; // ISO 8601
@@ -39,6 +41,8 @@ export function HydrographChart({
   floodStageMeters,
   observations,
 }: HydrographChartProps) {
+  const t = useTranslations("Hydrograph");
+  const locale = useLocale();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<{ index: number; x: number; y: number } | null>(null);
@@ -51,13 +55,16 @@ export function HydrographChart({
     [observations],
   );
 
-  const trend = useMemo(() => {
-    if (sorted.length < 2) return "no data";
+  const trendKey = useMemo(() => {
+    if (sorted.length < 2) return "trendNoData" as const;
     const delta = sorted[sorted.length - 1].waterLevelMeters - sorted[0].waterLevelMeters;
-    if (delta > 0.05) return "rising";
-    if (delta < -0.05) return "falling";
-    return "steady";
+    if (delta > 0.05) return "trendRising" as const;
+    if (delta < -0.05) return "trendFalling" as const;
+    return "trendSteady" as const;
   }, [sorted]);
+
+  const alarmDashLabel = t("alarmLabel", { level: alarmStageMeters.toFixed(2) });
+  const floodDashLabel = t("floodLabel", { level: floodStageMeters.toFixed(2) });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -120,7 +127,7 @@ export function HydrographChart({
     for (let i = 0; i <= xSteps; i += 1) {
       const time = tMin + ((tMax - tMin) * i) / xSteps;
       const x = xOf(time);
-      const label = new Intl.DateTimeFormat("en-GB", {
+      const label = new Intl.DateTimeFormat(intlLocale(locale), {
         timeZone: "Asia/Phnom_Penh",
         day: "2-digit",
         month: "short",
@@ -147,8 +154,8 @@ export function HydrographChart({
       ctx.textBaseline = "bottom";
       ctx.fillText(label, PADDING.left + 6, y - 4);
     };
-    dashLine(alarmStageMeters, tertiary, `Alarm ${alarmStageMeters.toFixed(2)}m / កម្រិតប្រកាស`);
-    dashLine(floodStageMeters, error, `Flood ${floodStageMeters.toFixed(2)}m / កម្រិតទឹកជំនន់`);
+    dashLine(alarmStageMeters, tertiary, alarmDashLabel);
+    dashLine(floodStageMeters, error, floodDashLabel);
 
     // water level trajectory
     ctx.strokeStyle = primary;
@@ -200,7 +207,7 @@ export function HydrographChart({
         ctx.stroke();
       }
     }
-  }, [sorted, alarmStageMeters, floodStageMeters, hover]);
+  }, [sorted, alarmStageMeters, floodStageMeters, hover, locale, alarmDashLabel, floodDashLabel]);
 
   const current = sorted.length ? sorted[sorted.length - 1].waterLevelMeters : null;
 
@@ -249,8 +256,7 @@ export function HydrographChart({
   if (sorted.length < 2) {
     return (
       <div className="empty-state body-medium" data-empty="true">
-        Telemetry temporarily unavailable / ទិន្នន័យកម្ពស់ទឹកមិនទាន់មាន — run a telemetry sync and
-        refresh.
+        {t("empty")}
       </div>
     );
   }
@@ -263,17 +269,20 @@ export function HydrographChart({
         ref={canvasRef}
         style={{ width: "100%", height: "auto", aspectRatio: `${WIDTH} / ${HEIGHT}` }}
         role="img"
-        aria-label={`${stationName} (${stationId}) 7-day water level hydrograph. Current ${current?.toFixed(
-          2,
-        )} meters, ${trend}. Alarm stage ${alarmStageMeters.toFixed(2)} m, flood crest ${floodStageMeters.toFixed(
-          2,
-        )} m.`}
+        aria-label={t("canvasAria", {
+          station: stationName,
+          id: stationId,
+          current: current?.toFixed(2) ?? "",
+          trend: t(trendKey),
+          alarm: alarmStageMeters.toFixed(2),
+          flood: floodStageMeters.toFixed(2),
+        })}
         onMouseMove={handleMove}
         onMouseLeave={() => setHover(null)}
       />
       {hoverPoint && hover && (
         <div className="hydrograph-tooltip label-small" style={{ left: hover.x, top: hover.y }}>
-          {hoverPoint.waterLevelMeters.toFixed(2)} m · {new Date(hoverPoint.timestamp).toLocaleString("en-GB", {
+          {hoverPoint.waterLevelMeters.toFixed(2)} m · {new Date(hoverPoint.timestamp).toLocaleString(intlLocale(locale), {
             timeZone: "Asia/Phnom_Penh",
             day: "2-digit",
             month: "short",

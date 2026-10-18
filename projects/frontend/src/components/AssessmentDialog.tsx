@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, type Assessment } from "@/lib/api";
+import { useLocale, useTranslations } from "next-intl";
+import { EvidencePanel } from "@/components/EvidencePanel";
+import { FieldReportsList } from "@/components/FieldReportsList";
+import { Link } from "@/i18n/navigation";
+import { api, ApiError, type Assessment, type EvidencePayload } from "@/lib/api";
 import { formatDateTime } from "@/lib/design";
 import { CloseIcon } from "./icons";
 import { RiskBadge } from "./RiskBadge";
@@ -16,9 +20,15 @@ export interface AssessmentDialogProps {
 }
 
 export function AssessmentDialog({ communeCode, onClose, onAssessment }: AssessmentDialogProps) {
+  const t = useTranslations("Dialog");
+  const evidenceT = useTranslations("Evidence");
+  const locale = useLocale();
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [evidence, setEvidence] = useState<EvidencePayload | null>(null);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const requestId = useRef(0);
 
@@ -43,16 +53,43 @@ export function AssessmentDialog({ communeCode, onClose, onAssessment }: Assessm
         setAssessment(null);
         setError(
           err instanceof ApiError && err.status === 409
-            ? `Commune ${communeCode} has no station telemetry to score yet. Pick another commune or retry after the next sync.`
+            ? t("errorNoTelemetry", { code: communeCode })
             : err instanceof ApiError && err.status === 404
-              ? `Commune ${communeCode} was not found in the 2025 gazetteer.`
-              : `Assessment unavailable right now${err instanceof ApiError ? ` (${err.status})` : ""}. Retry in a few minutes.`,
+              ? t("errorNotFound", { code: communeCode })
+              : `${t("errorUnavailable")}${err instanceof ApiError ? ` (${err.status})` : ""}`,
         );
       })
       .finally(() => {
         if (requestId.current === id) setLoading(false);
       });
   }, [communeCode, onAssessment]);
+
+  // Provenance loads independently: the dialog stays usable while it arrives.
+  useEffect(() => {
+    if (!communeCode) {
+      setEvidence(null);
+      setEvidenceError(null);
+      return;
+    }
+    let cancelled = false;
+    setEvidenceLoading(true);
+    setEvidenceError(null);
+    api
+      .evidence(communeCode)
+      .then((payload) => {
+        if (!cancelled) setEvidence(payload);
+      })
+      .catch(() => {
+        if (!cancelled) setEvidenceError(t("evidenceFailed"));
+      })
+      .finally(() => {
+        if (!cancelled) setEvidenceLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is memoized per namespace
+  }, [communeCode]);
 
   useEffect(() => {
     if (!communeCode) return;
@@ -78,7 +115,7 @@ export function AssessmentDialog({ communeCode, onClose, onAssessment }: Assessm
         className="dialog"
         role="dialog"
         aria-modal="true"
-        aria-label={`Flood assessment for commune ${communeCode}`}
+        aria-label={t("aria", { code: communeCode })}
         tabIndex={-1}
         ref={dialogRef}
       >
@@ -90,29 +127,31 @@ export function AssessmentDialog({ communeCode, onClose, onAssessment }: Assessm
                   {assessment.commune_name_kh}
                 </h2>
                 <p className="body-medium muted" style={{ margin: "4px 0 0" }}>
-                  {assessment.commune_name_en} · {assessment.commune_code} · updated{" "}
-                  {formatDateTime(assessment.generated_at)}
+                  {t("updated", {
+                    name: assessment.commune_name_en,
+                    code: assessment.commune_code,
+                    time: formatDateTime(assessment.generated_at, locale),
+                  })}
                 </p>
               </>
             ) : (
               <>
                 <h2 className="title-large" style={{ margin: 0 }}>
-                  Commune {communeCode}
+                  {t("loadingTitle", { code: communeCode })}
                 </h2>
                 <p className="body-medium muted" style={{ margin: "4px 0 0" }}>
-                  Evaluating flood risk and recording the Khmer voice bulletin — up to a minute…
+                  {t("loadingBody")}
                 </p>
               </>
             )}
           </div>
-          <button type="button" className="close-btn" onClick={onClose} aria-label="Close assessment">
+          <button type="button" className="close-btn" onClick={onClose} aria-label={t("closeAria")}>
             <CloseIcon />
           </button>
         </div>
 
         <p className="body-small muted" style={{ margin: 0 }}>
-          Read-only view — directives render the conservative ripening posture. Farmers set their
-          own rice stage once in the Telegram bot.
+          {t("readOnly")}
         </p>
 
         {loading && (
@@ -139,7 +178,7 @@ export function AssessmentDialog({ communeCode, onClose, onAssessment }: Assessm
               />
               {assessment.estimated && (
                 <span className="status-pill label-medium">
-                  ទិន្នន័យប៉ាន់ស្មាន / estimated telemetry — escalated conservatively
+                  {t("estimated")}
                 </span>
               )}
             </div>
@@ -173,6 +212,34 @@ export function AssessmentDialog({ communeCode, onClose, onAssessment }: Assessm
             </div>
           </div>
         )}
+
+        <section className="dialog-section" aria-label={evidenceT("title")}>
+          <h3 className="title-medium" style={{ margin: "0 0 10px" }}>
+            {evidenceT("title")}
+          </h3>
+          {evidenceLoading ? (
+            <div className="shimmer" style={{ height: 140 }} aria-busy="true" />
+          ) : evidence ? (
+            <EvidencePanel evidence={evidence} />
+          ) : evidenceError ? (
+            <p className="body-small muted" style={{ margin: 0 }}>
+              {evidenceError}
+            </p>
+          ) : null}
+        </section>
+
+        <section className="dialog-section">
+          <FieldReportsList communeCode={communeCode} plain />
+        </section>
+
+        <p style={{ margin: "4px 0 0" }}>
+          <Link
+            className="btn btn--filled btn--compact label-medium"
+            href={{ pathname: "/commune", query: { code: communeCode } }}
+          >
+            {t("openFullPage")}
+          </Link>
+        </p>
       </div>
     </div>
   );

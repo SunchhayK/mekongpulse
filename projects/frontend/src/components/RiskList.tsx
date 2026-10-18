@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import type { CommuneRiskRow } from "@/lib/api";
 import { downloadCsv, riskRegisterCsv } from "@/lib/csv";
-import { formatMeters, TIER_META, tierSeverity } from "@/lib/design";
+import { formatMeters, formatNumber, TIER_META, tierSeverity } from "@/lib/design";
 
 export interface RiskListProps {
   rows: CommuneRiskRow[];
@@ -13,6 +14,10 @@ export interface RiskListProps {
 const MAX_ROWS = 100;
 
 export function RiskList({ rows, onSelect }: RiskListProps) {
+  const t = useTranslations("RiskList");
+  const tableT = useTranslations("RiskTable");
+  const tierT = useTranslations("Tier");
+  const locale = useLocale();
   const [province, setProvince] = useState("ALL");
 
   const provinces = useMemo(() => {
@@ -51,11 +56,11 @@ export function RiskList({ rows, onSelect }: RiskListProps) {
     <div className="card" id="risk">
       <div className="card-title-row">
         <h2 className="title-medium" style={{ margin: 0 }}>
-          Risk register / តារាងហានិភ័យ
+          {t("title")}
         </h2>
         <span className="card-actions">
           <label className="body-small muted">
-            <span className="sr-only">Filter by province</span>
+            <span className="sr-only">{t("filterAria")}</span>
             <select
               className="province-select label-medium"
               id="province-filter"
@@ -63,7 +68,7 @@ export function RiskList({ rows, onSelect }: RiskListProps) {
               value={province}
               onChange={(event) => setProvince(event.target.value)}
             >
-              <option value="ALL">All provinces · {rows.length.toLocaleString()}</option>
+              <option value="ALL">{t("allProvinces", { count: formatNumber(rows.length, locale) })}</option>
               {provinces.map((name) => (
                 <option key={name} value={name}>
                   {name}
@@ -76,15 +81,15 @@ export function RiskList({ rows, onSelect }: RiskListProps) {
             className="btn btn--filled btn--compact label-medium no-print"
             onClick={exportCsv}
             disabled={rows.length === 0}
-            aria-label="Download the commune risk register as a CSV file"
+            aria-label={t("exportAria")}
           >
-            Export CSV / ទាញយក CSV
+            {t("export")}
           </button>
         </span>
       </div>
       {filtered.length === 0 ? (
         <p className="empty-state body-medium" data-empty="true">
-          No scored communes yet. Telemetry sync runs every 15 minutes.
+          {t("empty")}
         </p>
       ) : (
         <>
@@ -92,12 +97,12 @@ export function RiskList({ rows, onSelect }: RiskListProps) {
             <table className="risk-table body-small">
               <thead>
                 <tr>
-                  <th scope="col">Commune</th>
-                  <th scope="col">Province</th>
-                  <th scope="col">Tier</th>
-                  <th scope="col">Lead</th>
-                  <th scope="col">Level</th>
-                  <th scope="col">Score</th>
+                  <th scope="col">{tableT("commune")}</th>
+                  <th scope="col">{tableT("province")}</th>
+                  <th scope="col">{tableT("tier")}</th>
+                  <th scope="col">{tableT("lead")}</th>
+                  <th scope="col">{tableT("level")}</th>
+                  <th scope="col">{tableT("score")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -109,13 +114,13 @@ export function RiskList({ rows, onSelect }: RiskListProps) {
                     onKeyDown={(event) => {
                       if (event.key === "Enter") onSelect(row.commune_code);
                     }}
-                    aria-label={`Assess ${row.commune_name_en}, ${TIER_META[row.tier].labelEn} tier`}
+                    aria-label={t("rowAria", { name: row.commune_name_en, tier: tierT(row.tier) })}
                   >
                     <td>
                       <span lang="km">{row.commune_name_kh}</span>
                       <br />
                       {row.commune_name_en}{" "}
-                      <span className="muted">{row.estimated ? "· estimated" : ""}</span>
+                      <span className="muted">{row.estimated ? t("estimated") : ""}</span>
                     </td>
                     <td className="muted">{row.province ?? "—"}</td>
                     <td>
@@ -125,10 +130,12 @@ export function RiskList({ rows, onSelect }: RiskListProps) {
                           style={{ background: TIER_META[row.tier].color }}
                           aria-hidden="true"
                         />
-                        {TIER_META[row.tier].labelEn}
+                        {tierT(row.tier)}
                       </span>
                     </td>
-                    <td className="muted">{row.lead_time_hours != null ? `~${row.lead_time_hours}h` : "—"}</td>
+                    <td className="muted">
+                      {row.lead_time_hours != null ? tierT("lead", { hours: row.lead_time_hours }) : "—"}
+                    </td>
                     <td className="muted">
                       {row.station_level_m != null ? `${formatMeters(row.station_level_m)} m` : "—"}
                     </td>
@@ -140,8 +147,7 @@ export function RiskList({ rows, onSelect }: RiskListProps) {
           </div>
           {total > MAX_ROWS && (
             <p className="body-small muted" style={{ marginTop: 8 }}>
-              Showing the {MAX_ROWS} highest-risk of {total.toLocaleString()} scored communes. Pick a
-              province to narrow the register.
+              {t("footer", { max: MAX_ROWS, total })}
             </p>
           )}
         </>

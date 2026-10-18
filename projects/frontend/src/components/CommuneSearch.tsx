@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { api, ApiError, type SearchHit } from "@/lib/api";
 import { MapPinIcon, SearchIcon } from "./icons";
 
@@ -9,6 +10,7 @@ export interface CommuneSearchProps {
 }
 
 export function CommuneSearch({ onPick }: CommuneSearchProps) {
+  const t = useTranslations("Search");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchHit[]>([]);
   const [busy, setBusy] = useState(false);
@@ -33,7 +35,7 @@ export function CommuneSearch({ onPick }: CommuneSearchProps) {
         if (requestId.current === id) {
           setResults([]);
           setError(
-            `Commune Search: lookup failed${err instanceof ApiError ? ` (${err.status})` : ""}. Retry or pick a commune from the map.`,
+            `${t("errorLookup")}${err instanceof ApiError ? ` (${err.status})` : ""}`,
           );
         }
       } finally {
@@ -45,7 +47,7 @@ export function CommuneSearch({ onPick }: CommuneSearchProps) {
 
   function sendGpsLocation() {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setError("Location Resolver: this browser cannot share a GPS pin. Select your commune from the menu.");
+      setError(t("errorNoGeolocation"));
       return;
     }
     setBusy(true);
@@ -58,8 +60,8 @@ export function CommuneSearch({ onPick }: CommuneSearchProps) {
         } catch (err) {
           setError(
             err instanceof ApiError && err.problemType?.endsWith("outside-basin")
-              ? "Location Resolver: coordinates are outside the Mekong river basin. Select your target commune from the menu."
-              : "Location Resolver: GPS pin could not be resolved. Select your commune from the menu.",
+              ? t("errorOutsideBasin")
+              : t("errorResolve"),
           );
         } finally {
           setBusy(false);
@@ -68,7 +70,7 @@ export function CommuneSearch({ onPick }: CommuneSearchProps) {
       () => {
         setBusy(false);
         setError(
-          "Location Resolver: GPS permission was denied. Select your target commune from the menu.",
+          t("errorDenied"),
         );
       },
       { enableHighAccuracy: true, timeout: 10_000 },
@@ -79,7 +81,7 @@ export function CommuneSearch({ onPick }: CommuneSearchProps) {
     <div className="card">
       <div className="card-title-row">
         <h2 className="title-medium" style={{ margin: 0 }}>
-          Commune lookup / ស្វែងរកឃុំ
+          {t("title")}
         </h2>
       </div>
       <form
@@ -99,8 +101,8 @@ export function CommuneSearch({ onPick }: CommuneSearchProps) {
             id="commune-search"
             name="q"
             value={query}
-            placeholder="Koh Thom, កោះធំ, 080404…"
-            aria-label="Search commune by Khmer or English name or 6-digit code"
+            placeholder={t("placeholder")}
+            aria-label={t("inputAria")}
             aria-invalid={error != null}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -108,7 +110,7 @@ export function CommuneSearch({ onPick }: CommuneSearchProps) {
       </form>
       <div className="chip-row" style={{ marginTop: 10 }}>
         <button type="button" className="chip label-medium" onClick={sendGpsLocation} disabled={busy}>
-          <MapPinIcon /> Send GPS location · ផ្ញើទីតាំង GPS
+          <MapPinIcon /> {t("gps")}
         </button>
       </div>
       {error && (
@@ -138,8 +140,7 @@ export function CommuneSearch({ onPick }: CommuneSearchProps) {
       )}
       {!busy && query.trim().length >= 2 && results.length === 0 && !error && (
         <p className="body-small muted" style={{ marginTop: 8 }} data-empty="true">
-          No commune matched. Try a Khmer name (កោះធំ), an English variant (Koh Thom), or a 6-digit
-          code.
+          {t("noMatch")}
         </p>
       )}
     </div>

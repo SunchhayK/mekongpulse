@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import type {
   Canvas,
   CircleMarkerOptions,
@@ -27,10 +28,10 @@ type PositionedCommune = CommuneRiskRow & { lat: number; lng: number };
 
 const BASEMAPS: Record<
   BasemapStyle,
-  { label: string; url: string; attribution: string }
+  { labelKey: "basemapLight" | "basemapStreets" | "basemapTerrain"; url: string; attribution: string }
 > = {
   light: {
-    label: "Light",
+    labelKey: "basemapLight",
     // CARTO's keyless Positron endpoint now serves watermarked
     // "API KEY REQUIRED" tiles; Esri's light-gray canvas stays keyless.
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
@@ -38,12 +39,12 @@ const BASEMAPS: Record<
       "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors",
   },
   streets: {
-    label: "Streets",
+    labelKey: "basemapStreets",
     url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     attribution: "&copy; OpenStreetMap contributors",
   },
   terrain: {
-    label: "Terrain",
+    labelKey: "basemapTerrain",
     url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
     attribution: "&copy; OpenStreetMap contributors, SRTM | &copy; OpenTopoMap (CC-BY-SA)",
   },
@@ -71,6 +72,8 @@ export function BasinMap({
   onSelectCommune,
   onSelectStation,
 }: BasinMapProps) {
+  const t = useTranslations("Map");
+  const tierT = useTranslations("Tier");
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const leafletRef = useRef<LeafletModule | null>(null);
@@ -112,7 +115,11 @@ export function BasinMap({
         scrollWheelZoom: false,
         attributionControl: true,
       });
-      L.control.zoom({ position: "bottomright" }).addTo(map);
+      L.control.zoom({
+        position: "bottomright",
+        zoomInTitle: t("zoomIn"),
+        zoomOutTitle: t("zoomOut"),
+      }).addTo(map);
       rendererRef.current = L.canvas({ padding: 0.5 }).addTo(map);
       markerGroupRef.current = L.layerGroup().addTo(map);
       mapRef.current = map;
@@ -130,7 +137,7 @@ export function BasinMap({
       rendererRef.current = null;
       fittedRef.current = false;
     };
-  }, []);
+  }, [t]);
 
   // Swap the raster basemap in place; Leaflet's attribution control follows
   // the layer add/remove events, so the credits change with the tiles.
@@ -181,7 +188,7 @@ export function BasinMap({
 
       const meta = TIER_META[row.tier];
       const lead =
-        row.lead_time_hours != null ? ` · flood arrival ~${row.lead_time_hours} h` : "";
+        row.lead_time_hours != null ? t("floodArrival", { hours: row.lead_time_hours }) : "";
       const options: CircleMarkerOptions & { keyboard: boolean } = {
         renderer,
         radius: 5,
@@ -196,7 +203,7 @@ export function BasinMap({
       };
       const marker = L.circleMarker([row.lat, row.lng], options);
       marker.bindTooltip(
-        `${row.commune_name_kh} · ${row.commune_name_en} - ${meta.labelEn}${lead}`,
+        `${row.commune_name_kh} · ${row.commune_name_en} - ${tierT(row.tier)}${lead}`,
         { direction: "top", offset: [0, -6], opacity: 1, className: "basin-tooltip" },
       );
       marker.on("click", () => handlersRef.current.onSelectCommune(row.commune_code));
@@ -208,6 +215,7 @@ export function BasinMap({
       if (!position) return;
       const selected = station.station_id === selectedStationId;
       const level = formatMeters(station.level_m);
+      const stationLabel = t("stationTooltip", { name: station.name, level });
       const marker = L.marker([position.lat, position.lng], {
         icon: L.divIcon({
           className: `basin-station-icon${selected ? " is-selected" : ""}`,
@@ -217,10 +225,10 @@ export function BasinMap({
           tooltipAnchor: [0, -12],
         }),
         keyboard: true,
-        title: `${station.name} · ${level} m`,
+        title: stationLabel,
         riseOnHover: true,
       });
-      marker.bindTooltip(`${station.name} · ${level} m`, {
+      marker.bindTooltip(stationLabel, {
         direction: "top",
         opacity: 1,
         className: "basin-tooltip",
@@ -236,7 +244,7 @@ export function BasinMap({
       );
       fittedRef.current = true;
     }
-  }, [mapEpoch, positioned, stations, selectedStationId]);
+  }, [mapEpoch, positioned, stations, selectedStationId, t, tierT]);
 
   return (
     <div className="map-shell">
@@ -245,9 +253,9 @@ export function BasinMap({
           ref={containerRef}
           className="basin-map-canvas"
           role="region"
-          aria-label={`Interactive basin map: ${positioned.length} monitored communes shaded by flood risk tier`}
+          aria-label={t("aria", { count: positioned.length })}
         />
-        <div className="basemap-switcher" role="group" aria-label="Basemap style">
+        <div className="basemap-switcher" role="group" aria-label={t("basemapAria")}>
           {BASEMAP_ORDER.map((style) => (
             <button
               key={style}
@@ -256,7 +264,7 @@ export function BasinMap({
               aria-pressed={basemap === style}
               onClick={() => setBasemap(style)}
             >
-              {BASEMAPS[style].label}
+              {t(BASEMAPS[style].labelKey)}
             </button>
           ))}
         </div>
@@ -265,11 +273,11 @@ export function BasinMap({
         {TIER_ORDER.map((tier) => (
           <span className="item" key={tier}>
             <span className="swatch" style={{ background: TIER_META[tier].color }} />
-            {TIER_META[tier].labelKh} · {TIER_META[tier].labelEn}
+            {tierT(tier)}
           </span>
         ))}
         <span className="item">
-          <span className="station-mark" aria-hidden="true" /> station / ស្ថានីយ
+          <span className="station-mark" aria-hidden="true" /> {t("stationLegend")}
         </span>
       </div>
     </div>

@@ -1,12 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { AlertLog } from "@/components/AlertLog";
 import { AssessmentDialog } from "@/components/AssessmentDialog";
 import { BasinMap } from "@/components/BasinMap";
 import { CommuneSearch } from "@/components/CommuneSearch";
 import { HydrographChart, type HydroObservation } from "@/components/HydrographChart";
 import { AlertIcon, BrandMark, InfoIcon, MapIcon, RefreshIcon, WaveIcon } from "@/components/icons";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { OfficerAssistant } from "@/components/OfficerAssistant";
 import { RiskBadge } from "@/components/RiskBadge";
 import { RiskList } from "@/components/RiskList";
 import { StationMetricCard } from "@/components/StationMetricCard";
@@ -21,11 +24,19 @@ import {
   type HydroPoint,
   type StationTelemetry,
 } from "@/lib/api";
-import { formatDateTime, TIER_META, TIER_ORDER, tierSeverity } from "@/lib/design";
+import {
+  formatDateTime,
+  formatNumber,
+  TIER_META,
+  TIER_ORDER,
+  tierSeverity,
+} from "@/lib/design";
 
 const REFRESH_MS = 15 * 60 * 1000;
 
 export default function DashboardPage() {
+  const t = useTranslations();
+  const locale = useLocale();
   const [health, setHealth] = useState<Health | null>(null);
   const [stations, setStations] = useState<StationTelemetry[]>([]);
   const [riskRows, setRiskRows] = useState<CommuneRiskRow[]>([]);
@@ -52,13 +63,13 @@ export default function DashboardPage() {
     } catch (err) {
       setError(
         err instanceof ApiError && err.status >= 500
-          ? "Telemetry gateway: the upstream station feed is unavailable. Showing the last successful refresh."
-          : "Telemetry gateway: connection failed. Check that the API is running, then refresh.",
+          ? t("TelemetryErrors.gatewayUnavailable")
+          : t("TelemetryErrors.gatewayFailed"),
       );
     } finally {
       setBooting(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -117,32 +128,16 @@ export default function DashboardPage() {
 
   /** Plain-language basin status for the hero band. */
   const headline = useMemo(() => {
-    if (booting) return "Reading the rivers…";
-    if (tierCounts.DANGER > 0) return `${tierCounts.DANGER} communes in flood danger`;
-    if (tierCounts.WARNING > 0) return `${tierCounts.WARNING} communes under flood warning`;
-    if (tierCounts.ADVISORY > 0) return `${tierCounts.ADVISORY} communes on advisory watch`;
-    return "All monitored communes below alarm stage";
-  }, [booting, tierCounts]);
-
-  const headlineTier = useMemo(() => {
-    if (tierCounts.DANGER > 0) return "DANGER";
-    if (tierCounts.WARNING > 0) return "WARNING";
-    if (tierCounts.ADVISORY > 0) return "ADVISORY";
-    return "NORMAL";
-  }, [tierCounts]);
-
-  const headlineParts = useMemo(() => {
-    const count = tierCounts[headlineTier] ?? 0;
-    const phrase =
-      headlineTier === "DANGER"
-        ? "in flood danger"
-        : headlineTier === "WARNING"
-          ? "under flood warning"
-          : headlineTier === "ADVISORY"
-            ? "on advisory watch"
-            : "";
-    return { count, phrase };
-  }, [headlineTier, tierCounts]);
+    const tierWord = (chunks: React.ReactNode) => <span className="tier-word">{chunks}</span>;
+    if (booting) return t("Hero.reading");
+    if (tierCounts.DANGER > 0)
+      return t.rich("Hero.danger", { count: tierCounts.DANGER, tier: tierWord });
+    if (tierCounts.WARNING > 0)
+      return t.rich("Hero.warning", { count: tierCounts.WARNING, tier: tierWord });
+    if (tierCounts.ADVISORY > 0)
+      return t.rich("Hero.advisory", { count: tierCounts.ADVISORY, tier: tierWord });
+    return t("Hero.allClear");
+  }, [booting, tierCounts, t]);
 
   const topRisk = useMemo(
     () =>
@@ -164,7 +159,7 @@ export default function DashboardPage() {
           <BrandMark />
           <span className="brand-text">
             <span className="brand-name">MekongPulse</span>
-            <span className="body-small subtitle">ទឹកទន្លេមេគង្គ · River telemetry</span>
+            <span className="body-small subtitle">{t("Brand.subtitle")}</span>
           </span>
         </div>
         <div className="spacer" />
@@ -173,76 +168,83 @@ export default function DashboardPage() {
             <span
               className="connection-pill label-small"
               data-state={health.mrc_station_connection}
-              aria-label={`MRC telemetry ${health.mrc_station_connection}`}
+              aria-label={t("Header.mrcAria", {
+                state: t(`Header.mrcStates.${health.mrc_station_connection}`),
+              })}
             >
               <span className="dot" aria-hidden="true" />
-              <span className="connection-label">MRC {health.mrc_station_connection.toLowerCase()}</span>
+              <span className="connection-label">
+                {t("Header.mrcLabel", {
+                  state: t(`Header.mrcStates.${health.mrc_station_connection}`),
+                })}
+              </span>
             </span>
-            <span className="meta-pill label-small" aria-label={`Environment ${health.environment}`}>
+            <span
+              className="meta-pill label-small"
+              aria-label={t("Header.environmentAria", { environment: health.environment })}
+            >
               {health.environment}
             </span>
           </>
         )}
+        <LanguageSwitcher />
         <button
           type="button"
           className="btn btn--filled btn--compact label-medium"
           onClick={() => void load()}
-          aria-label="Refresh telemetry and risk data"
+          aria-label={t("Header.refreshAria")}
         >
           <RefreshIcon />
-          <span>Refresh</span>
+          <span>{t("Header.refresh")}</span>
         </button>
       </header>
 
-      <section className="hero-band" aria-label="Basin status">
+      <section className="hero-band" aria-label={t("Hero.bandAria")}>
         <div className="hero-inner">
           <div className="hero-copy">
-            <p className="eyebrow">MekongPulse · River telemetry · Cambodia</p>
-            <h1 className="hero-headline">
-              {headlineParts.count > 0 && headlineParts.phrase ? (
-                <>
-                  <span className="tier-word">{headlineParts.count}</span>{" "}
-                  {headlineParts.phrase}
-                </>
-              ) : (
-                headline
-              )}
-            </h1>
+            <p className="eyebrow">{t("Hero.eyebrow")}</p>
+            <h1 className="hero-headline">{headline}</h1>
             <p className="body-medium hero-sub">
-              {`${riskRows.length.toLocaleString()} communes scored from ${stations.length} MRC stations`}
+              {t("Hero.scored", { communes: riskRows.length, stations: stations.length })}
               {" · "}
-              {lastSync ? `last reading ${formatDateTime(lastSync)}` : "awaiting first sync"}
+              {lastSync
+                ? t("Hero.lastReading", { time: formatDateTime(lastSync, locale) })
+                : t("Hero.awaitingSync")}
               <br />
-              ស្ថានភាពទឹកទន្លេឥឡូវនេះ · មេគង្គ · បាសាក់ · ទន្លេសាប
+              {t("Hero.riverConditions")}
             </p>
-            <nav className="hero-links" aria-label="Jump to section">
+            <nav className="hero-links" aria-label={t("Hero.jumpAria")}>
               <a className="hero-link label-medium" href="#summary">
-                <InfoIcon /> Summary សេចក្តីសង្ខេប
+                <InfoIcon /> {t("Hero.linkSummary")}
               </a>
               <a className="hero-link label-medium" href="#alerts">
-                <AlertIcon /> Alert log កំណត់ហេតុ
+                <AlertIcon /> {t("Hero.linkAlerts")}
               </a>
               <a className="hero-link label-medium" href="#stations">
-                <WaveIcon /> River stations
+                <WaveIcon /> {t("Hero.linkStations")}
               </a>
               <a className="hero-link label-medium" href="#map">
-                <MapIcon /> Basin map
+                <MapIcon /> {t("Hero.linkMap")}
               </a>
               <a className="hero-link label-medium" href="#risk">
-                <AlertIcon /> Risk register
+                <AlertIcon /> {t("Hero.linkRisk")}
               </a>
             </nav>
           </div>
 
-          <div className="risk-panel" aria-label="Risk distribution across monitored communes">
+          <div className="risk-panel" aria-label={t("Hero.riskPanelAria")}>
             <div className="risk-panel-head">
-              <span className="eyebrow">Basin risk / ហានិភ័យអាង</span>
-              <span className="body-small muted">{riskRows.length.toLocaleString()} communes</span>
+              <span className="eyebrow">{t("Hero.riskPanelTitle")}</span>
+              <span className="body-small muted">
+                {t("Hero.communes", { count: riskRows.length })}
+              </span>
             </div>
             <div
               className="risk-bar"
               role="img"
-              aria-label={TIER_ORDER.map((tier) => `${TIER_META[tier].labelEn} ${tierCounts[tier] ?? 0}`).join(", ")}
+              aria-label={TIER_ORDER.map(
+                (tier) => `${t(`Tier.${tier}`)} ${formatNumber(tierCounts[tier] ?? 0, locale)}`,
+              ).join(", ")}
             >
               {TIER_ORDER.map((tier) => {
                 const count = tierCounts[tier] ?? 0;
@@ -260,9 +262,10 @@ export default function DashboardPage() {
               {TIER_ORDER.map((tier) => (
                 <li className="item" key={tier}>
                   <span className="swatch" style={{ background: TIER_META[tier].color }} aria-hidden="true" />
-                  <span className="body-small" lang="km">{TIER_META[tier].labelKh}</span>
-                  <span className="body-small muted">{TIER_META[tier].labelEn}</span>
-                  <span className="count mono body-medium">{(tierCounts[tier] ?? 0).toLocaleString()}</span>
+                  <span className="body-small">{t(`Tier.${tier}`)}</span>
+                  <span className="count mono body-medium">
+                    {formatNumber(tierCounts[tier] ?? 0, locale)}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -271,21 +274,21 @@ export default function DashboardPage() {
       </section>
 
       <main className="layout">
-        <aside className="rail" aria-label="Commune lookup and highest risk">
+        <aside className="rail" aria-label={t("Aria.rail")}>
           <CommuneSearch onPick={setSelectedCommuneCode} />
 
-          <section className="card" aria-label="Highest risk communes">
+          <section className="card" aria-label={t("Aria.highestRiskSection")}>
             <div className="card-title-row">
               <h2 className="title-medium" style={{ margin: 0 }}>
-                Highest risk / ហានិភ័យខ្ពស់
+                {t("HighestRisk.title")}
               </h2>
               <span className="body-small muted">
-                {topRisk.length > 0 ? "tap for the full bulletin" : "all clear"}
+                {topRisk.length > 0 ? t("HighestRisk.tap") : t("HighestRisk.allClear")}
               </span>
             </div>
             {topRisk.length === 0 ? (
               <p className="body-small muted" data-empty="true" style={{ margin: 0 }}>
-                No elevated communes right now.
+                {t("HighestRisk.empty")}
               </p>
             ) : (
               <ul className="top-risk-list">
@@ -313,6 +316,8 @@ export default function DashboardPage() {
               </ul>
             )}
           </section>
+
+          <OfficerAssistant communeCode={selectedCommuneCode} />
         </aside>
 
         <div className="main-column">
@@ -326,12 +331,12 @@ export default function DashboardPage() {
 
           <AlertLog />
 
-          <section className="card" id="stations" aria-label="River stations">
+          <section className="card" id="stations" aria-label={t("Stations.title")}>
             <div className="card-title-row">
               <h2 className="title-medium" style={{ margin: 0 }}>
-                River stations / ស្ថានីយទន្លេ
+                {t("Stations.title")}
               </h2>
-              <span className="body-small muted">select a station to plot its 7-day hydrograph</span>
+              <span className="body-small muted">{t("Stations.hint")}</span>
             </div>
             {booting ? (
               <div className="chip-row">
@@ -341,11 +346,12 @@ export default function DashboardPage() {
               </div>
             ) : stations.length === 0 ? (
               <p className="empty-state body-medium" data-empty="true" style={{ margin: 0 }}>
-                No telemetry yet. The scheduler syncs MRC stations every 15 minutes; run{" "}
-                <span className="mono">POST /api/v1/telemetry/sync</span> to poll immediately.
+                {t.rich("Stations.empty", {
+                  mono: (chunks) => <span className="mono">{chunks}</span>,
+                })}
               </p>
             ) : (
-              <div className="chip-row" role="group" aria-label="Station selector">
+              <div className="chip-row" role="group" aria-label={t("Stations.selectorAria")}>
                 {stations.map((station) => (
                   <button
                     key={station.station_id}
@@ -353,7 +359,11 @@ export default function DashboardPage() {
                     className="chip label-medium"
                     aria-pressed={station.station_id === selectedStationId}
                     onClick={() => setSelectedStationId(station.station_id)}
-                    title={`${station.river} · alarm ${station.alarm_stage_m} m · flood ${station.flood_stage_m} m`}
+                    title={t("Stations.chipTitle", {
+                      river: station.river,
+                      alarm: station.alarm_stage_m,
+                      flood: station.flood_stage_m,
+                    })}
                   >
                     {station.name}
                     <span className="chip-level">{station.level_m.toFixed(2)} m</span>
@@ -363,16 +373,21 @@ export default function DashboardPage() {
             )}
           </section>
 
-          <section className="card hero-card" aria-label="Hydrograph and voice bulletin">
+          <section className="card hero-card" aria-label={t("Hydrograph.cardAria")}>
             <div className="card-title-row" style={{ marginBottom: 0 }}>
               <div>
                 <h2 className="headline-medium" style={{ margin: 0 }}>
-                  {selectedStation ? selectedStation.name : "Station hydrograph"}
+                  {selectedStation ? selectedStation.name : t("Hydrograph.titleFallback")}
                 </h2>
                 <p className="body-small muted" style={{ margin: "4px 0 0" }}>
                   {selectedStation
-                    ? `${selectedStation.river} · ${selectedStation.station_id} · alarm ${selectedStation.alarm_stage_m.toFixed(2)} m · flood ${selectedStation.flood_stage_m.toFixed(2)} m · 7-day / កម្ពស់ទឹក ៧ថ្ងៃថយក្រោយ`
-                    : "Select a station to plot its 7-day water level."}
+                    ? t("Hydrograph.subActive", {
+                        river: selectedStation.river,
+                        id: selectedStation.station_id,
+                        alarm: selectedStation.alarm_stage_m.toFixed(2),
+                        flood: selectedStation.flood_stage_m.toFixed(2),
+                      })
+                    : t("Hydrograph.subEmpty")}
                 </p>
               </div>
               {selectedStation && (
@@ -411,43 +426,40 @@ export default function DashboardPage() {
               />
             ) : (
               <p className="empty-state body-medium" data-empty="true" style={{ margin: 0 }}>
-                Select a station to plot its 7-day hydrograph.
+                {t("Hydrograph.subEmpty")}
               </p>
             )}
           </section>
 
-          <section className="card voice-card" aria-label="Khmer voice bulletin">
+          <section className="card voice-card" aria-label={t("Voice.cardAria")}>
             <div className="card-title-row" style={{ marginBottom: 8 }}>
               <h2 className="title-medium" style={{ margin: 0 }}>
-                សារសម្លេងខ្មែរ · Khmer voice bulletin
+                {t("Voice.title")}
               </h2>
               <span className="body-small" style={{ color: "#a9bcd9" }}>
                 {lastAssessment
-                  ? `${lastAssessment.commune_name_en} (${lastAssessment.commune_code})`
-                  : "select a commune to load its bulletin"}
+                  ? t("Voice.selected", {
+                      name: lastAssessment.commune_name_en,
+                      code: lastAssessment.commune_code,
+                    })
+                  : t("Voice.empty")}
               </span>
             </div>
             <VoicePlayer
               audioSrc={lastAssessment?.audio?.url}
               durationSeconds={lastAssessment?.audio?.duration_seconds ?? undefined}
-              transcriptKhmer={
-                lastAssessment?.khmer_bulletin ??
-                "ជ្រើសរើសឃុំនៅលើផែនទី ឬស្វែងរកឃុំ ដើម្បីមើលសារជូនដំណឹង និងស្តាប់សារសម្លេងខ្មែរ។"
-              }
-              transcriptEnglish={
-                lastAssessment?.english_bulletin ??
-                "Select or search a commune to load its bilingual flood bulletin and spoken Khmer warning."
-              }
+              transcriptKhmer={lastAssessment?.khmer_bulletin ?? t("Voice.fallbackKhmer")}
+              transcriptEnglish={lastAssessment?.english_bulletin ?? t("Voice.fallbackEnglish")}
             />
           </section>
 
-          <section className="card" id="map" aria-label="Basin risk map">
+          <section className="card" id="map" aria-label={t("Map.sectionAria")}>
             <div className="card-title-row">
               <h2 className="title-medium" style={{ margin: 0 }}>
-                Basin risk map / ផែនទីហានិភ័យ
+                {t("Map.title")}
               </h2>
               <span className="body-small muted">
-                {riskRows.length.toLocaleString()} communes · tap a dot for its bulletin
+                {t("Map.hint", { count: riskRows.length })}
               </span>
             </div>
             <BasinMap
@@ -459,8 +471,8 @@ export default function DashboardPage() {
             />
           </section>
 
-          <section id="station-detail" aria-label="Station detail cards">
-            <div className="section-label label-small">Station detail / ព័ត៌មានលម្អិត</div>
+          <section id="station-detail" aria-label={t("Aria.stationDetailSection")}>
+            <div className="section-label label-small">{t("StationDetail.label")}</div>
             {booting ? (
               <div className="station-grid">
                 <div className="shimmer" style={{ height: 180 }} />
@@ -491,32 +503,28 @@ export default function DashboardPage() {
 
           <RiskList rows={riskRows} onSelect={setSelectedCommuneCode} />
 
-          <footer className="footer body-small">
-            Data: MRC telemetry (api.mrcmekong.org) · Open-Meteo rainfall · MEF 2025 commune gazetteer.
-            Risk tiers refresh every 15 minutes; alerts dispatch via the MekongPulse Telegram bot.
-            Bilingual bulletins are synthesized with Gemini Khmer TTS and attached to Sentinel alerts.
-          </footer>
+          <footer className="footer body-small">{t("Footer.data")}</footer>
         </div>
       </main>
 
-      <nav className="bottom-nav" aria-label="Primary">
+      <nav className="bottom-nav" aria-label={t("BottomNav.aria")}>
         <a href="#stations" aria-current="true">
           <span className="icon" aria-hidden="true">
             <WaveIcon />
           </span>
-          <span className="label-small">River ទន្លេ</span>
+          <span className="label-small">{t("BottomNav.river")}</span>
         </a>
         <a href="#map">
           <span className="icon" aria-hidden="true">
             <MapIcon />
           </span>
-          <span className="label-small">Map ផែនទី</span>
+          <span className="label-small">{t("BottomNav.map")}</span>
         </a>
         <a href="#risk">
           <span className="icon" aria-hidden="true">
             <AlertIcon />
           </span>
-          <span className="label-small">Risk ហានិភ័យ</span>
+          <span className="label-small">{t("BottomNav.risk")}</span>
         </a>
       </nav>
 

@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import type { FloodRiskTier, StationTelemetry } from "@/lib/api";
 import { formatMeters, formatRate, TIER_META } from "@/lib/design";
 
@@ -34,6 +37,7 @@ export function StationMetricCard({
   selected = false,
   onSelect,
 }: StationMetricCardProps) {
+  const t = useTranslations("StationCard");
   const flood = floodStageM ?? alarmStageM + 2;
   const tier = stationTier(
     {
@@ -66,8 +70,8 @@ export function StationMetricCard({
           </div>
         </div>
         {isStaleFallback && (
-          <span className="status-pill label-small" title="Estimated reading from station failover">
-            ប៉ាន់ស្មាន · estimated
+          <span className="status-pill label-small" title={t("estimatedTitle")}>
+            {t("estimated")}
           </span>
         )}
       </div>
@@ -86,14 +90,14 @@ export function StationMetricCard({
         <span
           className="marker"
           style={{ left: `${Math.min(100, (alarmStageM / flood) * 100)}%` }}
-          title={`Alarm stage ${formatMeters(alarmStageM)} m`}
+          title={t("alarmMarkerTitle", { level: formatMeters(alarmStageM) })}
         />
       </div>
       <div className="body-small muted">
-        Alarm <span className="mono">{formatMeters(alarmStageM)}</span> · Flood{" "}
+        {t("alarm")} <span className="mono">{formatMeters(alarmStageM)}</span> · {t("flood")}{" "}
         <span className="mono">{formatMeters(flood)}</span> ·{" "}
         <span className="margin-badge">
-          levee margin {margin > 0 ? "+" : ""}
+          {t("leveeMargin")} {margin > 0 ? "+" : ""}
           {margin.toFixed(2)} m
         </span>
       </div>

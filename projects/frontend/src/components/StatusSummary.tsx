@@ -1,7 +1,8 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import type { CommuneRiskRow, StationTelemetry } from "@/lib/api";
-import { formatDateTime, formatMeters, TIER_META, TIER_ORDER, tierSeverity } from "@/lib/design";
+import { formatDateTime, formatMeters, formatNumber, TIER_META, TIER_ORDER, tierSeverity } from "@/lib/design";
 
 export interface StatusSummaryProps {
   riskRows: CommuneRiskRow[];
@@ -11,14 +12,18 @@ export interface StatusSummaryProps {
 
 const TOP_RISK_LIMIT = 10;
 
-function stationStatus(station: StationTelemetry): string {
-  if (station.level_m >= station.flood_stage_m) return "ABOVE FLOOD";
-  if (station.level_m >= station.alarm_stage_m) return "ABOVE ALARM";
-  return "BELOW ALARM";
+function stationStatusKey(station: StationTelemetry): "aboveFlood" | "aboveAlarm" | "belowAlarm" {
+  if (station.level_m >= station.flood_stage_m) return "aboveFlood";
+  if (station.level_m >= station.alarm_stage_m) return "aboveAlarm";
+  return "belowAlarm";
 }
 
 /** Printable basin status report for shift handover (FR-10). */
 export function StatusSummary({ riskRows, stations, lastSync }: StatusSummaryProps) {
+  const t = useTranslations("Summary");
+  const tableT = useTranslations("RiskTable");
+  const tierT = useTranslations("Tier");
+  const locale = useLocale();
   const tierCounts: Record<string, number> = { NORMAL: 0, ADVISORY: 0, WARNING: 0, DANGER: 0 };
   riskRows.forEach((row) => {
     tierCounts[row.tier] = (tierCounts[row.tier] ?? 0) + 1;
@@ -30,18 +35,18 @@ export function StatusSummary({ riskRows, stations, lastSync }: StatusSummaryPro
     .slice(0, TOP_RISK_LIMIT);
 
   return (
-    <div className="card" id="summary" aria-label="Basin status summary">
+    <div className="card" id="summary" aria-label={t("aria")}>
       <div className="card-title-row">
         <h2 className="title-medium" style={{ margin: 0 }}>
-          Basin status summary / សេចក្តីសង្ខេបស្ថានភាពអាង
+          {t("title")}
         </h2>
         <button
           type="button"
           className="btn btn--filled btn--compact label-medium no-print"
           onClick={() => window.print()}
-          aria-label="Print or save this basin status summary as a PDF"
+          aria-label={t("printAria")}
         >
-          Print / PDF
+          {t("print")}
         </button>
       </div>
 
@@ -49,38 +54,37 @@ export function StatusSummary({ riskRows, stations, lastSync }: StatusSummaryPro
         {TIER_ORDER.map((tier) => (
           <li className="item" key={tier}>
             <span className="swatch" style={{ background: TIER_META[tier].color }} aria-hidden="true" />
-            <span className="body-small" lang="km">
-              {TIER_META[tier].labelKh}
-            </span>
-            <span className="body-small muted">{TIER_META[tier].labelEn}</span>
-            <span className="count mono body-medium">{(tierCounts[tier] ?? 0).toLocaleString()}</span>
+            <span className="body-small">{tierT(tier)}</span>
+            <span className="count mono body-medium">{formatNumber(tierCounts[tier] ?? 0, locale)}</span>
           </li>
         ))}
       </ul>
       <p className="body-medium" style={{ margin: "12px 0 0" }}>
-        {riskRows.length.toLocaleString()} communes scored · last telemetry sync{" "}
-        {lastSync ? formatDateTime(lastSync) : "awaiting first sync"}
+        {t("scored", {
+          count: riskRows.length,
+          time: lastSync ? formatDateTime(lastSync, locale) : t("awaitingSync"),
+        })}
       </p>
 
       <h3 className="section-label label-small" style={{ margin: "16px 0 8px" }}>
-        Station status / ស្ថានភាពស្ថានីយ
+        {t("stationSection")}
       </h3>
       {stations.length === 0 ? (
         <p className="body-small muted" data-empty="true" style={{ margin: 0 }}>
-          No telemetry yet. Last sync runs every 15 minutes.
+          {t("stationEmpty")}
         </p>
       ) : (
         <div className="summary-table-wrap">
           <table className="summary-table body-small">
             <thead>
               <tr>
-                <th scope="col">Station</th>
-                <th scope="col">River</th>
-                <th scope="col">Level (m)</th>
-                <th scope="col">Alarm (m)</th>
-                <th scope="col">Flood (m)</th>
-                <th scope="col">Status</th>
-                <th scope="col">Recorded</th>
+                <th scope="col">{t("stStation")}</th>
+                <th scope="col">{t("stRiver")}</th>
+                <th scope="col">{t("stLevel")}</th>
+                <th scope="col">{t("stAlarm")}</th>
+                <th scope="col">{t("stFlood")}</th>
+                <th scope="col">{t("stStatus")}</th>
+                <th scope="col">{t("stRecorded")}</th>
               </tr>
             </thead>
             <tbody>
@@ -91,8 +95,8 @@ export function StatusSummary({ riskRows, stations, lastSync }: StatusSummaryPro
                   <td className="mono">{formatMeters(station.level_m)}</td>
                   <td className="mono muted">{formatMeters(station.alarm_stage_m)}</td>
                   <td className="mono muted">{formatMeters(station.flood_stage_m)}</td>
-                  <td className="mono">{stationStatus(station)}</td>
-                  <td className="muted">{formatDateTime(station.recorded_at)}</td>
+                  <td className="mono">{t(stationStatusKey(station))}</td>
+                  <td className="muted">{formatDateTime(station.recorded_at, locale)}</td>
                 </tr>
               ))}
             </tbody>
@@ -101,22 +105,22 @@ export function StatusSummary({ riskRows, stations, lastSync }: StatusSummaryPro
       )}
 
       <h3 className="section-label label-small" style={{ margin: "16px 0 8px" }}>
-        Highest risk / ហានិភ័យខ្ពស់ (top {TOP_RISK_LIMIT})
+        {t("topTitle", { limit: TOP_RISK_LIMIT })}
       </h3>
       {topRisk.length === 0 ? (
         <p className="body-small muted" data-empty="true" style={{ margin: 0 }}>
-          No elevated communes right now.
+          {t("empty")}
         </p>
       ) : (
         <div className="summary-table-wrap">
           <table className="summary-table body-small">
             <thead>
               <tr>
-                <th scope="col">Commune</th>
-                <th scope="col">Province</th>
-                <th scope="col">Tier</th>
-                <th scope="col">Score</th>
-                <th scope="col">Lead</th>
+                <th scope="col">{tableT("commune")}</th>
+                <th scope="col">{tableT("province")}</th>
+                <th scope="col">{tableT("tier")}</th>
+                <th scope="col">{tableT("score")}</th>
+                <th scope="col">{tableT("lead")}</th>
               </tr>
             </thead>
             <tbody>
@@ -135,12 +139,12 @@ export function StatusSummary({ riskRows, stations, lastSync }: StatusSummaryPro
                         style={{ background: TIER_META[row.tier].color }}
                         aria-hidden="true"
                       />
-                      {TIER_META[row.tier].labelEn}
+                      {tierT(row.tier)}
                     </span>
                   </td>
                   <td>{row.score}</td>
                   <td className="muted">
-                    {row.lead_time_hours != null ? `~${row.lead_time_hours}h` : "—"}
+                    {row.lead_time_hours != null ? tierT("lead", { hours: row.lead_time_hours }) : "—"}
                   </td>
                 </tr>
               ))}
@@ -150,7 +154,7 @@ export function StatusSummary({ riskRows, stations, lastSync }: StatusSummaryPro
       )}
 
       <p className="body-small muted" style={{ margin: "14px 0 0" }} suppressHydrationWarning>
-        Generated at {formatDateTime(new Date().toISOString())}
+        {t("generated", { time: formatDateTime(new Date().toISOString(), locale) })}
       </p>
     </div>
   );

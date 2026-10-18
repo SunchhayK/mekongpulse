@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { PauseIcon, PlayIcon, VolumeIcon } from "./icons";
 
 export interface VoicePlayerProps {
@@ -30,6 +31,7 @@ export function VoicePlayer({
   transcriptEnglish,
   autoPlay = false,
 }: VoicePlayerProps) {
+  const t = useTranslations("Voice");
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
@@ -83,7 +85,7 @@ export function VoicePlayer({
         className="play-btn"
         onClick={toggle}
         disabled={!audioSrc}
-        aria-label="Play spoken Khmer flood warning"
+        aria-label={t("playAria")}
       >
         {playing ? <PauseIcon /> : <PlayIcon />}
       </button>
@@ -97,7 +99,7 @@ export function VoicePlayer({
           step={0.1}
           value={current}
           disabled={!audioSrc}
-          aria-label="Seek within the spoken Khmer bulletin"
+          aria-label={t("seekAria")}
           onChange={(event) => {
             const value = Number(event.target.value);
             setCurrent(value);
@@ -114,12 +116,11 @@ export function VoicePlayer({
             aria-expanded={showTranscript}
             onClick={() => setShowTranscript((value) => !value)}
           >
-            {showTranscript ? "Hide transcript / បិទអត្ថបទ" : "Show transcript / បង្ហាញអត្ថបទ"}
+            {showTranscript ? t("hideTranscript") : t("showTranscript")}
           </button>
         ) : (
           <p className="label-small voice-note" style={{ margin: 0 }}>
-            សារសម្លេងភ្ជាប់ជាមួយការជូនដំណឹងផ្ញើផ្ទាល់ · Voice note attaches when a Sentinel alert is
-            dispatched (Gemini TTS).
+            {t("attachNote")}
           </p>
         )}
         {showTranscript && (

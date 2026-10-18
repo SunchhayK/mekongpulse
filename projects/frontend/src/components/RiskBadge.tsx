@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import type { FloodRiskTier } from "@/lib/api";
 import { TIER_META } from "@/lib/design";
 
@@ -6,14 +9,12 @@ export interface RiskBadgeProps {
   tier: FloodRiskTier;
   /** Estimated hours until flood arrival (e.g. 36) */
   leadTimeHours?: number;
-  /** Display language: 'km' (Khmer) or 'en' (English) */
-  lang?: "km" | "en";
   /** Material 3 badge size */
   size?: "small" | "large";
 }
 
-export function RiskBadge({ tier, leadTimeHours, lang = "en", size = "small" }: RiskBadgeProps) {
-  const meta = TIER_META[tier];
+export function RiskBadge({ tier, leadTimeHours, size = "small" }: RiskBadgeProps) {
+  const t = useTranslations("Tier");
   return (
     <span
       className={`risk-badge ${size === "large" ? "risk-badge--large label-large" : "label-medium"}`}
@@ -21,11 +22,9 @@ export function RiskBadge({ tier, leadTimeHours, lang = "en", size = "small" }: 
       role="status"
     >
       <span className="dot" aria-hidden="true" />
-      {lang === "km" ? meta.labelKh : meta.labelEn}
+      {t(tier)}
       {leadTimeHours != null && (
-        <span className="lead-time">
-          ~{leadTimeHours}h{lang === "km" ? " ទៀត" : ""}
-        </span>
+        <span className="lead-time">{t("lead", { hours: leadTimeHours })}</span>
       )}
     </span>
   );

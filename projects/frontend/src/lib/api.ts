@@ -124,6 +124,118 @@ export interface AlertLogEntry {
   recipients_count: number;
 }
 
+/* --- Evidence layer (GET /api/v1/communes/{code}/evidence) --------------- */
+
+export type EvidenceConfidence = "high" | "medium" | "low";
+export type EvidenceQCStatus = "pass" | "warn" | "fail" | "unavailable";
+export type EvidenceCrossCheckStatus = "agree" | "disagree" | "unavailable";
+export type EvidenceFreshness = "fresh" | "recent" | "stale";
+
+export interface EvidenceQCCheck {
+  id: "gaps" | "stuck" | "spike" | "range";
+  status: EvidenceQCStatus;
+  detail: string;
+  detail_kh: string;
+}
+
+export interface EvidenceQCBlock {
+  status: EvidenceQCStatus;
+  checks: EvidenceQCCheck[];
+}
+
+export interface EvidenceCrossCheck {
+  id: "rainfall_agreement" | "upstream_coherence";
+  status: EvidenceCrossCheckStatus;
+  detail: string;
+  detail_kh: string;
+}
+
+export interface EvidenceStation {
+  station_id: string;
+  name: string;
+  distance_km: number | null;
+  source: string;
+  recorded_at: string;
+  age_minutes: number;
+  freshness: EvidenceFreshness;
+  level_m: number;
+  rate_of_rise_m_per_hr: number;
+  alarm_stage_m: number;
+  flood_stage_m: number;
+}
+
+export interface EvidenceChainStep {
+  id: "reading" | "change" | "threshold" | "tier" | "directive";
+  text_en: string;
+  text_kh: string;
+}
+
+export interface EvidencePayload {
+  commune_code: string;
+  commune_name_kh: string;
+  commune_name_en: string;
+  generated_at: string;
+  risk_tier: FloodRiskTier;
+  score: number;
+  confidence: EvidenceConfidence;
+  confidence_reasons: string[];
+  station: EvidenceStation;
+  qc: EvidenceQCBlock;
+  cross_checks: EvidenceCrossCheck[];
+  evidence_chain: EvidenceChainStep[];
+  limitations: { text_en: string; text_kh: string };
+}
+
+/* --- Field reports (GET /api/v1/communes/{code}/reports) ------------------- */
+
+export type FieldReportStatus = "water_reached" | "no_water" | "other";
+
+export interface FieldReport {
+  id: string;
+  commune_code: string;
+  status: FieldReportStatus;
+  note: string | null;
+  reporter_label: string | null;
+  source: string;
+  reported_at: string;
+}
+
+export interface FieldReportList {
+  reports: FieldReport[];
+}
+
+/* --- Officer assistant (POST /api/v1/advisor) ------------------------------ */
+
+export interface AdvisorHistoryTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AdvisorToolCall {
+  name: string;
+  status: string;
+  summary: string;
+}
+
+export interface AdvisorAction {
+  type: string;
+  status: string;
+  detail: string | null;
+}
+
+export interface AdvisorReply {
+  reply: string;
+  tool_calls: AdvisorToolCall[];
+  actions: AdvisorAction[];
+}
+
+export interface AdvisorRequest {
+  message: string;
+  history: AdvisorHistoryTurn[];
+  locale: "km" | "en";
+  commune_code?: string;
+}
+
 export class ApiError extends Error {
   status: number;
   problemType?: string;
@@ -187,4 +299,15 @@ export const api = {
     request<ResolvedCommune>(`/api/v1/communes/resolve?lat=${lat}&lng=${lng}`),
   alertLog: (limit = 50) =>
     request<AlertLogEntry[]>(`/api/v1/alerts/log?limit=${limit}`),
+  evidence: (communeCode: string) =>
+    request<EvidencePayload>(`/api/v1/communes/${communeCode}/evidence`),
+  reports: (communeCode: string, limit = 20) =>
+    request<FieldReportList>(`/api/v1/communes/${communeCode}/reports?limit=${limit}`),
+  advisor: (body: AdvisorRequest, officerToken?: string) =>
+    request<AdvisorReply>("/api/v1/advisor", {
+      method: "POST",
+      body: JSON.stringify(body),
+      // The officer token gates publishing; absent, the advisor stays draft-only.
+      ...(officerToken ? { headers: { "x-officer-token": officerToken } } : {}),
+    }),
 };

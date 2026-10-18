@@ -3,7 +3,7 @@
     "site": "ai-builder-cup-9f8cd",
     "public": "out",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [{ "source": "**", "destination": "/index.html" }],
+    "rewrites": [{ "source": "/", "destination": "/km/index.html" }],
     "headers": [
       {
         "source": "/_next/static/**",

@@ -137,3 +137,30 @@ export function RefreshIcon() {
     </svg>
   );
 }
+
+export function ShareIcon() {
+  return (
+    <svg {...base} width={18} height={18}>
+      <path d="M12 3v12" />
+      <path d="m7.5 7.5 4.5-4.5 4.5 4.5" />
+      <path d="M5 13v6.5h14V13" />
+    </svg>
+  );
+}
+
+export function ArrowLeftIcon() {
+  return (
+    <svg {...base} width={18} height={18}>
+      <path d="M19 12H5" />
+      <path d="m11 6-6 6 6 6" />
+    </svg>
+  );
+}
+
+export function SendIcon() {
+  return (
+    <svg {...base} width={18} height={18}>
+      <path d="M4 11.5 20 4l-6 16-3.5-7L4 11.5z" />
+    </svg>
+  );
+}

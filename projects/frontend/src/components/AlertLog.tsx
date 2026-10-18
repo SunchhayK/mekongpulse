@@ -1,13 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { api, ApiError, type AlertLogEntry } from "@/lib/api";
-import { formatDateTime, TIER_META } from "@/lib/design";
+import { formatDateTime, formatNumber, TIER_META } from "@/lib/design";
 
 const LOG_LIMIT = 50;
 
 /** Alert dispatch log for the officials' console (FR-10). */
 export function AlertLog() {
+  const t = useTranslations("AlertLog");
+  const tierT = useTranslations("Tier");
+  const locale = useLocale();
   const [entries, setEntries] = useState<AlertLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,8 +27,8 @@ export function AlertLog() {
         if (cancelled) return;
         setError(
           err instanceof ApiError && err.status >= 500
-            ? `Alert log gateway: the dispatch log is unavailable (HTTP ${err.status}).`
-            : "Alert log gateway: could not load the dispatch log.",
+            ? t("unavailable", { status: err.status })
+            : t("failed"),
         );
       })
       .finally(() => {
@@ -36,12 +40,12 @@ export function AlertLog() {
   }, []);
 
   return (
-    <div className="card" id="alerts" aria-label="Alert dispatch log">
+    <div className="card" id="alerts" aria-label={t("aria")}>
       <div className="card-title-row">
         <h2 className="title-medium" style={{ margin: 0 }}>
-          Alert dispatch log / កំណត់ហេតុការជូនដំណឹង
+          {t("title")}
         </h2>
-        <span className="body-small muted">latest {LOG_LIMIT} · newest first</span>
+        <span className="body-small muted">{t("hint", { limit: LOG_LIMIT })}</span>
       </div>
 
       {loading ? (
@@ -52,26 +56,26 @@ export function AlertLog() {
         </p>
       ) : entries.length === 0 ? (
         <p className="empty-state body-medium" data-empty="true">
-          No alerts dispatched yet.
+          {t("empty")}
         </p>
       ) : (
         <div className="summary-table-wrap">
-          <table className="summary-table body-small" aria-label="Alert dispatch log, newest first">
+          <table className="summary-table body-small" aria-label={t("tableAria")}>
             <thead>
               <tr>
-                <th scope="col">Dispatched</th>
-                <th scope="col">Commune</th>
-                <th scope="col">Province</th>
-                <th scope="col">Tier</th>
-                <th scope="col">Directive</th>
-                <th scope="col">Recipients</th>
-                <th scope="col">Voice note</th>
+                <th scope="col">{t("colDispatched")}</th>
+                <th scope="col">{t("colCommune")}</th>
+                <th scope="col">{t("colProvince")}</th>
+                <th scope="col">{t("colTier")}</th>
+                <th scope="col">{t("colDirective")}</th>
+                <th scope="col">{t("colRecipients")}</th>
+                <th scope="col">{t("colVoice")}</th>
               </tr>
             </thead>
             <tbody>
               {entries.map((entry) => (
                 <tr key={entry.id ?? `${entry.commune_code}-${entry.dispatched_at}`}>
-                  <td className="muted">{formatDateTime(entry.dispatched_at)}</td>
+                  <td className="muted">{formatDateTime(entry.dispatched_at, locale)}</td>
                   <td>
                     <span lang="km">{entry.commune_name_kh || entry.commune_code}</span>
                     <br />
@@ -85,30 +89,30 @@ export function AlertLog() {
                         style={{ background: TIER_META[entry.risk_tier].color }}
                         aria-hidden="true"
                       />
-                      {TIER_META[entry.risk_tier].labelEn}
+                      {tierT(entry.risk_tier)}
                     </span>
                   </td>
                   <td>
                     {entry.directive_title || "—"}
                     {entry.bulletin_text ? (
                       <details className="body-small" style={{ marginTop: 4 }}>
-                        <summary className="muted">Bulletin / សេចក្តីលម្អិត</summary>
+                        <summary className="muted">{t("bulletin")}</summary>
                         <p lang="km" className="muted" style={{ margin: "6px 0 0" }}>
                           {entry.bulletin_text}
                         </p>
                       </details>
                     ) : null}
                   </td>
-                  <td className="mono">{entry.recipients_count.toLocaleString()}</td>
+                  <td className="mono">{formatNumber(entry.recipients_count, locale)}</td>
                   <td>
                     {entry.audio_url ? (
                       <a
                         href={entry.audio_url}
                         target="_blank"
                         rel="noreferrer"
-                        aria-label={`Open the Khmer voice bulletin for ${entry.commune_name_en || entry.commune_code} in a new tab`}
+                        aria-label={t("listenAria", { name: entry.commune_name_en || entry.commune_code })}
                       >
-                        Listen
+                        {t("listen")}
                       </a>
                     ) : (
                       <span className="muted">—</span>
