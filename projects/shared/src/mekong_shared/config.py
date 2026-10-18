@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     cors_origins: str = "*"  # comma-separated; restricted in production
     log_salt: str = "mekongpulse-dev-salt"  # SHA-256 salt for GPS / id anonymization
     public_base_url: str = "http://localhost:8080"  # audio URLs etc.
+    web_base_url: str = "https://ai-builder-cup-9f8cd.web.app"  # officer dashboard link
 
     # --- domain -----------------------------------------------------------
     data_dir: Path = DATA_DIR_DEFAULT

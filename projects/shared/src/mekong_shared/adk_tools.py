@@ -8,10 +8,13 @@ of raising, so the LLM can recover conversationally.
 
 from __future__ import annotations
 
+import inspect
 import logging
+from collections.abc import Awaitable, Callable
+from datetime import datetime, timezone
 
 from .agronomy import primary_directive
-from .models import CropStage
+from .models import CommuneRisk, CropStage
 from .mrc import MRCTelemetryError
 from .pipeline import AssessmentUnavailable, CommuneNotFound, Pipeline
 from .spatial import OutsideBasinError
@@ -19,13 +22,30 @@ from .stations import load_stations
 
 log = logging.getLogger("mekongpulse.advisor")
 
+TELEGRAM_MESSAGE_LIMIT = 4096
+
+ChannelPublisher = Callable[[str], Awaitable[dict]]
+
 
 class AdvisorToolContext:
-    """Holds the per-request dependencies injected into every tool call."""
+    """Holds the per-request dependencies injected into every tool call.
 
-    def __init__(self, pipeline: Pipeline) -> None:
+    `authorized` gates the publish action (the officer token); `publisher` is
+    the async callable that posts to the public Telegram channel. Both are
+    optional so existing constructions with just a pipeline keep working.
+    """
+
+    def __init__(
+        self,
+        pipeline: Pipeline,
+        *,
+        authorized: bool = False,
+        publisher: ChannelPublisher | None = None,
+    ) -> None:
         self.pipeline = pipeline
         self.repo = pipeline.repo
+        self.authorized = authorized
+        self.publisher = publisher
 
     @property
     def gazetteer(self):
@@ -55,6 +75,21 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "synthesize_voice_bulletin": (
         "Generate the spoken Khmer voice bulletin (MP3) for a commune. Returns the audio "
         "URL when synthesis is available, else the Khmer bulletin text."
+    ),
+    "get_commune_evidence": (
+        "Get the compact evidence pack behind a commune's risk row: data confidence, "
+        "telemetry freshness, QC summary, and the evidence chain. Call it before "
+        "reporting a tier to an official; treat missing evidence as unknown."
+    ),
+    "draft_status_update": (
+        "Draft a deterministic bilingual (Khmer/English) official status update for the "
+        "given commune codes from stored risk rows only. No invented readings. Draft "
+        "first; publish only when the officer explicitly asks."
+    ),
+    "publish_to_channel": (
+        "ACTION: post a bilingual update to the public Telegram channel (Khmer text "
+        "required, English optional). Requires officer authorization; publish only after "
+        "drafting with draft_status_update and only when the officer asks."
     ),
 }
 
@@ -121,7 +156,79 @@ FUNCTION_DECLARATIONS: list[dict] = [
             "required": ["commune_id"],
         },
     },
+    {
+        "name": "get_commune_evidence",
+        "description": TOOL_DESCRIPTIONS["get_commune_evidence"],
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "commune_id": {"type": "string", "description": "MEF commune code, e.g. 080404"}
+            },
+            "required": ["commune_id"],
+        },
+    },
+    {
+        "name": "draft_status_update",
+        "description": TOOL_DESCRIPTIONS["draft_status_update"],
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "commune_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "MEF commune codes to include, e.g. [\"080404\"]",
+                },
+                "locale": {
+                    "type": "string",
+                    "enum": ["km", "en"],
+                    "description": "Primary audience language (both texts are returned)",
+                },
+            },
+            "required": ["commune_ids"],
+        },
+    },
+    {
+        "name": "publish_to_channel",
+        "description": TOOL_DESCRIPTIONS["publish_to_channel"],
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "khmer_text": {"type": "string", "description": "Khmer message to publish"},
+                "english_text": {
+                    "type": "string",
+                    "description": "Optional English message appended below the Khmer text",
+                },
+            },
+            "required": ["khmer_text"],
+        },
+    },
 ]
+
+
+def _status_line_kh(risk: CommuneRisk) -> str:
+    province = f", {risk.province}" if risk.province else ""
+    lead = (
+        f" — ប្រហែល {risk.lead_time_hours} ម៉ោងទៀត"
+        if risk.lead_time_hours is not None
+        else ""
+    )
+    return (
+        f"• {risk.commune_name_kh} ({risk.commune_code}{province}): "
+        f"{risk.tier.emoji} {risk.tier.label_kh}{lead}"
+    )
+
+
+def _status_line_en(risk: CommuneRisk) -> str:
+    province = f", {risk.province}" if risk.province else ""
+    lead = (
+        f" — ~{risk.lead_time_hours}h to flooding"
+        if risk.lead_time_hours is not None
+        else ""
+    )
+    return (
+        f"• {risk.commune_name_en} ({risk.commune_code}{province}): "
+        f"{risk.tier.emoji} {risk.tier.label_en}{lead}"
+    )
 
 
 class AdvisorTools:
@@ -251,3 +358,81 @@ class AdvisorTools:
             "risk_tier": assessment.risk_tier.value,
             "khmer_bulletin": assessment.khmer_bulletin,
         }
+
+    async def get_commune_evidence(self, commune_id: str) -> dict:
+        """Compact evidence pack for a commune (confidence, freshness, QC, chain).
+
+        `mekong_shared.evidence` is optional at runtime (added by a separate
+        workstream): the import is lazy and a missing module degrades to an
+        {"error": ...} payload the LLM can recover from.
+        """
+        try:
+            from mekong_shared.evidence import build_evidence
+        except Exception as exc:  # noqa: BLE001 - evidence module is optional
+            return {"error": f"evidence module unavailable: {exc}"}
+        try:
+            payload = build_evidence(self._ctx.pipeline, commune_id)
+            if inspect.isawaitable(payload):
+                payload = await payload
+        except Exception as exc:  # noqa: BLE001 - tool contract: never raise
+            return {"error": f"evidence unavailable: {exc}"}
+        if hasattr(payload, "model_dump"):
+            payload = payload.model_dump(mode="json")
+        if not isinstance(payload, dict):
+            return {"error": "evidence module returned an unsupported payload type"}
+        return payload
+
+    async def draft_status_update(self, commune_ids: list[str], locale: str = "km") -> dict:
+        """Deterministic bilingual official status text from stored risk rows.
+
+        Same data source as the risk-map endpoint (`repo.risk_map()`); templates
+        only, no LLM and no invented readings. Unknown commune codes produce an
+        explicit error line in both languages.
+        """
+        risks = {risk.commune_code: risk for risk in await self._ctx.repo.risk_map()}
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        khmer = [f"📣 ស្ថានភាពទឹក និងហានិភ័យ — {stamp}"]
+        english = [f"📣 Water and flood status — {stamp}"]
+        requested = [str(code) for code in (commune_ids or [])]
+        if not requested:
+            khmer.append("⚠️ គ្មានឃុំត្រូវបានស្នើទេ")
+            english.append("⚠️ No commune ids provided")
+        seen: set[str] = set()
+        for commune_id in requested:
+            if commune_id in seen:
+                continue
+            seen.add(commune_id)
+            risk = risks.get(commune_id)
+            if risk is None:
+                khmer.append(f"⚠️ មិនមានទិន្នន័យហានិភ័យសម្រាប់ឃុំ {commune_id}")
+                english.append(f"⚠️ No stored risk data for commune {commune_id}")
+                continue
+            khmer.append(_status_line_kh(risk))
+            english.append(_status_line_en(risk))
+        khmer.append(f"🗺 ផែនទី: {self._ctx.pipeline.settings.web_base_url}")
+        english.append(f"🗺 Dashboard: {self._ctx.pipeline.settings.web_base_url}")
+        return {"khmer": "\n".join(khmer), "english": "\n".join(english)}
+
+    async def publish_to_channel(self, khmer_text: str, english_text: str | None = None) -> dict:
+        """ACTION: post a bilingual update to the public Telegram channel.
+
+        Result statuses: denied (no officer authorization), unavailable (no
+        publisher wired), posted, or error with a detail.
+        """
+        if not self._ctx.authorized:
+            return {"status": "denied", "detail": "Officer authorization required"}
+        if self._ctx.publisher is None:
+            return {"status": "unavailable"}
+        text = str(khmer_text or "").strip()
+        if english_text and str(english_text).strip():
+            text = f"{text}\n\n{str(english_text).strip()}"
+        text = text[:TELEGRAM_MESSAGE_LIMIT]
+        if not text:
+            return {"status": "error", "detail": "empty message"}
+        try:
+            result = await self._ctx.publisher(text)
+        except Exception as exc:  # noqa: BLE001 - action failures are values, not exceptions
+            return {"status": "error", "detail": str(exc)}
+        if isinstance(result, dict) and (result.get("status") == "error" or "error" in result):
+            return {"status": "error", "detail": str(result.get("detail") or result.get("error"))}
+        return {"status": "posted"}

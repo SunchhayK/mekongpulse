@@ -6,11 +6,17 @@ google-genai function calling — same tools, same observable behavior (the
 agent calls `get_station_telemetry` and `evaluate_crop_directive` and reasons
 over results). The loop is engine-agnostic so tests can drive it with a
 scripted LLM.
+
+`answer_detailed()` wraps every tool call with a recorder (name, args,
+ok/error status, one-line summary) for the officer API; `answer()` keeps the
+string-only contract used by the Telegram bot and delegates to it.
 """
 
 from __future__ import annotations
 
 import asyncio
+import functools
+import inspect
 import logging
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -21,19 +27,26 @@ from .models import ConversationTurn
 
 log = logging.getLogger("mekongpulse.advisor")
 
-ADVISOR_INSTRUCTION = """You are MekongPulse Advisor, the agronomic flood advisor for Cambodian
-commune chiefs and smallholder rice farmers along the Mekong, Bassac, and Tonle Sap rivers.
+ADVISOR_INSTRUCTION = """You are MekongPulse Advisor, the flood and agronomy officer assistant for
+provincial officials and extension officers along the Mekong, Bassac, and Tonle Sap rivers in
+Cambodia.
 
 Rules:
-- Always ground answers in tool data. Call get_station_telemetry and/or
-  evaluate_crop_directive before giving any water level, risk tier, lead time, or
-  field-action advice. Never invent water elevations or stage values (INV-01).
+- Ground every claim in tool results. Call get_station_telemetry and/or
+  evaluate_crop_directive before stating any water level, risk tier, lead time, or field
+  action. Never invent water elevations or stage values (INV-01).
+- For evidence questions, call get_commune_evidence and treat missing evidence as
+  unknown rather than guessing.
 - When telemetry is estimated (fallback/cache), say so and advise conservatively (INV-03).
 - Answer in the user's language: Khmer if they write Khmer, otherwise English. Keep the
   register respectful and the sentences short and concrete.
 - Include exact lead times and harvest/fertilizer guidance when relevant.
 - If the location is outside Cambodia, ask the caller for their commune name and use
   search_commune.
+- Publishing to the public channel requires officer authorization. Prepare updates with
+  draft_status_update first (deterministic, stored data only) and call publish_to_channel
+  only when the officer explicitly asks to publish; if it returns denied, explain that
+  officer authorization is required.
 """
 
 
@@ -45,6 +58,22 @@ class AdvisorUnavailable(Exception):
 class StepResult:
     text: str | None = None
     calls: list[tuple[str, dict]] = field(default_factory=list)
+
+
+@dataclass
+class AdvisorCall:
+    """One recorded tool invocation (status: ok | error)."""
+
+    name: str
+    args: dict
+    status: str
+    summary: str
+
+
+@dataclass
+class AdvisorOutcome:
+    text: str
+    calls: list[AdvisorCall]
 
 
 class StepLLM(Protocol):
@@ -114,6 +143,87 @@ class GeminiFunctionCaller:
             return StepResult(text="\n".join(texts).strip() or None, calls=calls)
 
         return await asyncio.to_thread(_run)
+
+
+_SUMMARY_PRIORITY_KEYS = (
+    "risk_tier",
+    "water_level_m",
+    "commune_code",
+    "commune_id",
+    "lead_time_hours",
+    "estimated",
+    "audio_url",
+)
+
+
+def _summarize_tool_result(result: object) -> str:
+    """One-line, deterministic summary of a tool result for the trace."""
+    if not isinstance(result, dict):
+        return "ok"
+    if "status" in result:  # action tools (publish_to_channel)
+        status = str(result.get("status"))
+        detail = result.get("detail")
+        summary = f"{status}: {detail}" if detail else status
+    elif "error" in result:
+        summary = str(result["error"])
+    else:
+        keys = [key for key in _SUMMARY_PRIORITY_KEYS if key in result]
+        keys += [key for key in result if key not in keys]
+        parts = [
+            f"{key}={result[key]}"
+            for key in keys
+            if isinstance(result[key], (str, int, float, bool))
+        ]
+        summary = ", ".join(parts[:4]) if parts else "ok"
+    return summary if len(summary) <= 160 else f"{summary[:157]}..."
+
+
+class _RecordingTools:
+    """Proxy over AdvisorTools that records every call (name, args, status, summary).
+
+    Transparent for both engines: run_react resolves tools with getattr, and
+    build_adk_agent only passes the functions listed in FUNCTION_DECLARATIONS;
+    functools.wraps keeps names, docstrings, and signatures intact.
+    """
+
+    def __init__(self, tools: AdvisorTools) -> None:
+        self._tools = tools
+        self.calls: list[AdvisorCall] = []
+
+    def __getattr__(self, name: str):
+        attr = getattr(self._tools, name)
+        if name.startswith("_") or not callable(attr):
+            return attr
+
+        @functools.wraps(attr)
+        async def recorded(*args, **kwargs):
+            try:
+                call_args = dict(inspect.signature(attr).bind(*args, **kwargs).arguments)
+            except (TypeError, ValueError):
+                call_args = dict(kwargs)
+            try:
+                result = await attr(*args, **kwargs)
+            except Exception as exc:  # noqa: BLE001 - record, then let the loop recover
+                self.calls.append(
+                    AdvisorCall(name=name, args=call_args, status="error", summary=str(exc))
+                )
+                raise
+            status = "ok"
+            if isinstance(result, dict) and (
+                "error" in result or result.get("status") == "error"
+            ):
+                status = "error"
+            self.calls.append(
+                AdvisorCall(
+                    name=name,
+                    args=call_args,
+                    status=status,
+                    summary=_summarize_tool_result(result),
+                )
+            )
+            return result
+
+        return recorded
 
 
 async def run_react(
@@ -214,15 +324,13 @@ async def _run_adk(agent, history: list[ConversationTurn], user_text: str) -> st
     return final_text.strip()
 
 
-async def answer(
-    tools: AdvisorTools,
+async def _run_engine(
+    tools,
     history: list[ConversationTurn],
     user_text: str,
     settings: Settings,
-    *,
-    llm: StepLLM | None = None,
+    llm: StepLLM | None,
 ) -> str:
-    """One advisor turn. `llm` injects a scripted/deterministic engine for tests."""
     if llm is not None:
         return await run_react(tools, history, user_text, llm)
     if not settings.has_gemini:
@@ -234,3 +342,30 @@ async def answer(
         except Exception as exc:  # noqa: BLE001 - fall back to the native loop
             log.warning("ADK run failed, falling back to native ReAct loop: %s", exc)
     return await run_react(tools, history, user_text, GeminiFunctionCaller(settings))
+
+
+async def answer_detailed(
+    tools: AdvisorTools,
+    history: list[ConversationTurn],
+    user_text: str,
+    settings: Settings,
+    *,
+    llm: StepLLM | None = None,
+) -> AdvisorOutcome:
+    """One advisor turn with tool-call tracing. `llm` injects a test engine."""
+    recorded = _RecordingTools(tools)
+    text = await _run_engine(recorded, history, user_text, settings, llm)
+    return AdvisorOutcome(text=text, calls=recorded.calls)
+
+
+async def answer(
+    tools: AdvisorTools,
+    history: list[ConversationTurn],
+    user_text: str,
+    settings: Settings,
+    *,
+    llm: StepLLM | None = None,
+) -> str:
+    """One advisor turn. `llm` injects a scripted/deterministic engine for tests."""
+    outcome = await answer_detailed(tools, history, user_text, settings, llm=llm)
+    return outcome.text
