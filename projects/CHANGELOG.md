@@ -2,6 +2,18 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.10.0] — 2026-10-18
+
+Spoken bulletins are cached and reused instead of regenerated on every commune view.
+
+### Fixed
+
+- `shared` — 0.7.0: spoken bulletins are now content-addressed. `_synthesize_audio` hashes the deterministic briefing inputs (commune, crop stage, risk tier/score/reason, station levels, rain, directives) and keys the MP3 as `{commune}/v1-{digest}.mp3`; it probes the store with the new `head()` method and returns the existing file when the situation is unchanged. TTS runs only when the briefing actually changes, so repeated commune clicks reuse audio and a changed reading still produces a fresh bulletin. `AudioStoreProtocol` gains `head()`, implemented for the local disk and GCS stores.
+
+### Changed
+
+- `technical-report.md` 1.7.0 → 1.7.1 — audio cache behavior documented.
+
 ## [0.9.0] — 2026-10-18
 
 Assistant replies render as markdown, the officer thread survives refresh, and channel-post failures explain themselves.

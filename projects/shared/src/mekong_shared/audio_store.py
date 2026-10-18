@@ -24,6 +24,12 @@ class LocalAudioStore:
         await asyncio.to_thread(path.write_bytes, data)
         return AudioRef(uri=f"local:{key}", url=f"{self._base}/audio/{key}", mime_type=mime_type)
 
+    async def head(self, key: str) -> AudioRef | None:
+        path = self._dir / key
+        if not await asyncio.to_thread(path.is_file):
+            return None
+        return AudioRef(uri=f"local:{key}", url=f"{self._base}/audio/{key}")
+
     async def get(self, key_or_uri: str) -> bytes:
         key = key_or_uri.removeprefix("local:")
         return await asyncio.to_thread((self._dir / key).read_bytes)
@@ -52,6 +58,11 @@ class GCSAudioStore:
             url=f"{self._base}/{key}",
             mime_type=mime_type,
         )
+
+    async def head(self, key: str) -> AudioRef | None:
+        if not await asyncio.to_thread(self._bucket.blob(key).exists):
+            return None
+        return AudioRef(uri=f"gs://{self._bucket_name}/{key}", url=f"{self._base}/{key}")
 
     async def get(self, key_or_uri: str) -> bytes:
         key = key_or_uri.removeprefix(f"gs://{self._bucket_name}/")

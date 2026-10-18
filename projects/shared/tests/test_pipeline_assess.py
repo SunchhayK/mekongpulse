@@ -112,6 +112,39 @@ async def test_assess_with_audio_uses_store_and_stub_tts(
     assert (tmp_path / "audio" / key).exists()
 
 
+async def test_assess_audio_reuses_cache_for_identical_briefing(
+    repo, settings, make_pipeline, gazetteer, tmp_path
+):
+    pipeline = await _prepared(repo, settings, make_pipeline, gazetteer)
+    calls = {"n": 0}
+
+    class CountingTTS:
+        async def synthesize(self, text: str) -> AudioArtifact:
+            calls["n"] += 1
+            return AudioArtifact(
+                data=b"\xff\xfb\x90\x00fake-mp3", mime_type="audio/mpeg", duration_seconds=42.0
+            )
+
+    pipeline.tts = CountingTTS()  # type: ignore[assignment]
+    pipeline.audio_store = LocalAudioStore(tmp_path / "audio", "http://localhost:8080")
+
+    first = await pipeline.assess_commune(COMMUNE, CropStage.RIPENING, with_audio=True)
+    second = await pipeline.assess_commune(COMMUNE, CropStage.RIPENING, with_audio=True)
+
+    assert first.audio is not None and second.audio is not None
+    assert calls["n"] == 1  # second click reuses the stored MP3
+    assert second.audio.url == first.audio.url
+    assert second.audio.duration_seconds is None  # player reads it from metadata
+    assert len(list((tmp_path / "audio").rglob("*.mp3"))) == 1
+
+    # A changed reading is a changed briefing and must generate fresh audio.
+    await repo.save_observation(_warning_snapshot().model_copy(update={"level_m": 15.6}))
+    third = await pipeline.assess_commune(COMMUNE, CropStage.RIPENING, with_audio=True)
+    assert third.audio is not None
+    assert calls["n"] == 2
+    assert third.audio.url != first.audio.url
+
+
 async def test_assess_estimated_when_telemetry_is_fallback(repo, settings, make_pipeline, gazetteer):
     stations = load_stations(str(settings.data_dir))
     await repo.seed_stations(list(stations.values()))

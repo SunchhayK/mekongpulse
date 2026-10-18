@@ -6,4 +6,4 @@ application orchestration (ingestion pipeline, sentinel patrol, ADK tools) binds
 them together for the FastAPI gateway and the Telegram bot.
 """
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"

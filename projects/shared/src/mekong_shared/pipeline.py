@@ -10,6 +10,7 @@ and the advisor tools.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -23,6 +24,7 @@ from .models import (
     Commune,
     CommuneRisk,
     CropStage,
+    Directive,
     RiskTier,
     StationSnapshot,
     TelemetryWarning,
@@ -39,6 +41,45 @@ from .weather import OpenMeteoClient, WeatherError
 import logging
 
 log = logging.getLogger("mekongpulse.pipeline")
+
+# Bump when the TTS voice/model changes so cached bulletins are not reused.
+AUDIO_CACHE_VERSION = "v1"
+
+
+def audio_cache_signature(
+    commune_code: str,
+    crop_stage: CropStage,
+    risk: CommuneRisk,
+    station: StationSnapshot | None,
+    weather: WeatherSnapshot | None,
+    directives: list[Directive],
+) -> str:
+    """Digest of the inputs the spoken bulletin is derived from.
+
+    The Khmer text may be LLM-polished, so its wording is not stable across
+    requests; hashing the final text would miss the cache every time. The
+    deterministic inputs are, so identical situations reuse one MP3.
+    """
+    parts = [
+        commune_code,
+        crop_stage.value,
+        risk.tier.value,
+        f"{risk.score:.1f}",
+        risk.reason.value,
+        str(risk.lead_time_hours or 0),
+    ]
+    if station is not None:
+        parts += [
+            station.station_id,
+            f"{station.level_m:.2f}",
+            f"{station.rate_of_rise_m_per_hr:.2f}",
+            f"{station.alarm_stage_m:.2f}",
+            f"{station.flood_stage_m:.2f}",
+        ]
+    if weather is not None:
+        parts.append(f"{weather.precipitation_48h_mm:.0f}")
+    parts += [f"{d.action_code}:{d.urgency.value}" for d in directives]
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:32]
 
 
 class CommuneNotFound(Exception):
@@ -399,7 +440,14 @@ class Pipeline:
 
         audio = None
         if with_audio:
-            audio = await self._synthesize_audio(commune_code, risk, kh)
+            audio = await self._synthesize_audio(
+                commune_code,
+                risk,
+                kh,
+                audio_cache_signature(
+                    commune_code, crop_stage, risk, station, weather, directives
+                ),
+            )
 
         return AssessmentResult(
             commune_code=commune.code,
@@ -417,15 +465,29 @@ class Pipeline:
             generated_at=datetime.now(timezone.utc),
         )
 
-    async def _synthesize_audio(self, commune_code: str, risk: CommuneRisk, bulletin_kh: str):
+    async def _synthesize_audio(
+        self,
+        commune_code: str,
+        risk: CommuneRisk,
+        bulletin_kh: str,
+        cache_signature: str,
+    ):
         if self.audio_store is None:
             return None
+        key = f"{commune_code}/{AUDIO_CACHE_VERSION}-{cache_signature}.mp3"
+        try:
+            cached = await self.audio_store.head(key)
+        except Exception as exc:  # noqa: BLE001 - a cache probe must never break assessment
+            log_event(log, "TTS_CACHE_ERROR", commune=commune_code, error=str(exc))
+            cached = None
+        if cached is not None:
+            log_event(log, "TTS_CACHE_HIT", commune=commune_code, tier=risk.tier.value)
+            return cached
         try:
             artifact = await self.tts.synthesize(bulletin_kh)  # type: ignore[union-attr]
         except (TTSUnavailable, AudioEncodeError) as exc:
             log_event(log, "TTS_UNAVAILABLE", commune=commune_code, error=str(exc))
             return None
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-        key = f"{commune_code}/{risk.tier.value.lower()}_{stamp}.mp3"
         ref = await self.audio_store.put(key, artifact.data, artifact.mime_type)
+        log_event(log, "TTS_SYNTHESIZED", commune=commune_code, tier=risk.tier.value)
         return ref.model_copy(update={"duration_seconds": artifact.duration_seconds})
