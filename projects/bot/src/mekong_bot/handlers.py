@@ -40,6 +40,13 @@ def _markup(reply: BotReply) -> InlineKeyboardMarkup | None:
 async def _respond(update: Update, reply: BotReply) -> None:
     chat = update.effective_chat
     text = reply.text[:4096]
+    query = update.callback_query
+    if reply.edit and query is not None and query.message is not None:
+        try:
+            await query.edit_message_text(text=text, reply_markup=_markup(reply))
+            return
+        except Exception as exc:  # noqa: BLE001 - stale callback, fall back to a fresh message
+            log.warning("message edit failed, sending a new message: %s", exc)
     if reply.audio_bytes:
         try:
             await chat.send_voice(
@@ -98,6 +105,12 @@ def register_handlers(application: Application, service: BotService) -> None:
         query = " ".join(context.args or [])
         await _respond(update, await service.risk(update.effective_chat.id, query))
 
+    async def report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await _respond(update, await service.report(update.effective_chat.id))
+
+    async def digest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await _respond(update, await service.digest(update.effective_chat.id))
+
     async def on_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         location = update.message.location
         await _respond(
@@ -110,7 +123,12 @@ def register_handlers(application: Application, service: BotService) -> None:
     async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         await query.answer()
-        await _respond(update, await service.callback(update.effective_chat.id, query.data))
+        user = update.effective_user
+        reporter = (user.first_name or user.username) if user else None
+        await _respond(
+            update,
+            await service.callback(update.effective_chat.id, query.data, reporter=reporter),
+        )
 
     application.add_handler(CommandHandler("start", _safe(start)))
     application.add_handler(CommandHandler("help", _safe(help_command)))
@@ -118,6 +136,8 @@ def register_handlers(application: Application, service: BotService) -> None:
     application.add_handler(CommandHandler("unsubscribe", _safe(unsubscribe)))
     application.add_handler(CommandHandler("mysubs", _safe(mysubs)))
     application.add_handler(CommandHandler("risk", _safe(risk)))
+    application.add_handler(CommandHandler("report", _safe(report)))
+    application.add_handler(CommandHandler("digest", _safe(digest)))
     application.add_handler(MessageHandler(filters.LOCATION, _safe(on_location)))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, _safe(on_text)))
     application.add_handler(CallbackQueryHandler(_safe(on_callback)))

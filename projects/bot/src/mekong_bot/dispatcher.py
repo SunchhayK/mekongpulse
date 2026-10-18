@@ -12,6 +12,7 @@ log = logging.getLogger("mekongpulse.bot")
 
 CAPTION_LIMIT = 1024
 MESSAGE_LIMIT = 4096
+DEFAULT_WEB_BASE_URL = "https://ai-builder-cup-9f8cd.web.app"  # fallback if settings lacks web_base_url
 
 
 def _chat_id(value: str | int):
@@ -69,9 +70,12 @@ def make_telegram_dispatcher(pipeline: Pipeline, bot):
 
         channel = settings.telegram_broadcast_channel_id if post_to_channel else None
         if channel:
+            base = getattr(settings, "web_base_url", None) or DEFAULT_WEB_BASE_URL
+            link = f"\n\n{base.rstrip('/')}/km/commune?code={alert.commune_id}"
             try:
                 await bot.send_message(
-                    chat_id=_chat_id(channel), text=alert.bulletin_text[:MESSAGE_LIMIT]
+                    chat_id=_chat_id(channel),
+                    text=alert.bulletin_text[: MESSAGE_LIMIT - len(link)] + link,
                 )
             except Exception as exc:  # noqa: BLE001 - channel post is best-effort
                 log.warning("broadcast channel post failed: %s", exc)

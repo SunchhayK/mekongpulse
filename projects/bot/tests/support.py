@@ -4,7 +4,34 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from mekong_shared.memory_repo import MemoryRepository
 from mekong_shared.models import StationSnapshot
+
+
+class FieldReportingRepository(MemoryRepository):
+    """MemoryRepository + the field-report contract (concurrent shared workstream).
+
+    Repository is gaining add_field_report/list_field_reports; until the
+    in-memory backend implements them, bot tests use this local stand-in.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.field_reports: list = []
+
+    async def add_field_report(self, report):
+        self.field_reports.append(report)
+        return report
+
+    async def list_field_reports(self, commune_code: str | None = None, limit: int = 20):
+        rows = [
+            r
+            for r in self.field_reports
+            if commune_code is None or r.commune_code == commune_code
+        ]
+        rows.sort(key=lambda r: r.reported_at, reverse=True)  # newest first, like shared
+        return rows[:limit]
+
 
 STATION_META: dict[str, dict] = {
     "019802": {"name": "Kompong Cham", "river": "Mekong", "alarm": 15.2, "flood": 16.2},

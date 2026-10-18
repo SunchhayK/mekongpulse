@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from enum import StrEnum
+from uuid import uuid4
 
 from mekong_shared.adk_agent import AdvisorUnavailable, StepLLM, answer
 from mekong_shared.adk_tools import AdvisorToolContext, AdvisorTools
@@ -17,6 +20,26 @@ from mekong_shared.models import AssessmentResult, Commune, CropStage
 from mekong_shared.pipeline import AssessmentUnavailable, CommuneNotFound, Pipeline
 from mekong_shared.repository import Repository
 from mekong_shared.spatial import OutsideBasinError
+
+try:  # concurrent workstream adds these to shared; bot codes to their contract
+    from mekong_shared.models import FieldReport, FieldReportStatus
+except ImportError:  # ponytail: local stand-ins until shared exports them, then delete
+
+    class FieldReportStatus(StrEnum):
+        WATER_REACHED = "water_reached"
+        NO_WATER = "no_water"
+        OTHER = "other"
+
+    @dataclass
+    class FieldReport:
+        id: str
+        commune_code: str
+        status: FieldReportStatus
+        reported_at: datetime
+        note: str | None = None
+        reporter_label: str | None = None
+        source: str = "telegram"
+
 
 log = logging.getLogger("mekongpulse.bot")
 
@@ -27,10 +50,23 @@ WELCOME = (
     "/subscribe <ឈ្មោះឃុំ ឬកូដ> — តាមដានឃុំមួយ / track a commune\n"
     "/mysubs — បញ្ជីតាមដាន / your subscriptions\n"
     "/risk [ឈ្មោះឃុំ] — កម្រិតហានិភ័យឥឡូវនេះ / current risk + advice\n"
+    "/report — រាយការណ៍ទឹកនៅវាលរបស់អ្នក / report water at your fields\n"
+    "/digest — របាយការណ៍ប្រចាំថ្ងៃ / daily digest\n"
     "📍 ផ្ញើទីតាំង — send your location to find your commune\n"
     "💬 សួរខ្ញុំជាខ្មែរ ឬអង់គ្លេស — ask the agronomy advisor anything\n"
     "\n"
     "ឧទាហរណ៍ / Example: /subscribe Koh Thom"
+)
+
+FIELD_REPORT_CHOICES: tuple[tuple[str, str], ...] = (
+    ("water_reached", "💧 ទឹកមកដល់វាលស្រែ / Water reached the fields"),
+    ("no_water", "🌾 គ្មានទឹកមកដល់វាល / No water reached"),
+    ("other", "❓ ផ្សេងទៀត ឬមិនប្រាកដ / Other or unsure"),
+)
+
+DIGEST_UNAVAILABLE = (
+    "📰 របាយការណ៍ប្រចាំថ្ងៃមិនទាន់អាចប្រើបានទេ — សូមព្យាយាមម្តងទៀតនៅពេលក្រោយ។\n"
+    "The daily digest is unavailable right now — please try again later."
 )
 
 
@@ -39,6 +75,7 @@ class BotReply:
     text: str
     buttons: list[list[tuple[str, str]]] | None = None  # (label, callback_data)
     audio_bytes: bytes | None = None  # Khmer voice bulletin, sent as a Telegram voice note
+    edit: bool = False  # replace the originating message instead of sending a new one
 
 
 class BotService:
@@ -155,6 +192,35 @@ class BotService:
             lines.append(f"• {name}{stage}{last} — /risk {sub.commune_id}")
         return BotReply("\n".join(lines))
 
+    async def report(self, chat_id: str | int) -> BotReply:
+        subs = await self.repo.subscriptions_for_chat(str(chat_id))
+        codes = list(dict.fromkeys(sub.commune_id for sub in subs))[:8]
+        if not codes:
+            return BotReply(
+                "មិនទាន់មានឃុំសម្រាប់រាយការណ៍ទេ — ចាប់ផ្តើមដោយ /subscribe <ឈ្មោះឃុំ> សិន។\n"
+                "No communes to report on yet — use /subscribe <commune>, then /report again."
+            )
+        buttons = []
+        for code in codes:
+            commune = await self._commune(code)
+            buttons.append([(self._label(commune) if commune else code, f"fr:{code}")])
+        return BotReply(
+            "📍 រាយការណ៍ស្ថានភាពទឹកនៅវាល — សូមជ្រើសរើសឃុំ\n"
+            "Report what the water is doing at your fields — pick a commune:",
+            buttons=buttons,
+        )
+
+    async def digest(self, chat_id: str | int) -> BotReply:
+        try:
+            # added by a concurrent workstream; import lazily so the bot runs without it
+            from mekong_shared.digest import build_digest
+
+            khmer, _english = await build_digest(self.repo, self.settings)
+        except Exception:  # noqa: BLE001 - digest is best-effort, never a crash
+            log.warning("digest unavailable", exc_info=True)
+            return BotReply(DIGEST_UNAVAILABLE)
+        return BotReply(khmer)
+
     async def risk(self, chat_id: str | int, query: str = "") -> BotReply:
         query = (query or "").strip()
         if query:
@@ -208,7 +274,9 @@ class BotService:
         await self.repo.append_turn(str(chat_id), "assistant", reply_text)
         return BotReply(reply_text)
 
-    async def callback(self, chat_id: str | int, data: str) -> BotReply:
+    async def callback(
+        self, chat_id: str | int, data: str, *, reporter: str | None = None
+    ) -> BotReply:
         parts = (data or "").split(":")
         if parts[0] == "sub" and len(parts) == 2:
             commune = await self._commune(parts[1])
@@ -219,9 +287,56 @@ class BotService:
             return await self.subscribe_stage(chat_id, parts[1], parts[2])
         if parts[0] == "risk" and len(parts) == 2:
             return await self._risk_for(chat_id, parts[1])
+        if parts[0] == "fr" and len(parts) == 2:
+            commune = await self._commune(parts[1])
+            if commune is None:
+                return BotReply(self._not_found(parts[1]))
+            return self._status_prompt(commune)
+        if parts[0] == "frr" and len(parts) == 3:
+            return await self._file_field_report(parts[1], parts[2], reporter)
         return BotReply("មិនស្គាល់ប៊ូតុងនេះ / Unknown action.")
 
     # --- internals ---------------------------------------------------------------
+
+    def _status_prompt(self, commune: Commune) -> BotReply:
+        buttons = [
+            [(label, f"frr:{commune.code}:{value}")] for value, label in FIELD_REPORT_CHOICES
+        ]
+        return BotReply(
+            f"📍 {self._label(commune)}\n"
+            "តើទឹកនៅវាលស្រែរបស់អ្នកយ៉ាងណា? / What is the water doing at your fields?",
+            buttons=buttons,
+            edit=True,
+        )
+
+    async def _file_field_report(
+        self, code: str, status_value: str, reporter: str | None
+    ) -> BotReply:
+        commune = await self._commune(code)
+        if commune is None:
+            return BotReply(self._not_found(code))
+        try:
+            status = FieldReportStatus(status_value)
+        except ValueError:
+            return BotReply("ស្ថានភាពទឹកមិនត្រឹមត្រូវ / Unknown water status.")
+        await self.repo.add_field_report(
+            FieldReport(
+                id=uuid4().hex,
+                commune_code=commune.code,
+                status=status,
+                reporter_label=reporter,
+                source="telegram",
+                reported_at=datetime.now(timezone.utc),
+            )
+        )
+        label = dict(FIELD_REPORT_CHOICES)[status_value]
+        return BotReply(
+            f"🙏 អរគុណ — បានកត់ត្រារាយការណ៍សម្រាប់ {self._label(commune)}៖\n"
+            f"{label}\n"
+            "របាយការណ៍របស់អ្នកអាចមើលឃើញដោយមន្ត្រី។\n"
+            f"Thanks — your report for {self._label(commune)} is recorded and visible to officials.",
+            edit=True,
+        )
 
     async def _risk_for(self, chat_id: str | int, code: str) -> BotReply:
         subs = await self.repo.subscriptions_for_chat(str(chat_id))

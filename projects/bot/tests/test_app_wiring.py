@@ -21,4 +21,4 @@ def test_build_application_registers_handlers_and_service(settings, pipeline, re
         for handler in handlers
         for command in getattr(handler, "commands", set())
     }
-    assert {"start", "subscribe", "unsubscribe", "mysubs", "risk"} <= commands
+    assert {"start", "subscribe", "unsubscribe", "mysubs", "risk", "report", "digest"} <= commands

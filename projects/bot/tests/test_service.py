@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import sys
+import types
+from datetime import datetime
+
+import pytest
+
 from mekong_shared.adk_agent import ScriptedLLM, StepResult
 from mekong_shared.models import AudioRef, CropStage, RiskTier
 
-from mekong_bot.service import BotService
+from mekong_bot.service import FIELD_REPORT_CHOICES, BotService
 
-from support import seed_warning_observations, warning_snapshot
+from support import (
+    FieldReportingRepository,
+    seed_warning_observations,
+    warning_snapshot,
+)
 
 COMMUNE = "030502"  # Kampong Cham town, served by 019802
 
@@ -229,3 +239,110 @@ async def test_risk_reply_without_tts_is_text_only(service, repo):
     await seed_warning_observations(repo)
     reply = await service.risk("1", COMMUNE)
     assert reply.audio_bytes is None
+
+
+async def test_report_without_subscriptions_suggests_subscribe(service):
+    reply = await service.report("1")
+    assert "/subscribe" in reply.text
+    assert reply.buttons is None
+
+
+async def test_report_lists_subscribed_communes_capped_at_eight(pipeline, settings):
+    repo = FieldReportingRepository()
+    await repo.init()
+    service = BotService(settings, pipeline, repo)
+    codes = [c.code for c in pipeline.gazetteer.all_communes()][:10]
+    for code in codes:
+        await repo.upsert_subscription("1", code, "RIPENING")
+
+    reply = await service.report("1")
+
+    assert reply.buttons is not None
+    assert [row[0][1] for row in reply.buttons] == [f"fr:{code}" for code in codes[:8]]
+
+
+async def test_report_flow_end_to_end_writes_field_report(pipeline, settings):
+    repo = FieldReportingRepository()
+    await repo.init()
+    service = BotService(settings, pipeline, repo)
+    await service.subscribe_stage("1", COMMUNE, "RIPENING")
+
+    prompt = await service.report("1")
+    # a single subscription still gets a button (one tap of friction, not zero)
+    assert prompt.buttons is not None
+    assert [row[0][1] for row in prompt.buttons] == [f"fr:{COMMUNE}"]
+    assert prompt.edit is False
+
+    picker = await service.callback("1", f"fr:{COMMUNE}")
+    assert "កំពង់ចាម" in picker.text
+    assert [row[0][1] for row in picker.buttons] == [
+        f"frr:{COMMUNE}:{value}" for value, _ in FIELD_REPORT_CHOICES
+    ]
+    assert picker.edit is True  # replaces the picker message
+
+    thanks = await service.callback("1", f"frr:{COMMUNE}:no_water", reporter="Sok")
+    assert "កំពង់ចាម" in thanks.text
+    assert "officials" in thanks.text
+    assert thanks.edit is True  # collapses the stale picker into the confirmation
+
+    (saved,) = repo.field_reports
+    assert saved.commune_code == COMMUNE
+    assert saved.status.value == "no_water"
+    assert saved.reporter_label == "Sok"
+    assert saved.source == "telegram"
+    assert saved.note is None
+    assert saved.id
+    assert isinstance(saved.reported_at, datetime) and saved.reported_at.tzinfo is not None
+
+
+async def test_report_callbacks_unknown_commune_and_status(service):
+    missing = await service.callback("1", "fr:999999")
+    assert "Could not find" in missing.text
+    missing_save = await service.callback("1", "frr:999999:water_reached", reporter="x")
+    assert "Could not find" in missing_save.text
+    bad_status = await service.callback("1", f"frr:{COMMUNE}:monsoon")
+    assert "Unknown water status" in bad_status.text
+
+
+async def test_digest_replies_with_khmer_text_from_builder(service, monkeypatch):
+    seen = {}
+
+    async def fake_build(repo, settings):
+        seen["repo"] = repo
+        seen["settings"] = settings
+        return ("📰 របាយការណ៍ប្រចាំថ្ងៃ", "Today's digest")
+
+    module = types.ModuleType("mekong_shared.digest")
+    module.build_digest = fake_build
+    monkeypatch.setitem(sys.modules, "mekong_shared.digest", module)
+
+    reply = await service.digest("1")
+
+    assert reply.text == "📰 របាយការណ៍ប្រចាំថ្ងៃ"
+    assert seen["repo"] is service.repo
+    assert seen["settings"] is service.settings
+
+
+async def test_digest_unavailable_on_import_or_build_failure(service, monkeypatch):
+    monkeypatch.setitem(sys.modules, "mekong_shared.digest", None)  # import fails
+    missing = await service.digest("1")
+    assert "unavailable" in missing.text
+
+    module = types.ModuleType("mekong_shared.digest")
+
+    async def broken(repo, settings):
+        raise RuntimeError("boom")
+
+    module.build_digest = broken
+    monkeypatch.setitem(sys.modules, "mekong_shared.digest", module)
+    failed = await service.digest("1")
+    assert "unavailable" in failed.text
+
+
+async def test_digest_with_real_shared_builder_when_available(service):
+    pytest.importorskip("mekong_shared.digest")
+
+    reply = await service.digest("1")
+
+    assert "MekongPulse" in reply.text
+    assert "unavailable" not in reply.text

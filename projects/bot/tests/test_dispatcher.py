@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from mekong_shared.models import RiskTier, SentinelAlert, Subscription
 
-from mekong_bot.dispatcher import make_telegram_dispatcher
+from mekong_bot.dispatcher import DEFAULT_WEB_BASE_URL, make_telegram_dispatcher
 
 
 class FakeBot:
@@ -109,3 +109,32 @@ async def test_dispatch_isolates_subscriber_failures(pipeline, settings):
 
     assert delivered == 1  # 222 failed, 111 delivered, run survived
     assert [chat for chat, _ in bot.messages] == [111]
+
+
+async def test_channel_post_appends_commune_link_but_dms_do_not(pipeline, settings):
+    pipeline.settings = settings.model_copy(
+        update={
+            "telegram_broadcast_channel_id": "-100999",
+            "web_base_url": "https://web.example",
+        }
+    )
+    bot = FakeBot()
+    dispatch = make_telegram_dispatcher(pipeline, bot)
+
+    await dispatch(_alert(), _subs())
+
+    channel_text = bot.messages[-1][1]
+    assert bot.messages[-1][0] == -100999
+    assert channel_text.endswith("\n\nhttps://web.example/km/commune?code=030502")
+    assert len(channel_text) <= 4096
+    assert all("km/commune" not in text for _, text in bot.messages[:-1])
+
+
+async def test_channel_link_uses_web_base_url_default(pipeline, settings):
+    pipeline.settings = settings.model_copy(update={"telegram_broadcast_channel_id": "-1"})
+    bot = FakeBot()
+    dispatch = make_telegram_dispatcher(pipeline, bot)
+
+    await dispatch(_alert(), _subs()[:1])
+
+    assert bot.messages[-1][1].endswith(f"\n\n{DEFAULT_WEB_BASE_URL}/km/commune?code=030502")
