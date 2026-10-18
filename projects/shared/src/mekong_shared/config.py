@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     gemini_text_model: str = "gemini-3.8-flash"
     # Comma-separated ordered fallbacks; quotas are per model per day.
     gemini_fallback_models: str = "gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite"
-    gemini_tts_model: str = "gemini-3.8-flash-tts"
+    gemini_tts_model: str = "gemini-3.8-flash-lite-tts"
     use_vertex_ai: bool = False
     vertex_project: str | None = None
     vertex_location: str = "asia-southeast1"

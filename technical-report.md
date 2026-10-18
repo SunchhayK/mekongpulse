@@ -3,7 +3,7 @@ id: REPORT-TECH-002
 document_type: technical_report
 title: MekongPulse Technical Architecture and Engineering Report
 project_name: "MekongPulse"
-version: 1.9.0
+version: 1.9.1
 status: approved
 last_updated: 2026-10-18
 owners: ["@bytelab-lead", "@tech-lead", "@backend-lead"]
@@ -22,7 +22,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
   - Telemetry integration with Mekong River Commission (MRC) REST API (`api.mrcmekong.org`) for 4 permanent Cambodian stations: Prek Kdam (`020102`), Chaktomuk (`033401`), Koh Khel (`033402`), and Kompong Cham (`019802`).
   - Weather forecast integration with Open-Meteo API for 7-day hourly precipitation and 0–7cm soil moisture.
   - Spatial in-memory R-Tree index over the official 2025 MEF Cambodian administrative gazetteer (1,661 communes).
-  - Gemini integration via the Gemini API: `gemini-3.8-flash` for Khmer bulletin polish and the ADK advisor; `gemini-3.8-flash-tts` for spoken Khmer audio (24 kHz PCM WAV transcoded to MP3 with `lameenc`; no system ffmpeg in the container).
+  - Gemini integration via the Gemini API: `gemini-3.8-flash` for Khmer bulletin polish and the ADK advisor; `gemini-3.8-flash-lite-tts` for spoken Khmer audio (24 kHz PCM WAV transcoded to MP3 with `lameenc`; no system ffmpeg in the container).
   - Telegram Bot webhook processing for GPS location pin queries and automated broadcast dispatches.
   - Rice-stage profiles: the bot asks once per commune subscription (Khmer inline options), stores the stage on the subscription, and reuses it for every alert and advisory answer. Escalations are dispatched per stage group, so each subscriber receives their stage's directive set; the public channel receives a single post per escalation (conservative ripening posture). `/crop` changes the stage later; the web console is read-only and never collects per-farmer data.
   - Deterministic verification layer (`shared/src/mekong_shared/evidence.py`): provenance, QC over the stored station series (gaps, stuck, spike, range), two heuristic cross-checks (rainfall agreement, upstream coherence), a confidence label with stable reason ids, a 5-step bilingual evidence chain, and the MRC-style limitations notice — no LLM in any verdict.
@@ -52,7 +52,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 | Schema & Settings Validation | Pydantic, pydantic-settings        | 2.10.x            | Request/response data validation and type enforcement              |
 | Async HTTP Client            | HTTPX                              | 0.28.x            | Non-blocking telemetry ingestion client with connection pooling    |
 | Spatial & Geometry Engine    | Shapely, Rtree / STRtree           | 2.0.x             | Sub-15ms in-memory spatial geocoding for 1,661 MEF communes        |
-| AI Reasoning & Synthesis     | google-genai (Gemini API), google-adk (bot) | 1.x / 2.12.x      | `gemini-3.8-flash` bulletins & ADK advisor; `gemini-3.8-flash-tts` Khmer voice synthesis |
+| AI Reasoning & Synthesis     | google-genai (Gemini API), google-adk (bot) | 1.x / 2.12.x      | `gemini-3.8-flash` bulletins & ADK advisor; `gemini-3.8-flash-lite-tts` Khmer voice synthesis |
 | Time-Series & State Store    | google-cloud-firestore             | 2.19.x            | Real-time observation snapshots and commune risk index             |
 | Audio Object Storage         | google-cloud-storage               | 2.18.x            | Direct streaming upload and hosting for synthesized MP3 notes      |
 | Secret Management            | google-cloud-secret-manager        | 2.20.x            | Zero-leak credential injection for Telegram and Gemini keys        |
@@ -70,7 +70,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | **Secret management & API keys**        | Hardcoded env files in Git repositories leak API tokens; container layer leaks expose credentials in image registries.     | Google Cloud Secret Manager injected via Cloud Run runtime metadata (`--set-secrets`).      |
 | **Object storage & audio delivery**     | Buffering multi-megabyte synthesized audio streams in memory crashes lightweight Cloud Run instances with OOM errors.      | Direct stream pipe to Google Cloud Storage (`google-cloud-storage`) with public CDN URLs.   |
-| **Spoken Khmer speech synthesis**       | Hand-rolled phoneme synthesizers or rule-based TTS lack Khmer tone sandhi, honorifics, and dialect nuances.                | Google Gemini native TTS (`gemini-3.8-flash-tts`) with Khmer prompting; 24 kHz PCM transcoded to MP3 with `lameenc`. |
+| **Spoken Khmer speech synthesis**       | Hand-rolled phoneme synthesizers or rule-based TTS lack Khmer tone sandhi, honorifics, and dialect nuances.                | Google Gemini native TTS (`gemini-3.8-flash-lite-tts`, cheaper and lower-latency than Flash TTS) with Khmer prompting; 24 kHz PCM transcoded to MP3 with `lameenc`. |
 | **Spatial point-in-polygon resolution** | Iterating 1,661 commune polygon boundaries sequentially yields O(N) lookup times exceeding 450ms.                          | In-memory Shapely STRtree index over 2025 MEF gazetteer GeoJSON yielding < 15ms lookups.    |
 | **Scheduled telemetry synchronization** | In-process `while True: await asyncio.sleep(900)` loops crash silently on unhandled exceptions and fail across instances. | Google Cloud Scheduler firing authenticated HTTP POST triggers to `/api/v1/patrol/run` (the patrol performs the sync before alert evaluation). |
 | **Webhook authentication**              | Blindly processing incoming webhooks leaves bots open to spoofed payload injection and replay attacks.                     | HMAC token verification via standard `X-Telegram-Bot-Api-Secret-Token` header validation.   |
@@ -142,7 +142,7 @@ flowchart TD
   subgraph GoogleCloudData["Google Cloud Managed Platform"]
     Firestore[("Cloud Firestore\n(Stations, Observations, Commune Risk)")]
     GCS[("Cloud Storage\n(Generated Khmer MP3 Voice Notes)")]
-    Gemini["Google Gemini API\n(gemini-3.8-flash + gemini-3.8-flash-tts)"]
+    Gemini["Google Gemini API\n(gemini-3.8-flash + gemini-3.8-flash-lite-tts)"]
   end
 
   subgraph ExternalAPIs["External Telemetry & Forecasting"]
@@ -1168,14 +1168,14 @@ def test_fertilizer_hold_during_heavy_rain_forecast():
   - _Positive_: Sub-15ms spatial point-in-polygon resolution. Zero PostGIS container hosting costs. Total dataset is < 10 MB RAM.
   - _Negative_: Adds ~1.2s of GeoJSON parsing during container startup.
 
-### ADR-0005: Gemini Native TTS (gemini-3.8-flash-tts) + lameenc vs. External Specialized TTS
+### ADR-0005: Gemini Native TTS (gemini-3.8-flash-lite-tts) + lameenc vs. External Specialized TTS
 
 - **Status**: Accepted (amended)
-- **Context**: Generating natural spoken Khmer alerts for rural farmers. The original draft assumed Gemini 2.0 Flash multimodal synthesis; that model cannot emit audio, and 2.5-era Gemini TTS lacked Khmer support. The verified Khmer-capable path is `gemini-3.8-flash-tts`.
-- **Decision**: Use Google Gemini native TTS (`gemini-3.8-flash-tts`) via the Gemini API (API-key path; Vertex AI remains supported by the client when `USE_VERTEX_AI=true`). The model returns 24 kHz PCM WAV, which the service transcodes to MP3 with `lameenc` bindings, avoiding a system ffmpeg dependency in the container.
+- **Context**: Generating natural spoken Khmer alerts for rural farmers. The original draft assumed Gemini 2.0 Flash multimodal synthesis; that model cannot emit audio, and 2.5-era Gemini TTS lacked Khmer support. The verified Khmer-capable path is Gemini's native TTS family.
+- **Decision**: Use Google Gemini native TTS via the Gemini API (API-key path; Vertex AI remains supported by the client when `USE_VERTEX_AI=true`). The active default is `gemini-3.8-flash-lite-tts` (amended 2026-10-18 for lower cost and latency); the pipeline remains model-agnostic through `GEMINI_TTS_MODEL`. The model returns 24 kHz PCM WAV, which the service transcodes to MP3 with `lameenc` bindings, avoiding a system ffmpeg dependency in the container.
 - **Consequences**:
-  - _Positive_: Unified SDK and billing for Khmer reasoning and audio synthesis. Culturally respectful honorifics and correct agricultural vocabulary. No system codec dependency in the runtime image.
-  - _Negative_: Audio generation takes 1.8–2.2 seconds round-trip; `lameenc` is a pinned native wheel carried per target platform.
+  - _Positive_: Unified SDK and billing for Khmer reasoning and audio synthesis. Culturally respectful honorifics and correct agricultural vocabulary. No system codec dependency in the runtime image. Flash-Lite TTS costs $6/M audio-output tokens versus $9/M for Flash TTS.
+  - _Negative_: Full-length bulletin synthesis takes tens of seconds when cold (observed 35–74 s for 59–66 s of audio); the earlier 1.8–2.2 s estimate was optimistic. Content-addressed caching makes repeat views instant, and the cache namespace is versioned (`v2` now) so a model change never reuses the old voice.
 
 ### ADR-0006: Battle-Tested Managed Cloud Services vs. Hand-Rolling High-Risk Domains
 

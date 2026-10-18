@@ -2,6 +2,15 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.12.1] — 2026-10-18
+
+Voice bulletins use the cheaper, lower-latency Flash-Lite TTS model.
+
+### Changed
+
+- `shared` — 0.9.1: default `GEMINI_TTS_MODEL` is `gemini-3.8-flash-lite-tts` ($6/M audio output vs $9/M on Flash TTS, and built for low-latency synthesis). The audio cache namespace is bumped to `v2`, so clips synthesized with Flash TTS are not reused.
+- `technical-report.md` 1.9.0 → 1.9.1 — TTS model and cache namespace updated; ADR-0005 amended.
+
 ## [0.12.0] — 2026-10-18
 
 Runtime switched to Vertex AI so the deployment bills through Google Cloud instead of a depleted Gemini prepay balance.

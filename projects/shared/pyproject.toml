@@ -1,6 +1,6 @@
 [project]
 name = "mekong-shared"
-version = "0.9.0"
+version = "0.9.1"
 description = "MekongPulse shared domain engine: telemetry, weather, spatial reasoner, agronomy, Khmer synthesis, persistence."
 requires-python = ">=3.12"
 dependencies = [

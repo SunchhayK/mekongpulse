@@ -43,7 +43,7 @@ import logging
 log = logging.getLogger("mekongpulse.pipeline")
 
 # Bump when the TTS voice/model changes so cached bulletins are not reused.
-AUDIO_CACHE_VERSION = "v1"
+AUDIO_CACHE_VERSION = "v2"
 
 
 def _risk_changed(prev: CommuneRisk | None, current: CommuneRisk) -> bool:
