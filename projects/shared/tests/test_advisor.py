@@ -392,3 +392,29 @@ async def test_digest_notes_stale_stations(repo, settings):
 
     assert "1 stale/fallback reading(s)" in english
     assert "ទិន្នន័យប៉ាន់ស្មាន 1 ស្ថានីយ" in khmer
+
+
+class _QuotaLLM:
+    """LLM step that fails the way google-genai does when the daily quota is spent."""
+
+    async def step(self, contents):
+        from google.genai import errors
+
+        raise errors.ClientError(429, {"error": {"code": 429, "message": "quota exceeded"}}, None)
+
+
+class _BoomLLM:
+    async def step(self, contents):
+        raise RuntimeError("boom")
+
+
+async def test_llm_quota_error_degrades_to_advisor_unavailable(advisor_tools, settings):
+    # Live 429s must surface as AdvisorUnavailable (503 / friendly bot text), not a 500.
+    with pytest.raises(AdvisorUnavailable, match="LLM provider error"):
+        await answer(advisor_tools, [], "status?", settings, llm=_QuotaLLM())
+
+
+async def test_non_llm_errors_still_propagate(advisor_tools, settings):
+    # Only provider failures degrade; real bugs must stay visible.
+    with pytest.raises(RuntimeError, match="boom"):
+        await answer(advisor_tools, [], "status?", settings, llm=_BoomLLM())

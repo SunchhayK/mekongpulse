@@ -54,6 +54,38 @@ class AdvisorUnavailable(Exception):
     pass
 
 
+_LLM_FAILURE_NAMES = frozenset(
+    {
+        "ClientError",
+        "ServerError",
+        "ResourceExhausted",
+        "ResourceExhaustedError",
+        "_ResourceExhaustedError",
+    }
+)
+_LLM_FAILURE_MARKERS = ("RESOURCE_EXHAUSTED", "generativelanguage.googleapis.com")
+
+
+def is_llm_failure(exc: BaseException) -> bool:
+    """True when an exception chain points at an LLM provider failure (e.g. 429 quota).
+
+    Provider quota errors surface as `google.genai.errors.ClientError` on the ReAct
+    path or as ADK's private resource-exhausted wrapper on the ADK path; either way
+    the advisor must degrade to `AdvisorUnavailable`, never fail the request.
+    """
+    current: BaseException | None = exc
+    for _ in range(5):
+        if current is None:
+            return False
+        if type(current).__name__ in _LLM_FAILURE_NAMES:
+            return True
+        text = str(current)
+        if any(marker in text for marker in _LLM_FAILURE_MARKERS):
+            return True
+        current = current.__cause__ if current.__cause__ is not None else current.__context__
+    return False
+
+
 @dataclass
 class StepResult:
     text: str | None = None
@@ -331,17 +363,24 @@ async def _run_engine(
     settings: Settings,
     llm: StepLLM | None,
 ) -> str:
-    if llm is not None:
-        return await run_react(tools, history, user_text, llm)
-    if not settings.has_gemini:
-        raise AdvisorUnavailable("advisor requires GEMINI_API_KEY")
-    agent = build_adk_agent(tools, settings)
-    if agent is not None:
-        try:
-            return await _run_adk(agent, history, user_text)
-        except Exception as exc:  # noqa: BLE001 - fall back to the native loop
-            log.warning("ADK run failed, falling back to native ReAct loop: %s", exc)
-    return await run_react(tools, history, user_text, GeminiFunctionCaller(settings))
+    try:
+        if llm is not None:
+            return await run_react(tools, history, user_text, llm)
+        if not settings.has_gemini:
+            raise AdvisorUnavailable("advisor requires GEMINI_API_KEY")
+        agent = build_adk_agent(tools, settings)
+        if agent is not None:
+            try:
+                return await _run_adk(agent, history, user_text)
+            except Exception as exc:  # noqa: BLE001 - fall back to the native loop
+                log.warning("ADK run failed, falling back to native ReAct loop: %s", exc)
+        return await run_react(tools, history, user_text, GeminiFunctionCaller(settings))
+    except AdvisorUnavailable:
+        raise
+    except Exception as exc:  # noqa: BLE001 - provider failures degrade, never 500
+        if is_llm_failure(exc):
+            raise AdvisorUnavailable(f"LLM provider error: {str(exc)[:300]}") from exc
+        raise
 
 
 async def answer_detailed(
