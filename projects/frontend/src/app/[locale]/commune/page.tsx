@@ -19,6 +19,22 @@ import {
 import { formatDateTime } from "@/lib/design";
 
 const CROP_STAGES: CropStage[] = ["TILLERING", "VEGETATIVE", "FLOWERING", "RIPENING"];
+const OFFICER_SESSION_KEY = "mekongpulse.officer_session";
+
+/** Read the assistant page's signed officer session (same origin). */
+function readOfficerToken(): string | null {
+  try {
+    const raw = window.localStorage.getItem(OFFICER_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { session?: unknown; expires_at?: unknown };
+    if (typeof parsed.session !== "string" || typeof parsed.expires_at !== "string") return null;
+    if (Number.isNaN(Date.parse(parsed.expires_at))) return null;
+    if (Date.parse(parsed.expires_at) <= Date.now()) return null;
+    return parsed.session;
+  } catch {
+    return null;
+  }
+}
 
 /** Keep the selected stage in the URL so shared links reuse the same briefing/audio. */
 function setStageInUrl(next: CropStage | null) {
@@ -87,6 +103,8 @@ function CommuneView() {
   const [assessError, setAssessError] = useState<string | null>(null);
   const [stage, setStage] = useState<CropStage | null>(initialStage);
   const [shareState, setShareState] = useState<"idle" | "copied" | "failed">("idle");
+  const [officerToken, setOfficerToken] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
   const requestId = useRef(0);
 
   useEffect(() => {
@@ -125,29 +143,55 @@ function CommuneView() {
     };
   }, [code, initialStage]);
 
+  useEffect(() => {
+    setOfficerToken(readOfficerToken());
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === OFFICER_SESSION_KEY) setOfficerToken(readOfficerToken());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   /** Fetch the bulletin (with Khmer TTS) for the chosen rice stage. */
   const requestAssessment = useCallback(
-    async (nextStage: CropStage | null) => {
+    async (nextStage: CropStage | null, force = false) => {
       if (!code) return;
       const id = ++requestId.current;
       setAssessing(true);
+      if (force) setRegenerating(true);
       setAssessError(null);
       try {
-        const result = await api.assess(code, nextStage ?? undefined);
+        const result = await api.assess(code, nextStage ?? undefined, {
+          force,
+          session: force ? officerToken ?? undefined : undefined,
+        });
         if (requestId.current !== id) return;
         setAssessment(result);
         setStage(nextStage);
         setStageInUrl(nextStage);
       } catch (err) {
         if (requestId.current !== id) return;
-        setAssessError(
-          err instanceof ApiError && err.status === 409 ? t("errorNoTelemetry") : t("assessFailed"),
-        );
+        if (force && err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+          try {
+            window.localStorage.removeItem(OFFICER_SESSION_KEY);
+          } catch {
+            // storage unavailable; the in-memory token is cleared below
+          }
+          setOfficerToken(null);
+          setAssessError(t("regenerateAuth"));
+        } else {
+          setAssessError(
+            err instanceof ApiError && err.status === 409 ? t("errorNoTelemetry") : t("assessFailed"),
+          );
+        }
       } finally {
-        if (requestId.current === id) setAssessing(false);
+        if (requestId.current === id) {
+          setAssessing(false);
+          setRegenerating(false);
+        }
       }
     },
-    [code, t],
+    [code, t, officerToken],
   );
 
   const nameKh = assessment?.commune_name_kh ?? evidence?.commune_name_kh ?? "";
@@ -303,6 +347,20 @@ function CommuneView() {
                     </p>
                   </div>
                 ))}
+
+              {assessment && officerToken && (
+                <div className="commune-regenerate">
+                  <button
+                    type="button"
+                    className="btn btn--outline label-small"
+                    onClick={() => void requestAssessment(stage, true)}
+                    disabled={assessing}
+                  >
+                    {regenerating ? t("regenerating") : t("regenerate")}
+                  </button>
+                  <span className="body-small muted">{t("regenerateHint")}</span>
+                </div>
+              )}
 
               <div className="commune-stage" role="group" aria-label={t("stageAria")}>
                 <span className="label-small muted">{t("stageLabel")}</span>

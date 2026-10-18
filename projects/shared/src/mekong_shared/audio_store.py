@@ -7,6 +7,7 @@ the storage uri and the playable URL used by the bot and dashboard.
 from __future__ import annotations
 
 import asyncio
+import time
 from pathlib import Path
 
 from .models import AudioRef
@@ -22,13 +23,22 @@ class LocalAudioStore:
         path = self._dir / key
         path.parent.mkdir(parents=True, exist_ok=True)
         await asyncio.to_thread(path.write_bytes, data)
-        return AudioRef(uri=f"local:{key}", url=f"{self._base}/audio/{key}", mime_type=mime_type)
+        stat = await asyncio.to_thread(path.stat)
+        return AudioRef(
+            uri=f"local:{key}",
+            url=f"{self._base}/audio/{key}?v={stat.st_mtime_ns}",
+            mime_type=mime_type,
+        )
 
     async def head(self, key: str) -> AudioRef | None:
         path = self._dir / key
         if not await asyncio.to_thread(path.is_file):
             return None
-        return AudioRef(uri=f"local:{key}", url=f"{self._base}/audio/{key}")
+        stat = await asyncio.to_thread(path.stat)
+        return AudioRef(
+            uri=f"local:{key}",
+            url=f"{self._base}/audio/{key}?v={stat.st_mtime_ns}",
+        )
 
     async def get(self, key_or_uri: str) -> bytes:
         key = key_or_uri.removeprefix("local:")
@@ -55,7 +65,7 @@ class GCSAudioStore:
         await asyncio.to_thread(_upload)
         return AudioRef(
             uri=f"gs://{self._bucket_name}/{key}",
-            url=f"{self._base}/{key}",
+            url=f"{self._base}/{key}?v={time.time_ns()}",
             mime_type=mime_type,
         )
 

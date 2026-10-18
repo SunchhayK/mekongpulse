@@ -453,6 +453,7 @@ class Pipeline:
         crop_stage: CropStage,
         *,
         with_audio: bool = False,
+        force_audio: bool = False,
     ) -> AssessmentResult:
         commune = self.gazetteer.get(commune_code) or await self.repo.get_commune(commune_code)
         if commune is None:
@@ -481,7 +482,9 @@ class Pipeline:
             soil_moisture_pct=weather.soil_moisture_pct if weather else None,
             lead_time_hours=risk.lead_time_hours,
         )
-        kh, en = await self.bulletin.build(commune, risk, directives, station, weather)  # type: ignore[union-attr]
+        kh, en = await self.bulletin.build(  # type: ignore[union-attr]
+            commune, risk, directives, station, weather, force_polish=force_audio
+        )
 
         audio = None
         if with_audio:
@@ -492,6 +495,7 @@ class Pipeline:
                 audio_cache_signature(
                     commune_code, crop_stage, risk, station, weather, directives
                 ),
+                force=force_audio,
             )
 
         return AssessmentResult(
@@ -516,23 +520,32 @@ class Pipeline:
         risk: CommuneRisk,
         bulletin_kh: str,
         cache_signature: str,
+        *,
+        force: bool = False,
     ):
         if self.audio_store is None:
             return None
         key = f"{commune_code}/{AUDIO_CACHE_VERSION}-{cache_signature}.mp3"
-        try:
-            cached = await self.audio_store.head(key)
-        except Exception as exc:  # noqa: BLE001 - a cache probe must never break assessment
-            log_event(log, "TTS_CACHE_ERROR", commune=commune_code, error=str(exc))
-            cached = None
-        if cached is not None:
-            log_event(log, "TTS_CACHE_HIT", commune=commune_code, tier=risk.tier.value)
-            return cached
+        if not force:
+            try:
+                cached = await self.audio_store.head(key)
+            except Exception as exc:  # noqa: BLE001 - a cache probe must never break assessment
+                log_event(log, "TTS_CACHE_ERROR", commune=commune_code, error=str(exc))
+                cached = None
+            if cached is not None:
+                log_event(log, "TTS_CACHE_HIT", commune=commune_code, tier=risk.tier.value)
+                return cached
         try:
             artifact = await self.tts.synthesize(bulletin_kh)  # type: ignore[union-attr]
         except (TTSUnavailable, AudioEncodeError) as exc:
             log_event(log, "TTS_UNAVAILABLE", commune=commune_code, error=str(exc))
             return None
         ref = await self.audio_store.put(key, artifact.data, artifact.mime_type)
-        log_event(log, "TTS_SYNTHESIZED", commune=commune_code, tier=risk.tier.value)
+        log_event(
+            log,
+            "TTS_SYNTHESIZED",
+            commune=commune_code,
+            tier=risk.tier.value,
+            forced=force,
+        )
         return ref.model_copy(update={"duration_seconds": artifact.duration_seconds})

@@ -55,6 +55,16 @@ async def test_assess_warning_ripening_returns_harvest_plan(client, repo):
     assert body["english_bulletin"]
 
 
+async def test_assess_force_requires_officer(client):
+    response = await client.post(
+        f"/api/v1/communes/{COMMUNE}/assess",
+        json={"with_audio": True, "force": True},
+    )
+    assert response.status_code == 403
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json()["type"].endswith("officer-auth-required")
+
+
 async def test_assess_unknown_commune_is_404_problem(client):
     response = await client.post("/api/v1/communes/999999/assess", json={})
     assert response.status_code == 404

@@ -2,6 +2,21 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.17.0] — 2026-10-19
+
+Officers can force-regenerate a commune briefing; the watch inbox separates actions from runs.
+
+### Added
+
+- `shared` — 0.12.0: `assess_commune(..., force_audio=True)` bypasses both the polished-text cache and the TTS cache, rewrites the content-addressed MP3, and local audio URLs now carry `?v=<mtime>` so browsers fetch the new file instead of replaying the old one.
+- `backend` — 0.7.0: `POST /api/v1/communes/{code}/assess` accepts `force` and requires an officer session (403 `officer-auth-required` otherwise).
+- `frontend` — 0.11.0: an officer-only **Regenerate briefing** button on the commune page when the assistant session is present. The watch inbox now has a distinct **Start a watch** action panel and a **Recent runs** list separated by a rule; pending runs are listed first with a status stripe.
+- `bot` — 0.6.2: strips the audio `?v` query when fetching local audio for Telegram voice notes.
+
+### Changed
+
+- `technical-report.md` 1.13.1 → 1.14.0 and `product-report.md` 1.7.3 → 1.8.0 — force regeneration, versioned audio, and the redesigned inbox documented. Tests: 156 shared / 90 backend / 44 bot.
+
 ## [0.16.1] — 2026-10-19
 
 Voice input rejects silence and tiny clips instead of hallucinating a transcript.

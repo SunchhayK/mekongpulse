@@ -146,11 +146,13 @@ class BulletinBuilder:
         directives: list[Directive],
         station: StationSnapshot | None,
         weather: WeatherSnapshot | None,
+        *,
+        force_polish: bool = False,
     ) -> tuple[str, str]:
         kh, en = self.build_templates(commune, risk, directives, station, weather)
         if self._text is not None:
             cache_key = hashlib.sha256(kh.encode("utf-8")).hexdigest()
-            cached = self._polish_cache.get(cache_key)
+            cached = None if force_polish else self._polish_cache.get(cache_key)
             if cached is not None:
                 return cached, en
             try:

@@ -175,6 +175,35 @@ def test_audio_signature_buckets_small_telemetry_changes():
     assert changed != base
 
 
+async def test_assess_audio_force_bypasses_cache(
+    repo, settings, make_pipeline, gazetteer, tmp_path
+):
+    pipeline = await _prepared(repo, settings, make_pipeline, gazetteer)
+    calls = {"n": 0}
+
+    class CountingTTS:
+        async def synthesize(self, text: str) -> AudioArtifact:
+            calls["n"] += 1
+            return AudioArtifact(
+                data=b"\xff\xfb\x90\x00fake-mp3", mime_type="audio/mpeg", duration_seconds=42.0
+            )
+
+    pipeline.tts = CountingTTS()  # type: ignore[assignment]
+    pipeline.audio_store = LocalAudioStore(tmp_path / "audio", "http://localhost:8080")
+
+    first = await pipeline.assess_commune(COMMUNE, CropStage.RIPENING, with_audio=True)
+    second = await pipeline.assess_commune(COMMUNE, CropStage.RIPENING, with_audio=True)
+    forced = await pipeline.assess_commune(
+        COMMUNE, CropStage.RIPENING, with_audio=True, force_audio=True
+    )
+
+    assert first.audio is not None and second.audio is not None and forced.audio is not None
+    assert calls["n"] == 2  # the force call bypassed the cached MP3
+    assert second.audio.url == first.audio.url
+    assert forced.audio.url != first.audio.url  # versioned URL for the rewritten file
+    assert len(list((tmp_path / "audio").rglob("*.mp3"))) == 1  # same content-addressed key
+
+
 async def test_assess_audio_reuses_cache_for_identical_briefing(
     repo, settings, make_pipeline, gazetteer, tmp_path
 ):

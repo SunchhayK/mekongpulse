@@ -28,7 +28,7 @@ async def _audio_bytes(pipeline: Pipeline, url: str) -> bytes | None:
     index = url.find(marker)
     if index < 0 or pipeline.audio_store is None:
         return None
-    key = url[index + len(marker) :]
+    key = url[index + len(marker) :].split("?", 1)[0]
     try:
         return await pipeline.audio_store.get(f"local:{key}")
     except Exception:  # noqa: BLE001 - audio is best-effort, text always goes out

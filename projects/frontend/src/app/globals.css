@@ -1701,9 +1701,48 @@ button.station-card[aria-pressed="true"] {
 }
 
 /* --- Watch officer inbox -------------------------------------------------- */
+.watch-action {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--sky) 6%, var(--paper));
+}
+.watch-action-copy { max-width: 52ch; }
+.watch-action-label {
+  margin: 0 0 4px;
+  color: var(--sky-deep);
+}
+.watch-run-btn { flex: 0 0 auto; align-self: center; }
+.watch-inbox-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 20px 0 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.watch-count {
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  color: var(--tier-warning-ink);
+  background: color-mix(in srgb, var(--tier-warning) 12%, var(--paper));
+}
+.watch-empty { margin: 12px 0 0; }
 .watch-list { display: flex; flex-direction: column; }
-.watch-run { border-top: 1px solid var(--line); padding: 14px 0; }
+.watch-run {
+  border-top: 1px solid var(--line);
+  border-left: 3px solid transparent;
+  padding: 14px 0 14px 12px;
+}
 .watch-run:first-child { border-top: 0; padding-top: 4px; }
+.watch-run--pending_approval { border-left-color: var(--tier-warning); }
+.watch-run--published { border-left-color: var(--tier-normal); }
+.watch-run--rejected,
+.watch-run--failed { border-left-color: var(--tier-danger); }
 .watch-run-head {
   display: flex;
   align-items: flex-start;
@@ -1785,3 +1824,14 @@ button.station-card[aria-pressed="true"] {
   line-height: 1;
 }
 .assistant-panel[hidden] { display: none; }
+.commune-regenerate {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+@media (max-width: 600px) {
+  .watch-action { flex-direction: column; align-items: stretch; }
+  .watch-run-btn { width: 100%; align-self: stretch; }
+}

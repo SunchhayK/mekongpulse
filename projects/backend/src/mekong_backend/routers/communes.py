@@ -21,6 +21,9 @@ from mekong_shared.models import (
 )
 from mekong_shared.pipeline import CommuneNotFound
 
+from ..officer_auth import authorized_for
+from ..problems import problem
+
 log = logging.getLogger("mekongpulse.backend")
 
 router = APIRouter(prefix="/api/v1/communes", tags=["communes"])
@@ -29,6 +32,7 @@ router = APIRouter(prefix="/api/v1/communes", tags=["communes"])
 class AssessRequest(BaseModel):
     crop_stage: CropStage = CropStage.RIPENING
     with_audio: bool = False
+    force: bool = False
 
 
 class FieldReportCreate(BaseModel):
@@ -98,9 +102,21 @@ async def search(request: Request, q: str, limit: int = 10) -> list[CommuneSumma
 
 @router.post("/{commune_code}/assess")
 async def assess(commune_code: str, body: AssessRequest, request: Request) -> AssessmentResult:
+    settings = request.app.state.settings
+    if body.force and not authorized_for(settings, request.headers):
+        return problem(
+            403,
+            "Officer authorization required",
+            "Sign in on the assistant page to regenerate the cached briefing.",
+            type_suffix="officer-auth-required",
+            trace_id=getattr(request.state, "trace_id", None),
+        )
     pipeline = request.app.state.pipeline
     result = await pipeline.assess_commune(
-        commune_code, body.crop_stage, with_audio=body.with_audio
+        commune_code,
+        body.crop_stage,
+        with_audio=body.with_audio,
+        force_audio=body.force,
     )
     log_event(
         log,
@@ -110,6 +126,7 @@ async def assess(commune_code: str, body: AssessRequest, request: Request) -> As
         tier=result.risk_tier.value,
         directive=result.directive,
         crop_stage=body.crop_stage.value,
+        forced=body.force,
     )
     return result
 

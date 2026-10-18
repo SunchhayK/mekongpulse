@@ -46,9 +46,15 @@ export function WatchRuns({
   );
   const [error, setError] = useState<string | null>(null);
 
+  const pendingCount = runs.filter((run) => run.status === "pending_approval").length;
+  const orderedRuns = [...runs].sort(
+    (a, b) =>
+      Number(b.status === "pending_approval") - Number(a.status === "pending_approval"),
+  );
+
   useEffect(() => {
-    onPendingChange?.(runs.filter((run) => run.status === "pending_approval").length);
-  }, [runs, onPendingChange]);
+    onPendingChange?.(pendingCount);
+  }, [pendingCount, onPendingChange]);
 
   const formatTime = useCallback(
     (iso: string | null) => {
@@ -162,18 +168,19 @@ export function WatchRuns({
 
   return (
     <section className="card watch-card" aria-label={t("title")}>
-      <div className="card-title-row">
-        <div>
-          <h2 className="title-small" style={{ margin: 0 }}>
-            {t("title")}
+      <div className="watch-action">
+        <div className="watch-action-copy">
+          <p className="watch-action-label label-small">{t("startTitle")}</p>
+          <h2 className="title-small" style={{ margin: "2px 0 4px" }}>
+            {communeCode ? t("runOn", { code: communeCode }) : t("runHighest")}
           </h2>
-          <p className="body-small muted" style={{ margin: "4px 0 0" }}>
+          <p className="body-small muted" style={{ margin: 0 }}>
             {t("intro")}
           </p>
         </div>
         <button
           type="button"
-          className="btn btn--filled label-small"
+          className="btn btn--filled label-medium watch-run-btn"
           onClick={() => void runWatch()}
           disabled={!session || creating}
         >
@@ -187,12 +194,23 @@ export function WatchRuns({
         </p>
       )}
       {!session && <p className="body-small muted">{t("signIn")}</p>}
-      {session && runs.length === 0 && !loading && (
-        <p className="body-small muted">{t("empty")}</p>
+      {session && orderedRuns.length === 0 && !loading && (
+        <p className="body-small muted watch-empty">{t("empty")}</p>
       )}
 
+      <div className="watch-inbox-head">
+        <h3 className="title-small" style={{ margin: 0 }}>
+          {t("recent")}
+        </h3>
+        {pendingCount > 0 && (
+          <span className="watch-count label-small">
+            {t("pendingCount", { count: pendingCount })}
+          </span>
+        )}
+      </div>
+
       <div className="watch-list" aria-live="polite">
-        {runs.map((run) => {
+        {orderedRuns.map((run) => {
           const name =
             locale === "km"
               ? run.commune_name_kh || run.commune_name_en || run.commune_code
@@ -200,7 +218,7 @@ export function WatchRuns({
           const isEditing = editing?.id === run.id;
           const pending = run.status === "pending_approval";
           return (
-            <article key={run.id} className="watch-run">
+            <article key={run.id} className={`watch-run watch-run--${run.status}`}>
               <div className="watch-run-head">
                 <div>
                   <span className="watch-run-title">{name}</span>{" "}
