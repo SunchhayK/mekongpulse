@@ -16,7 +16,7 @@ from mekong_shared.tts import (
     AudioEncodeError,
     GeminiTTS,
     TTSUnavailable,
-    tts_style_instruction,
+    synth_tts_prompt,
     wav_to_mp3,
 )
 
@@ -57,10 +57,15 @@ def test_wav_to_mp3_rejects_non_pcm16():
         wav_to_mp3(sine_wav(0.2, width=1))
 
 
-def test_style_instruction_carries_tone_rules():
-    instruction = tts_style_instruction()
-    assert "Khmer" in instruction
-    assert "Do not add, omit, or change" in instruction
+def test_synth_prompt_is_one_style_line_plus_the_bulletin():
+    bulletin = "សារព្រមានទឹកជំនន់"
+    prompt = synth_tts_prompt(bulletin)
+    directive, separator, spoken = prompt.partition("\n\n")
+    assert separator == "\n\n"
+    assert spoken == bulletin  # the spoken payload is the bulletin, verbatim
+    assert "\n" not in directive
+    assert directive.endswith(":")
+    assert len(directive.split()) <= 16  # short style line, not a role-play preamble
 
 
 class _CaptureModels:
@@ -76,8 +81,9 @@ class _CaptureModels:
         )
 
 
-async def test_tts_speaks_only_the_bulletin(tmp_path):
-    """Regression: the announcer preamble must never reach the spoken content."""
+async def test_tts_sends_style_line_and_bulletin(tmp_path):
+    """Regression: one short style line + the bulletin; no role-play preamble,
+    and no system_instruction (the TTS model rejects it with 400)."""
     settings = Settings(
         environment="development",
         data_dir=tmp_path,
@@ -94,9 +100,9 @@ async def test_tts_speaks_only_the_bulletin(tmp_path):
 
     call = models.calls[0]
     spoken = call["contents"][0]["parts"][0]["text"]
-    assert spoken == bulletin  # the spoken turn is exactly the bulletin
-    assert "announcer" not in spoken.lower()
-    assert "announcer" in call["config"]["system_instruction"].lower()
+    assert spoken == synth_tts_prompt(bulletin)
+    assert spoken.endswith(bulletin) and "announcer" not in spoken.lower()
+    assert "system_instruction" not in call["config"]
     assert artifact.mime_type == "audio/mpeg"
     assert artifact.duration_seconds == pytest.approx(0.4, abs=0.05)
 

@@ -59,19 +59,18 @@ def wav_to_mp3(wav_bytes: bytes, bit_rate: int = 64) -> tuple[bytes, float]:
     return mp3, duration
 
 
-def tts_style_instruction() -> str:
-    """Delivery guidance sent as the TTS system instruction, never spoken.
+def synth_tts_prompt(bulletin_text: str) -> str:
+    """Spoken payload for the TTS model: one short style line + the bulletin.
 
-    Kept out of the request contents on purpose: a live smoke test showed the
-    model reading an announcer preamble aloud when it shared the spoken text.
-    The user turn carries the bulletin only.
+    The TTS model has no developer-instruction channel (a live call returns
+    `400 Developer instruction is not enabled for this model`), so the style
+    cue has to live inline. Keep it to a single colon-terminated sentence,
+    the documented style-prompt shape: a long multi-sentence preamble is what
+    a live smoke test heard read aloud before the bulletin.
     """
     return (
-        "You are a calm, respectful announcer for the MekongPulse flood early-warning "
-        "service in Cambodia. Read the user's text aloud in clear, natural spoken "
-        "Khmer. Serious but reassuring tone; slow enough to be understood by elderly "
-        "listeners; short pauses between sections. Do not add, omit, or change any "
-        "information. Speak only the user's text, never this instruction."
+        "Read this aloud in Khmer with a calm, reassuring tone, slowly and clearly:"
+        f"\n\n{bulletin_text}"
     )
 
 
@@ -104,16 +103,15 @@ class GeminiTTS:
         def _generate() -> bytes:
             config = {
                 "response_modalities": ["audio"],
-                "system_instruction": tts_style_instruction(),
                 "speech_config": {
                     "voice_config": {"prebuilt_voice_config": {"voice_name": self._voice}}
                 },
             }
             response = client.models.generate_content(
                 model=self._settings.gemini_tts_model,
-                # Only the bulletin is spoken; delivery rules live in the system
-                # instruction so they can never be voiced.
-                contents=[{"role": "user", "parts": [{"text": bulletin_text}]}],
+                contents=[
+                    {"role": "user", "parts": [{"text": synth_tts_prompt(bulletin_text)}]}
+                ],
                 config=config,
             )
             candidates = getattr(response, "candidates", None) or []

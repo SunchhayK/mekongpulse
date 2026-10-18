@@ -4,11 +4,12 @@ All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https:
 
 ## [0.4.1] — 2026-10-18
 
-Voice notes no longer read the announcer instructions aloud.
+Voice notes no longer read the announcer instructions aloud, and the assessment dialog opens above the map.
 
 ### Fixed
 
-- `shared` — 0.3.1: the TTS request no longer carries the announcer preamble in the spoken content. `synth_tts_prompt()` concatenated the delivery instructions and the bulletin into one user turn, and a live voice note read the preamble ("You are a calm, respectful announcer…") aloud before the bulletin. It is replaced by `tts_style_instruction()`, passed as the request's `system_instruction`; the spoken turn is exactly the bulletin. Regression test `test_tts_speaks_only_the_bulletin` captures the outgoing request and asserts the spoken text is the bulletin alone.
+- `frontend` — 0.4.1: the assessment dialog opened from the basin map rendered underneath it. The backdrop sat at `z-index: 40` while Leaflet's panes reach 700, its controls 1000, and the basemap switcher 1100, so every map layer painted over the dialog. The backdrop now stacks at `z-index: 1200`, above all map layers.
+- `shared` — 0.3.1: voice notes no longer open by reading their own delivery instructions aloud. `synth_tts_prompt()` sent the multi-sentence "You are a calm, respectful announcer…" preamble plus tone rules as part of the spoken text, and a live voice note read all of it before the bulletin. The TTS model has no developer-instruction channel (routing the text through `system_instruction` returns `400 Developer instruction is not enabled for this model`), so the prompt is now a single short colon-terminated style line ("Read this aloud in Khmer with a calm, reassuring tone…") followed by the bulletin only. Regression tests pin the prompt shape and assert no `system_instruction` is sent.
 
 ## [0.4.0] — 2026-10-18
 

@@ -713,7 +713,8 @@ button.station-card[aria-pressed="true"] {
 .dialog-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  /* Above Leaflet: panes reach 700, controls 1000, the basemap switcher 1100. */
+  z-index: 1200;
   background: rgb(15 23 42 / 0.45);
   backdrop-filter: blur(3px);
   display: flex;
