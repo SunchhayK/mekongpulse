@@ -2,6 +2,14 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.4.2] — 2026-10-18
+
+TTS outages degrade to text instead of failing the request.
+
+### Fixed
+
+- `shared` — 0.3.2: `GeminiTTS.synthesize` converts any generation failure (quota 429, safety blocks, transient API errors) into `TTSUnavailable`, which the pipeline already treats as "deliver the text bulletin without audio". A live free-tier quota exhaustion (`429 … limit: 10, model: gemini-3.8-flash-tts`) was surfacing as `500 Internal server error` on `POST /api/v1/communes/{code}/assess` instead of the documented text-only fallback.
+
 ## [0.4.1] — 2026-10-18
 
 Voice notes no longer read the announcer instructions aloud, and the assessment dialog opens above the map.

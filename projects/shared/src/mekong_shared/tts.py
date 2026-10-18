@@ -128,6 +128,14 @@ class GeminiTTS:
                     return bytes(data)
             raise TTSUnavailable("Gemini response contained no audio part")
 
-        wav_bytes = await asyncio.to_thread(_generate)
+        try:
+            wav_bytes = await asyncio.to_thread(_generate)
+        except TTSUnavailable:
+            raise
+        except Exception as exc:  # noqa: BLE001 - audio is best-effort
+            # Quota (429), safety blocks, and transient API failures degrade
+            # to a text-only bulletin via the pipeline's existing handling;
+            # surfacing them as 500s on /assess would break that contract.
+            raise TTSUnavailable(f"TTS request failed: {exc}") from exc
         mp3, duration = await asyncio.to_thread(wav_to_mp3, wav_bytes)
         return AudioArtifact(data=mp3, mime_type="audio/mpeg", duration_seconds=round(duration, 1))

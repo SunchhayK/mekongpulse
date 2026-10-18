@@ -107,6 +107,27 @@ async def test_tts_sends_style_line_and_bulletin(tmp_path):
     assert artifact.duration_seconds == pytest.approx(0.4, abs=0.05)
 
 
+class _FailingModels:
+    def generate_content(self, *, model, contents, config):
+        raise RuntimeError("429 RESOURCE_EXHAUSTED")
+
+
+async def test_tts_api_failure_degrades_to_unavailable(tmp_path):
+    """A quota/API error must surface as TTSUnavailable (text-only fallback),
+    never as an unhandled 500 on the assessment endpoint."""
+    settings = Settings(
+        environment="development",
+        data_dir=tmp_path,
+        audio_dir=tmp_path / "audio",
+        gemini_api_key="test-key",
+        use_vertex_ai=False,
+    )
+    tts = GeminiTTS(settings)
+    tts._client = SimpleNamespace(models=_FailingModels())  # type: ignore[assignment]
+    with pytest.raises(TTSUnavailable):
+        await tts.synthesize("សារព្រមានទឹកជំនន់")
+
+
 async def test_tts_without_key_raises_unavailable(tmp_path):
     settings = Settings(
         environment="development",
