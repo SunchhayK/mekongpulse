@@ -46,6 +46,21 @@ log = logging.getLogger("mekongpulse.pipeline")
 AUDIO_CACHE_VERSION = "v1"
 
 
+def _risk_changed(prev: CommuneRisk | None, current: CommuneRisk) -> bool:
+    """True when a persisted risk row would actually change (timestamps excluded)."""
+    if prev is None:
+        return True
+    return (
+        prev.tier != current.tier
+        or prev.score != current.score
+        or prev.reason != current.reason
+        or prev.lead_time_hours != current.lead_time_hours
+        or prev.drivers != current.drivers
+        or prev.station_id != current.station_id
+        or prev.estimated != current.estimated
+    )
+
+
 def audio_cache_signature(
     commune_code: str,
     crop_stage: CropStage,
@@ -121,6 +136,9 @@ class Pipeline:
     bulletin: BulletinBuilder | None = None
     tts: GeminiTTS | None = None
     audio_store: AudioStoreProtocol | None = None
+    _weather_cache: tuple[float, dict[str, WeatherSnapshot]] | None = field(
+        default=None, init=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         if self.mrc is None:
@@ -157,7 +175,8 @@ class Pipeline:
         warnings: list[TelemetryWarning] = []
         stations = load_stations(str(self.settings.data_dir))
 
-        previous = {r.commune_code: r.tier for r in await self.repo.risk_map()}
+        previous_by_code = {r.commune_code: r for r in await self.repo.risk_map()}
+        previous = {code: r.tier for code, r in previous_by_code.items()}
 
         snapshots: dict[str, StationSnapshot] = {}
         failed: list[str] = []
@@ -189,7 +208,16 @@ class Pipeline:
                 )
             )
         if risks:
-            await self.repo.save_commune_risks(risks)
+            changed = [r for r in risks if _risk_changed(previous_by_code.get(r.commune_code), r)]
+            if changed:
+                await self.repo.save_commune_risks(changed)
+            log_event(
+                log,
+                "RISK_WRITES",
+                communes_evaluated=len(risks),
+                written=len(changed),
+                unchanged=len(risks) - len(changed),
+            )
 
         transitions: list[RiskTransition] = []
         for r in risks:
@@ -380,6 +408,12 @@ class Pipeline:
                 await self.repo.save_failover_offset(cfg.id, cfg.fallback_id, offset)
 
     async def _refresh_weather(self) -> dict[str, WeatherSnapshot]:
+        now = time.monotonic()
+        if self._weather_cache is not None:
+            cached_at, cached = self._weather_cache
+            if now - cached_at < self.settings.weather_refresh_minutes * 60:
+                return cached
+
         province_points = self.gazetteer.province_points()
         fetched: dict[str, WeatherSnapshot] = {}
         semaphore = asyncio.Semaphore(5)
@@ -399,6 +433,9 @@ class Pipeline:
         )
         merged = await self.repo.latest_weather_by_province()
         merged.update(fetched)
+        # Only cache a complete pass; a failed province retries on the next sync.
+        if len(fetched) == len(province_points):
+            self._weather_cache = (now, merged)
         return merged
 
     # ---- on-demand assessment ---------------------------------------------------

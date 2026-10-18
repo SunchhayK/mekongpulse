@@ -2,6 +2,20 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.11.0] — 2026-10-18
+
+Sync work is halved and repeat commune views stop re-billing Gemini quota.
+
+### Added
+
+- `scripts/benchmark_api.py` and `scripts/benchmark_server.py` measure API latency/size, sync wall time, per-table row deltas, host and database footprint; `BENCHMARKS.md` records the measured numbers and reproduction commands.
+- `shared` — 0.8.0: weather forecasts are cached for `WEATHER_REFRESH_MINUTES` (default 60) since Open-Meteo updates hourly; polished Khmer bulletins are cached in-process by template digest (512 entries); commune-risk rows are written only when tier/score/reason/lead time/drivers/station/estimate actually change.
+
+### Changed
+
+- `scripts/server_sync.sh` and `scripts/deploy_gcp.sh` trigger `/patrol/run` only. Patrol performs a full `pipeline.sync()` first, so the extra `/telemetry/sync` call duplicated every ingest and risk write (192 → 96 syncs/day; ~296k → ~148k risk row writes/day before diffing).
+- `technical-report.md` 1.7.1 → 1.8.0 — cost controls and benchmark references updated.
+
 ## [0.10.0] — 2026-10-18
 
 Spoken bulletins are cached and reused instead of regenerated on every commune view.

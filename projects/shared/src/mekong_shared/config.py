@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     mrc_base_url: str = "https://api.mrcmekong.org/api/v1"
     open_meteo_base_url: str = "https://api.open-meteo.com/v1"
     http_timeout_seconds: float = 10.0
+    weather_refresh_minutes: int = 60  # forecasts update hourly; syncs run every 15 min
 
     # --- telegram ---------------------------------------------------------
     telegram_bot_token: str | None = None

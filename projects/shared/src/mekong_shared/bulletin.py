@@ -9,6 +9,7 @@ is the fallback and the source of truth for tests.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 
 from .config import Settings
 from .models import Commune, CommuneRisk, Directive, FloodReason, RiskTier, StationSnapshot, WeatherSnapshot
@@ -71,8 +72,11 @@ class GeminiTextClient:
 
 
 class BulletinBuilder:
+    _POLISH_CACHE_LIMIT = 512
+
     def __init__(self, text_client: GeminiTextClient | None = None) -> None:
         self._text = text_client
+        self._polish_cache: dict[str, str] = {}
 
     # ---- deterministic templates -----------------------------------------
     def build_templates(
@@ -145,8 +149,17 @@ class BulletinBuilder:
     ) -> tuple[str, str]:
         kh, en = self.build_templates(commune, risk, directives, station, weather)
         if self._text is not None:
+            cache_key = hashlib.sha256(kh.encode("utf-8")).hexdigest()
+            cached = self._polish_cache.get(cache_key)
+            if cached is not None:
+                return cached, en
             try:
-                kh = await self._text.polish_khmer(kh)
+                polished = await self._text.polish_khmer(kh)
             except Exception:  # noqa: BLE001 - template remains the source of truth
-                pass
+                return kh, en
+            if polished and polished != kh:
+                if len(self._polish_cache) >= self._POLISH_CACHE_LIMIT:
+                    self._polish_cache.pop(next(iter(self._polish_cache)))
+                self._polish_cache[cache_key] = polished
+                kh = polished
         return kh, en

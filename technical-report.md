@@ -3,7 +3,7 @@ id: REPORT-TECH-002
 document_type: technical_report
 title: MekongPulse Technical Architecture and Engineering Report
 project_name: "MekongPulse"
-version: 1.7.1
+version: 1.8.0
 status: approved
 last_updated: 2026-10-18
 owners: ["@bytelab-lead", "@tech-lead", "@backend-lead"]
@@ -33,6 +33,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
   - Model resilience: an ordered Gemini text chain (`GEMINI_TEXT_MODEL`, then `GEMINI_FALLBACK_MODELS`; default `gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite`) rotates inside the model-call layer — an ADK `BaseLlm` wrapper for the primary engine and the same loop in the native ReAct caller; STT uses the chain too. Quota (429), overload (503), and missing-model (404) failures cool down per model (1 h / 60 s / 6 h) without replaying a turn. Gemma 4 was evaluated and rejected: `gemma-4-26b-a4b-it` emits tool calls but leaks reasoning and ignores language instructions in final answers, and `gemma-4-31b-it` fails with tools.
   - Bilingual Khmer-first web: next-intl `[locale]` routing (`km` default, `en` toggle) with static export (`trailingSlash`; Firebase `/` → `/km/index.html`), the dedicated officer assistant page at `/{locale}/assistant`, the public commune page at `/{locale}/commune?code=XXXXXX`, and `WEB_BASE_URL` driving the commune links appended to channel posts.
   - Firestore for time-series observation snapshots, commune risk profiles, and alert history in production; PostgreSQL (asyncpg) in development, staging, and self-hosted modes; Cloud Storage for audio caching. Spoken bulletins are content-addressed (digest of the deterministic briefing inputs) and served from the store when unchanged, so repeated commune views reuse one MP3.
+  - Sync cost discipline: the 15-minute trigger calls `/patrol/run` only (patrol performs the sync itself), weather is refreshed hourly, unchanged commune-risk rows are not rewritten, and polished Khmer bulletins are cached by template digest. Reproducible measurements and scripts live in `projects/BENCHMARKS.md` and `projects/scripts/benchmark_*.py`.
 - **Deferred / out-of-scope**:
   - Custom physical river buoys or ultrasonic sensor hardware.
   - Heavy 2D hydrodynamic numerical fluid simulations.
@@ -54,7 +55,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 | Time-Series & State Store    | google-cloud-firestore             | 2.19.x            | Real-time observation snapshots and commune risk index             |
 | Audio Object Storage         | google-cloud-storage               | 2.18.x            | Direct streaming upload and hosting for synthesized MP3 notes      |
 | Secret Management            | google-cloud-secret-manager        | 2.20.x            | Zero-leak credential injection for Telegram and Gemini keys        |
-| Task Scheduling              | Google Cloud Scheduler             | Managed           | Scheduled 15-minute HTTP cron triggers to `/api/v1/telemetry/sync`; when self-hosted, host cron mirrors them (`server_sync.sh`) and posts the daily digest (`server_digest.sh`, 07:00 Asia/Phnom_Penh) |
+| Task Scheduling              | Google Cloud Scheduler             | Managed           | Scheduled 15-minute HTTP cron triggers to `/api/v1/patrol/run` (which runs the telemetry sync first); when self-hosted, host cron mirrors it (`server_sync.sh`) and posts the daily digest (`server_digest.sh`, 07:00 Asia/Phnom_Penh) |
 | Serverless Hosting           | Google Cloud Run + Firebase Hosting | Gen 2 (Singapore) | Auto-scaling API containers (`asia-southeast1`) + static dashboard on Firebase Hosting |
 | Basin Map & Charts           | Leaflet, HTML5 canvas hydrographs | 1.9.x | Interactive commune risk map with switchable Esri Light Gray, OpenStreetMap and OpenTopoMap basemaps; no API key; overlays render over a neutral canvas when tiles are slow |
 | UI Framework                 | React 18 + hand-rolled CSS design tokens | 18.3.x      | Light "river lab" theme (navy `#213a63`, sky `#0ea5e9`), IBM Plex + Kantumruy Pro fonts; no external UI library |
@@ -70,7 +71,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 | **Object storage & audio delivery**     | Buffering multi-megabyte synthesized audio streams in memory crashes lightweight Cloud Run instances with OOM errors.      | Direct stream pipe to Google Cloud Storage (`google-cloud-storage`) with public CDN URLs.   |
 | **Spoken Khmer speech synthesis**       | Hand-rolled phoneme synthesizers or rule-based TTS lack Khmer tone sandhi, honorifics, and dialect nuances.                | Google Gemini native TTS (`gemini-3.8-flash-tts`) with Khmer prompting; 24 kHz PCM transcoded to MP3 with `lameenc`. |
 | **Spatial point-in-polygon resolution** | Iterating 1,661 commune polygon boundaries sequentially yields O(N) lookup times exceeding 450ms.                          | In-memory Shapely STRtree index over 2025 MEF gazetteer GeoJSON yielding < 15ms lookups.    |
-| **Scheduled telemetry synchronization** | In-process `while True: await asyncio.sleep(900)` loops crash silently on unhandled exceptions and fail across instances. | Google Cloud Scheduler firing authenticated HTTP POST triggers to `/api/v1/telemetry/sync`. |
+| **Scheduled telemetry synchronization** | In-process `while True: await asyncio.sleep(900)` loops crash silently on unhandled exceptions and fail across instances. | Google Cloud Scheduler firing authenticated HTTP POST triggers to `/api/v1/patrol/run` (the patrol performs the sync before alert evaluation). |
 | **Webhook authentication**              | Blindly processing incoming webhooks leaves bots open to spoofed payload injection and replay attacks.                     | HMAC token verification via standard `X-Telegram-Bot-Api-Secret-Token` header validation.   |
 
 ### 1.4 SLA / SLO performance budgets
@@ -1073,7 +1074,7 @@ components:
 
 ## 5. Test Plans and Test Cases
 
-Current suites, all green: 146 shared, 83 backend, 37 bot tests; the frontend typecheck and static export are clean. New coverage lands in `shared/tests/test_evidence.py`, `shared/tests/test_stt.py`, `shared/tests/test_model_rotation.py`, `shared/tests/test_adk_rotation.py`, `backend/tests/test_evidence_api.py`, `backend/tests/test_reports_api.py`, `backend/tests/test_advisor_api.py`, `backend/tests/test_officer_auth.py`, `backend/tests/test_officer_login_api.py`, `backend/tests/test_officer_channel_api.py`, `backend/tests/test_transcribe_api.py`, `backend/tests/test_digest_api.py`, and the extended `bot/tests/test_service.py`.
+Current suites, all green: 150 shared, 83 backend, 37 bot tests; the frontend typecheck and static export are clean. New coverage lands in `shared/tests/test_evidence.py`, `shared/tests/test_stt.py`, `shared/tests/test_model_rotation.py`, `shared/tests/test_adk_rotation.py`, `shared/tests/test_sync_cost.py`, `backend/tests/test_evidence_api.py`, `backend/tests/test_reports_api.py`, `backend/tests/test_advisor_api.py`, `backend/tests/test_officer_auth.py`, `backend/tests/test_officer_login_api.py`, `backend/tests/test_officer_channel_api.py`, `backend/tests/test_transcribe_api.py`, `backend/tests/test_digest_api.py`, and the extended `bot/tests/test_service.py`.
 
 ### 5.1 Deterministic test matrix
 

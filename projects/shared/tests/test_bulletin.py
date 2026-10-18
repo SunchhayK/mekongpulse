@@ -125,6 +125,35 @@ async def test_polish_failure_falls_back_to_template():
     assert "សារព្រមានទឹកជំនន់ពី MekongPulse" in kh
 
 
+class CountingTextClient:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def polish_khmer(self, text: str) -> str:
+        self.calls += 1
+        return f"{text}\n[polished]"
+
+
+async def test_polish_is_cached_for_identical_templates():
+    engine = AgriDecisionEngine()
+    client = CountingTextClient()
+    builder = BulletinBuilder(client)  # type: ignore[arg-type]
+
+    warning = engine.evaluate(RiskTier.WARNING, CropStage.RIPENING)
+    first, _ = await builder.build(
+        _commune(), _risk(RiskTier.WARNING), warning, _station(), _weather()
+    )
+    second, _ = await builder.build(
+        _commune(), _risk(RiskTier.WARNING), warning, _station(), _weather()
+    )
+    assert client.calls == 1  # second view reuses the polished text
+    assert second == first
+
+    danger = engine.evaluate(RiskTier.DANGER, CropStage.RIPENING)
+    await builder.build(_commune(), _risk(RiskTier.DANGER), danger, _station(), _weather())
+    assert client.calls == 2  # a changed briefing still calls the model
+
+
 def test_gemini_text_client_has_polish_contract():
     assert hasattr(GeminiTextClient, "polish_khmer")
     assert hasattr(GeminiTextClient, "generate")

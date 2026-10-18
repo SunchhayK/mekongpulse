@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Periodic telemetry sync + sentinel patrol for the labyrinth.ts deployment.
+# Periodic sentinel patrol for the labyrinth.ts deployment. The patrol runs a
+# full pipeline.sync() first, so it covers telemetry, weather and risk refresh.
 # Mirrors the two Cloud Scheduler jobs in deploy_gcp.sh.
 #
 # Install on the server (every 15 minutes):
@@ -17,7 +18,7 @@ set +a
 
 : "${ADMIN_TOKEN:?ADMIN_TOKEN missing from $ENV_FILE}"
 
-curl -fsS -m 180 -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -X POST "$API/api/v1/telemetry/sync" -o /dev/null && echo "sync ok    $(date -Is)"
+# /patrol/run performs a full pipeline.sync() before the sentinel pass, so a
+# separate /telemetry/sync here would duplicate every ingest and risk write.
 curl -fsS -m 180 -H "Authorization: Bearer $ADMIN_TOKEN" \
   -X POST "$API/api/v1/patrol/run" -o /dev/null && echo "patrol ok  $(date -Is)"

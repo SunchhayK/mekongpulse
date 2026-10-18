@@ -146,8 +146,10 @@ create_or_update_job() {
       --uri "$uri" --http-method POST \
       --headers "Authorization=Bearer ${ADMIN_TOKEN:-REPLACE_ME}"
 }
-create_or_update_job "mekongpulse-telemetry-sync" "${BACKEND_URL}/api/v1/telemetry/sync"
 create_or_update_job "mekongpulse-sentinel-patrol" "${BACKEND_URL}/api/v1/patrol/run"
+# /patrol/run performs the telemetry sync itself. If an older deployment still
+# has "mekongpulse-telemetry-sync", delete it so ingestion does not run twice.
+#   gcloud scheduler jobs delete mekongpulse-telemetry-sync --location "$REGION"
 
 echo
 echo "--- 9. register the Telegram webhook ---"
