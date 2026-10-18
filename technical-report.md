@@ -3,7 +3,7 @@ id: REPORT-TECH-002
 document_type: technical_report
 title: MekongPulse Technical Architecture and Engineering Report
 project_name: "MekongPulse"
-version: 1.3.0
+version: 1.4.0
 status: approved
 last_updated: 2026-10-18
 owners: ["@bytelab-lead", "@tech-lead", "@backend-lead"]
@@ -25,6 +25,10 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
   - Gemini integration via the Gemini API: `gemini-3.8-flash` for Khmer bulletin polish and the ADK advisor; `gemini-3.8-flash-tts` for spoken Khmer audio (24 kHz PCM WAV transcoded to MP3 with `lameenc`; no system ffmpeg in the container).
   - Telegram Bot webhook processing for GPS location pin queries and automated broadcast dispatches.
   - Rice-stage profiles: the bot asks once per commune subscription (Khmer inline options), stores the stage on the subscription, and reuses it for every alert and advisory answer. Escalations are dispatched per stage group, so each subscriber receives their stage's directive set; the public channel receives a single post per escalation (conservative ripening posture). `/crop` changes the stage later; the web console is read-only and never collects per-farmer data.
+  - Deterministic verification layer (`shared/src/mekong_shared/evidence.py`): provenance, QC over the stored station series (gaps, stuck, spike, range), two heuristic cross-checks (rainfall agreement, upstream coherence), a confidence label with stable reason ids, a 5-step bilingual evidence chain, and the MRC-style limitations notice — no LLM in any verdict.
+  - Ground-truth field reporting: `FieldReport` model + `field_reports` table (idempotent DDL), filed from the Telegram `/report` flow or `POST /api/v1/communes/{code}/reports` and listed for officials, the console, and the commune page.
+  - Officer assistant with actions (`POST /api/v1/advisor`): `get_commune_evidence`, `draft_status_update`, and `publish_to_channel` tools with tool-call tracing (`answer_detailed` → `AdvisorOutcome`); publishing is gated by the officer token (the admin token, sent as `X-Officer-Token`). A deterministic bilingual daily digest (`shared/src/mekong_shared/digest.py`) posts via admin-guarded `POST /api/v1/digest/send` or the bot's `/digest`.
+  - Bilingual Khmer-first web: next-intl `[locale]` routing (`km` default, `en` toggle) with static export (`trailingSlash`; Firebase `/` → `/km/index.html`), the public commune page at `/{locale}/commune?code=XXXXXX`, and `WEB_BASE_URL` driving the commune links appended to channel posts.
   - Firestore for time-series observation snapshots, commune risk profiles, and alert history in production; PostgreSQL (asyncpg) in development, staging, and self-hosted modes; Cloud Storage for audio caching.
 - **Deferred / out-of-scope**:
   - Custom physical river buoys or ultrasonic sensor hardware.
@@ -47,10 +51,11 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 | Time-Series & State Store    | google-cloud-firestore             | 2.19.x            | Real-time observation snapshots and commune risk index             |
 | Audio Object Storage         | google-cloud-storage               | 2.18.x            | Direct streaming upload and hosting for synthesized MP3 notes      |
 | Secret Management            | google-cloud-secret-manager        | 2.20.x            | Zero-leak credential injection for Telegram and Gemini keys        |
-| Task Scheduling              | Google Cloud Scheduler             | Managed           | Scheduled 15-minute HTTP cron triggers to `/api/v1/telemetry/sync` (mirrored by host cron when self-hosted) |
+| Task Scheduling              | Google Cloud Scheduler             | Managed           | Scheduled 15-minute HTTP cron triggers to `/api/v1/telemetry/sync`; when self-hosted, host cron mirrors them (`server_sync.sh`) and posts the daily digest (`server_digest.sh`, 07:00 Asia/Phnom_Penh) |
 | Serverless Hosting           | Google Cloud Run + Firebase Hosting | Gen 2 (Singapore) | Auto-scaling API containers (`asia-southeast1`) + static dashboard on Firebase Hosting |
 | Basin Map & Charts           | Leaflet, HTML5 canvas hydrographs | 1.9.x | Interactive commune risk map with switchable Esri Light Gray, OpenStreetMap and OpenTopoMap basemaps; no API key; overlays render over a neutral canvas when tiles are slow |
 | UI Framework                 | React 18 + hand-rolled CSS design tokens | 18.3.x      | Light "river lab" theme (navy `#213a63`, sky `#0ea5e9`), IBM Plex + Kantumruy Pro fonts; no external UI library |
+| Web i18n                     | next-intl                          | 3.26.5            | Khmer-first locale routing (`/km` default, `/en` toggle) across the console and the public commune page |
 | Design Tokens & UI Contract  | CSS custom properties + root `DESIGN.md` | v1.0         | Tokenized palette, type scale, and component states consumed across the console |
 | Test Harness                 | Pytest, pytest-asyncio, pytest-cov | 8.3.x             | Deterministic unit and Given-When-Then integration tests           |
 
@@ -82,6 +87,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 - **Secret Management**: Google Cloud Secret Manager manages credentials (`TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, `GCS_BUCKET_NAME`) in the Cloud Run path; development, staging, and self-hosted modes read the same names from the gitignored `.env` presets.
 - **Data Protection**: User GPS coordinates and subscriber identifiers are anonymized via SHA-256 salting before persistent logging in Firestore. TLS 1.3 encryption is enforced in transit.
 - **Access Control**: Public endpoints allow read-only telemetry queries; administrative broadcast triggers require IAM Bearer token authentication.
+- **Officer-Gated Actions**: the advisor endpoint authenticates the officer token in the `X-Officer-Token` header (the existing admin token); only an authorized turn may call `publish_to_channel`, and the digest trigger is admin-guarded like `/telemetry/sync`.
 
 ### 1.6 Observability and telemetry
 
@@ -100,6 +106,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
   }
   ```
 - **OpenTelemetry Tracing**: W3C `traceparent` context propagated across Cloud Run instances, background workers, and Gemini API calls.
+- **Verification and Officer Events**: structured events cover the new surfaces — `EVIDENCE_BUILT` (commune, tier, confidence), `FIELD_REPORT_ADDED`, `ADVISOR_ANSWERED` (tool-call count, authorization), and `DIGEST_SENT` / `DIGEST_SEND_FAILED`.
 - **Health Verification**: Exposes `/health` returning status `HEALTHY`, MRC station connectivity check, and Firestore connection state.
 
 ---
@@ -111,8 +118,8 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 ```mermaid
 flowchart TD
   subgraph ClientChannels["Client Presentation Channels"]
-    Telegram["Telegram Bot Client\n(Mobile Farmers & Commune Chiefs)"]
-    WebDashboard["Officials' Console (Next.js 14,\nstatic export on Firebase Hosting)\n(Commune Chiefs, District Committees,\nCooperatives, Public - read-only)"]
+    Telegram["Telegram Bot & Channel\n(Relay People, Commune Chiefs,\nExtension Advisors - broadcast/fan-out)"]
+    WebDashboard["Web (Next.js 14, static export\non Firebase Hosting): Officials' Console\n+ Officer Assistant + public commune page\n(Commune Chiefs, Extension Advisors,\nPublic - Khmer-first, read-only)"]
   end
 
   subgraph IngressPlatform["Container Runtime\n(Cloud Run target / self-hosted Docker)"]
@@ -160,17 +167,19 @@ flowchart TD
   ```text
   projects/
   ├── shared/src/mekong_shared/    # Domain engine: models, MRC + Open-Meteo clients, SpatialRiskClassifier,
-  │                                # AgriDecisionEngine, MekongSentinel, TTS, repositories (memory/Postgres/Firestore)
-  ├── backend/src/mekong_backend/  # FastAPI gateway: routers/, deps.py, problems.py, app.py, main.py
-  ├── bot/src/mekong_bot/          # Telegram service, dispatcher, PTB handlers, polling entrypoint
-  ├── frontend/src/app/            # Next.js 14 read-only officials console, client-rendered
-  └── scripts/                     # switch_env.sh, run_dev.sh, init_db.sh, deploy_gcp.sh, build_gazetteer.py
+  │                                # AgriDecisionEngine, MekongSentinel, TTS, evidence layer, digest,
+  │                                # advisor tools, repositories (memory/Postgres/Firestore)
+  ├── backend/src/mekong_backend/  # FastAPI gateway: routers/ (telemetry, communes + evidence + reports,
+  │                                # advisor + digest, ...), deps.py, problems.py, app.py, main.py
+  ├── bot/src/mekong_bot/          # Telegram service, dispatcher, PTB handlers (/report, /digest), polling entrypoint
+  ├── frontend/src/app/[locale]/   # Next.js 14 console (km default) + public commune page, static export
+  └── scripts/                     # switch_env.sh, run_dev.sh, init_db.sh, server_sync.sh, server_digest.sh, deploy_gcp.sh, build_gazetteer.py
   ```
 
 ### 2.3 Failure modes and resilience
 
 - **Adjacent station failover**: If Prek Kdam (`020102`) times out or returns HTTP 500, the ingestion service automatically falls back to Chaktomuk (`033401`) — or Koh Khel (`033402`) when Chaktomuk is also unavailable — applying an empirically derived hydraulic offset (median stage difference over the overlapping historical window, recomputed on every refresh; see `compute_hydraulic_offset`).
-- **Gemini audio synthesis timeout**: The Telegram webhook never blocks on audio: location/share replies are text-only risk cards, and voice notes are attached only on the alert push path, so the webhook always responds within Telegram's deadline. When synthesis is unavailable, alerts degrade to text (audio is best-effort; text is always delivered).
+- **Gemini audio synthesis timeout**: The Telegram webhook never blocks on audio: location/share replies are text-only risk cards, and voice notes are attached only on the alert push path, so the webhook always responds within Telegram's deadline. When synthesis is unavailable, alerts degrade to text (audio is best-effort; text is always delivered); TTS quota exhaustion (`TTSUnavailable`) follows the same path, including the commune page's text fallback.
 - **Cold cache resilience**: The spatial gazetteer is bundled in the container image (`data/commune_gazetteer_2025.json`, ~0.8 MB centroids + DEM elevations, plus `data/raw/mef_commune_boundaries.geojson`, ~6.3 MB polygons), requiring zero external network calls during cold start.
 
 ---
@@ -187,6 +196,7 @@ erDiagram
   HYDRO_STATION ||--o{ COMMUNE : influences
   COMMUNE ||--o{ COMMUNE_SUBSCRIPTION : subscribes
   COMMUNE ||--o{ SENTINEL_ALERT : triggers
+  COMMUNE ||--o{ FIELD_REPORT : reports
   SENTINEL_PATROL_RUN ||--o{ SENTINEL_ALERT : records
 
   HYDRO_STATION {
@@ -280,6 +290,16 @@ erDiagram
     int recipients_count
     timestamp dispatched_at
   }
+
+  FIELD_REPORT {
+    string id PK "uuid4 hex"
+    string commune_code FK
+    string status "water_reached|no_water|other"
+    text note
+    string reporter_label
+    string source "telegram|web"
+    timestamp reported_at
+  }
 ```
 
 ### 3.2 Indexing strategy and partition keys
@@ -287,6 +307,7 @@ erDiagram
 - `idx_observations_station_time`: Firestore composite index on `(station_id ASC, recorded_at DESC)` for 7-day hydrograph queries.
 - `idx_communes_risk_province`: Firestore composite index on `(current_risk_tier ASC, province_name ASC)` for regional flood map filtering.
 - `idx_alerts_commune_time`: Firestore composite index on `(commune_id ASC, dispatched_at DESC)` for alert deduplication and auditing.
+- `idx_field_reports_commune_time`: PostgreSQL index on `field_reports(commune_code, reported_at DESC)` for the per-commune report list. All `field_reports` DDL is `CREATE ... IF NOT EXISTS` and appended to the idempotent init script, so it is backward-compatible for the color still serving during a blue-green switch.
 - `spatial_rtree_communes`: In-memory R-Tree spatial index mapping latitude/longitude coordinates to MEF commune boundaries in <15ms.
 
 ---
@@ -459,6 +480,154 @@ paths:
                     recipients_count:
                       type: integer
 
+  /api/v1/communes/{commune_code}/evidence:
+    get:
+      summary: Deterministic evidence pack behind a commune's risk row
+      operationId: getCommuneEvidence
+      parameters:
+        - name: commune_code
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "080404"
+      responses:
+        "200":
+          description: Provenance payload — freshness, QC, cross-checks, confidence, evidence chain, limitations. No LLM, no audio.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidencePayload"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Commune has no station assignment or the station is not configured.
+
+  /api/v1/communes/{commune_code}/reports:
+    post:
+      summary: File a ground-truth field report for a commune
+      operationId: createFieldReport
+      parameters:
+        - name: commune_code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [water_reached, no_water, other]
+                note:
+                  type: string
+                  nullable: true
+                reporter_label:
+                  type: string
+                  nullable: true
+      responses:
+        "201":
+          description: Stored report (source "web"; the Telegram /report flow stores source "telegram").
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FieldReport"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    get:
+      summary: List a commune's field reports, newest first
+      operationId: listFieldReports
+      parameters:
+        - name: commune_code
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Field reports for the commune.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FieldReportList"
+
+  /api/v1/advisor:
+    post:
+      summary: One traced officer-assistant turn (draft then officer-gated publish)
+      operationId: advisorTurn
+      parameters:
+        - name: X-Officer-Token
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Officer token (the existing admin token) enabling the publish_to_channel action.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  maxLength: 2000
+                history:
+                  type: array
+                  maxItems: 6
+                  items:
+                    type: object
+                    required: [role, content]
+                    properties:
+                      role:
+                        type: string
+                        enum: [user, assistant]
+                      content:
+                        type: string
+                        maxLength: 4000
+                locale:
+                  type: string
+                  enum: [km, en]
+                  default: km
+                commune_code:
+                  type: string
+                  nullable: true
+      responses:
+        "200":
+          description: Traced reply with tool calls and action results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdvisorReply"
+        "503":
+          description: Advisor unavailable (no Gemini key configured).
+
+  /api/v1/digest/send:
+    post:
+      summary: Build and post the bilingual daily digest to the public channel
+      operationId: sendDigest
+      responses:
+        "200":
+          description: posted | unavailable (no Telegram config) | error (post failed) — cron-friendly, never a 5xx for a missing channel.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DigestSendResult"
+
   /api/v1/telegram/webhook:
     post:
       summary: Telegram Bot Webhook Endpoint
@@ -592,6 +761,194 @@ components:
         instance:
           type: string
 
+    EvidencePayload:
+      type: object
+      required: [commune_code, generated_at, risk_tier, confidence, station, qc, evidence_chain, limitations]
+      properties:
+        commune_code:
+          type: string
+          example: "080404"
+        commune_name_kh:
+          type: string
+        commune_name_en:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
+        risk_tier:
+          type: string
+          enum: [NORMAL, ADVISORY, WARNING, DANGER]
+        score:
+          type: integer
+        confidence:
+          type: string
+          enum: [high, medium, low]
+        confidence_reasons:
+          type: array
+          description: Stable reason ids (fresh_telemetry, stale_telemetry, qc_clean, qc_warning, qc_fail, near_station, far_from_station, sources_agree, source_disagree).
+          items:
+            type: string
+        station:
+          type: object
+          properties:
+            station_id:
+              type: string
+            name:
+              type: string
+            distance_km:
+              type: number
+              nullable: true
+            source:
+              type: string
+              enum: [live, fallback, cache]
+            recorded_at:
+              type: string
+              format: date-time
+            age_minutes:
+              type: integer
+            freshness:
+              type: string
+              enum: [fresh, recent, stale]
+            level_m:
+              type: number
+            rate_of_rise_m_per_hr:
+              type: number
+            alarm_stage_m:
+              type: number
+            flood_stage_m:
+              type: number
+        qc:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [pass, warn, fail, unavailable]
+            checks:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    enum: [gaps, stuck, spike, range]
+                  status:
+                    type: string
+                    enum: [pass, warn, fail, unavailable]
+                  detail:
+                    type: string
+                  detail_kh:
+                    type: string
+        cross_checks:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                enum: [rainfall_agreement, upstream_coherence]
+              status:
+                type: string
+                enum: [agree, disagree, unavailable]
+              detail:
+                type: string
+              detail_kh:
+                type: string
+        evidence_chain:
+          type: array
+          description: Five bilingual steps — reading, change, threshold, tier, directive.
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                enum: [reading, change, threshold, tier, directive]
+              text_en:
+                type: string
+              text_kh:
+                type: string
+        limitations:
+          type: object
+          properties:
+            text_en:
+              type: string
+            text_kh:
+              type: string
+
+    FieldReport:
+      type: object
+      required: [id, commune_code, status, source, reported_at]
+      properties:
+        id:
+          type: string
+        commune_code:
+          type: string
+        status:
+          type: string
+          enum: [water_reached, no_water, other]
+        note:
+          type: string
+          nullable: true
+        reporter_label:
+          type: string
+          nullable: true
+        source:
+          type: string
+          enum: [telegram, web]
+        reported_at:
+          type: string
+          format: date-time
+
+    FieldReportList:
+      type: object
+      properties:
+        reports:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldReport"
+
+    AdvisorReply:
+      type: object
+      required: [reply, tool_calls, actions]
+      properties:
+        reply:
+          type: string
+        tool_calls:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              status:
+                type: string
+              summary:
+                type: string
+        actions:
+          type: array
+          description: Results of act tools — telegram_post with status posted | denied | unavailable | error.
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              status:
+                type: string
+              detail:
+                type: string
+                nullable: true
+
+    DigestSendResult:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [posted, unavailable, error]
+        detail:
+          type: string
+          nullable: true
+        digest_preview:
+          type: string
+
   responses:
     NotFound:
       description: The requested resource was not found.
@@ -605,6 +962,8 @@ components:
 
 ## 5. Test Plans and Test Cases
 
+Current suites, all green: 126 shared, 45 backend, 37 bot tests; the frontend typecheck and static export are clean. New coverage lands in `shared/tests/test_evidence.py`, `backend/tests/test_evidence_api.py`, `backend/tests/test_reports_api.py`, `backend/tests/test_advisor_api.py`, `backend/tests/test_digest_api.py`, and the extended `bot/tests/test_service.py`.
+
 ### 5.1 Deterministic test matrix
 
 | Test ID       | Module / Unit          | Given                               | When                        | Then                                                 | Priority |
@@ -617,6 +976,10 @@ components:
 | `TEST-AGR-01` | `AgriDecisionEngine`   | Risk `WARNING`, Crop `RIPENING`     | `evaluate_directives()`     | Returns `EMERGENCY_HARVEST_ACCELERATION`             | P0       |
 | `TEST-AGR-02` | `AgriDecisionEngine`   | Rain `> 50mm`, Crop `VEGETATIVE`    | `evaluate_directives()`     | Returns `HOLD_CHEMICAL_FERTILIZER`                   | P0       |
 | `TEST-DIS-01` | `VernacularDispatcher` | Valid directive parameters          | `synthesize_khmer_voice()`  | Produces valid MP3 stream (duration 30–60s)          | P1       |
+| `TEST-EVD-01` | `evidence.build_evidence` | 7-day series missing 20–50% of hourly readings | `build_evidence()`  | QC block `warn`, confidence reason `qc_warning`; 5-step bilingual evidence chain; no LLM in the verdict | P1 |
+| `TEST-ADV-01` | `AdvisorTools.publish_to_channel` | Officer turn without the token, then with it | `publish_to_channel()` | `denied` without authorization; `posted` with the token and a wired publisher | P1 |
+| `TEST-RPT-01` | Field reports API      | Commune exists                      | `POST /api/v1/communes/{code}/reports` | 201 with source `web`; listed newest-first by `GET .../reports` | P1 |
+| `TEST-DGT-01` | `digest.build_digest`  | Persisted risk rows                 | `build_digest(repo, settings)` | Returns `(khmer, english)`; both carry tier counts and the dashboard link | P1 |
 
 Drift correction: the v1.1.0 draft expected `TEST-SPA-01` to resolve to `080402` ("Koh Thom"); the 2025 MEF boundary is the source of truth, the point is inside `081001` (Khpob, S'ang), and `080402` is Kampong Kong. See `shared/tests/test_spatial.py`.
 
@@ -676,7 +1039,7 @@ def test_fertilizer_hold_during_heavy_rain_forecast():
 
 ### ADR-0003: Telegram Bot & Voice Notes vs. Standalone Mobile App
 
-- **Status**: Accepted
+- **Status**: Superseded by ADR-0007 (delivery surface only; the spoken Khmer voice-note decision stands)
 - **Context**: Choosing the primary delivery mechanism for rural commune leaders and smallholder farmers.
 - **Decision**: Deliver via Telegram Bot (`@MekongPulseBot`) using interactive cards and spoken Khmer voice notes.
 - **Consequences**:
@@ -709,6 +1072,33 @@ def test_fertilizer_hold_during_heavy_rain_forecast():
 - **Consequences**:
   - _Positive_: Eliminates credential leaks, prevents container memory exhaustion from audio buffering, guarantees reliable 15-minute polling triggers, and keeps total codebase focused strictly on core domain logic (hydrology, agronomy, and spatial reasoners).
   - _Negative_: Introduces dependency on Google Cloud IAM and service APIs.
+
+### ADR-0007: Telegram as Relay/Broadcast Surface, Web-First Officer Tooling (supersedes ADR-0003)
+
+- **Status**: Accepted
+- **Context**: ADR-0003 chose Telegram as the primary delivery mechanism for farmers. Survey and channel evidence collected since (`research/farmer-reach.md`) shows Telegram in Cambodia is a broadcast institution whose audience skews to the relay layer — officials, agri-sector workers, students, family members — that Facebook/Messenger/TikTok carry the population reach, and that app-install and fact-checking competence is minimal. Treating the bot as a farmer interface overstates reach and risks designing for a user who never arrives.
+- **Decision**: Keep Telegram as a relay/broadcast surface (alerts, public channel posts, daily digest, `/report` ground truth, officer assistant) and make the web the officer/relay-facing home: the officials' console, the officer assistant panel, and the public voice-first commune page (`/{locale}/commune?code=…`) that a relay person opens and plays aloud. Direct farmer use of the bot remains supported but is not assumed anywhere in the design.
+- **Consequences**:
+  - _Positive_: Product claims match evidence; relay people get purpose-built tools (evidence checks, deterministic drafting, token-gated publishing); a shareable Khmer-first page reaches farmers through people they already trust.
+  - _Negative_: Reach depends on relay intermediaries and channel co-publication until a Facebook posting path lands (roadmap).
+
+### ADR-0008: Deterministic Verification Layer — No LLM in QC or Confidence
+
+- **Status**: Accepted
+- **Context**: The system must show how a warning was reached and how much to trust it. An LLM could phrase such an explanation, but its verdicts are not stable, reproducible, or auditable; trust is the product here.
+- **Decision**: All QC verdicts (gaps, stuck, spike, range), the heuristic cross-checks (rainfall agreement, upstream coherence), the confidence label with stable reason ids, the evidence-chain text, and the limitations notice are deterministic thresholds and templates (`shared/src/mekong_shared/evidence.py`; tunables pinned by tests). LLMs may paraphrase conversationally elsewhere, but never produce these verdicts.
+- **Consequences**:
+  - _Positive_: Payloads are reproducible, fast, cacheable, and testable; every claim traces to a documented threshold; checks that cannot run degrade to "unavailable" instead of fabricated verdicts.
+  - _Negative_: Explanations are template-shaped rather than conversational, and threshold changes need code review rather than prompt edits (intended).
+
+### ADR-0009: next-intl with Khmer-First Locale Routing
+
+- **Status**: Accepted
+- **Context**: The public surfaces must be Khmer-first for relay people and farmers, with English for a secondary audience (officials, partners, judges). Ad-hoc translation dictionaries had no routing, no locale-aware links, and no way to keep 316 message keys per locale in sync.
+- **Decision**: Adopt next-intl 3.26.5 with `[locale]` routing — `km` default, `en` toggle — on the static export (`trailingSlash`; the Firebase `/` rewrite resolves to `/km/index.html`). Commune links use `/{locale}/commune?code=…`, and channel posts always link the Khmer page.
+- **Consequences**:
+  - _Positive_: One framework owns routing, messages, and links; Khmer is the default everywhere; the same page serves both audiences.
+  - _Negative_: Static export constraints (no middleware locale negotiation; the root rewrite is explicit) and message-key discipline across two catalogs.
 
 ---
 
@@ -834,7 +1224,7 @@ DRY_RUN=0 ./projects/scripts/deploy_web_firebase.sh https://<backend-url>
 
 The deploy script reads `projects/.env.production` directly (it never mutates the active `.env` symlink), requires the secret values to be present in that preset, and prompts nothing. The web dashboard ships as a static export (`NEXT_OUTPUT=export`, built against the deployed backend URL) to the Firebase Hosting site named by `FIREBASE_PROJECT` — `https://ai-builder-cup-9f8cd.web.app`.
 
-The current public demo does not run on Cloud Run. The API container runs self-hosted on the `labyrinth.ts` host via `projects/docker-compose.server.yml` behind that host's Cloudflare tunnel (`https://mekongpulse-api.labyrinth.buzz`), with `projects/scripts/server_sync.sh` on a 15-minute host cron standing in for Cloud Scheduler, and the Firebase console republished against the tunnel URL. The Cloud Run path above remains the deployment target when GCP billing is enabled.
+The current public demo does not run on Cloud Run. The API container runs self-hosted on the `labyrinth.ts` host via `projects/docker-compose.server.yml` behind that host's Cloudflare tunnel (`https://mekongpulse-api.labyrinth.buzz`), with `projects/scripts/server_sync.sh` on a 15-minute host cron standing in for Cloud Scheduler and `projects/scripts/server_digest.sh` on a daily 07:00 (Asia/Phnom_Penh) host cron posting the bilingual digest, and the Firebase console republished against the tunnel URL. The Cloud Run path above remains the deployment target when GCP billing is enabled.
 
 ### 9.2 Health verification
 
@@ -883,11 +1273,11 @@ curl -sf https://mekongpulse-api.labyrinth.buzz/api/v1/health | grep '"status":"
 
 | Category                          | Pass / Fail |  Checked Items   | Violations Found | Notes                                                     |
 | --------------------------------- | :---------: | :--------------: | :--------------: | --------------------------------------------------------- |
-| Functional Requirements (PRD/SRS) |  **PASS**   |     10 / 10      |        0         | FR-01..09 verified with Gherkin; FR-10 by smoke check + demo checklist |
-| Technology Stack & Tooling        |  **PASS**   |  17 components   |        0         | Google ADK (2.12.0), gemini-3.8-flash + gemini-3.8-flash-tts, asyncpg verified |
+| Functional Requirements (PRD/SRS) |  **PASS**   |     15 / 15      |        0         | FR-01..15 verified with Gherkin; FR-10 and FR-15 by smoke check + demo checklist |
+| Technology Stack & Tooling        |  **PASS**   |  18 components   |        0         | Google ADK (2.12.0), gemini-3.8-flash + gemini-3.8-flash-tts, next-intl 3.26.5, asyncpg verified |
 | High-Risk Domain Buy vs Build     |  **PASS**   |    6 domains     |        0         | Secret Manager, GCS, Cloud Scheduler, STRtree enforced    |
-| API Contract Compliance (OpenAPI) |  **PASS**   |     7 routes     |        0         | Validated OpenAPI 3.1.0 schema with Subscriptions, Patrol & Alert Log|
-| Database Schema Alignment (ERD)   |  **PASS**   |    7 entities    |        0         | PostgreSQL & Firestore subscriptions, sentinel runs/alerts|
+| API Contract Compliance (OpenAPI) |  **PASS**   |     10 paths     |        0         | Validated OpenAPI 3.1.0 schema incl. Evidence, Field Reports, Advisor & Digest |
+| Database Schema Alignment (ERD)   |  **PASS**   |    8 entities    |        0         | PostgreSQL & Firestore subscriptions, sentinel runs/alerts, field reports |
 | Design Tokens & UI Contract       |  **PASS**   | brand token set  |        0         | Light theme tokens in `globals.css`; no external UI library |
 | System Invariants Compliance      |  **PASS**   |   4 invariants   |        0         | Grounded telemetry and zero-hardware invariant confirmed  |
 | Scope Creep & Phantom Code        |  **PASS**   | 0 unspec'd items |        0         | Heavy 2D numerical hydrodynamic simulation deferred       |
@@ -905,7 +1295,12 @@ curl -sf https://mekongpulse-api.labyrinth.buzz/api/v1/health | grep '"status":"
 | FR-07           | PRD / SRS     | `MekongSentinel Background`     | `shared/src/mekong_shared/sentinel.py`, backend `patrol.py` | `shared/tests/test_sentinel.py`, `backend/tests/test_patrol_api.py` | **PASS** |
 | FR-08           | PRD / SRS     | `MekongAdvisor ReAct Agent`     | `shared/src/mekong_shared/adk_agent.py`, `mekong_bot/`      | `shared/tests/test_advisor.py`                           | **PASS** |
 | FR-09           | PRD / SRS     | `Commune Subscriptions Store`   | `backend/src/mekong_backend/routers/subscriptions.py`       | `backend/tests/test_subscriptions_api.py`                | **PASS** |
-| FR-10           | PRD           | Read-only officials console     | `frontend/src/app/page.tsx`, `components/BasinMap.tsx`, `RiskList.tsx`, `StatusSummary.tsx`, `AlertLog.tsx`, `lib/csv.ts`, `VoicePlayer.tsx` | Firebase smoke check (`curl` grep) + demo checklist      | **PASS** |
+| FR-10           | PRD           | Read-only officials console     | `frontend/src/app/[locale]/page.tsx`, `components/BasinMap.tsx`, `RiskList.tsx`, `StatusSummary.tsx`, `AlertLog.tsx`, `OfficerAssistant.tsx`, `lib/csv.ts`, `VoicePlayer.tsx` | Firebase smoke check (`curl` grep) + demo checklist      | **PASS** |
+| FR-11           | PRD           | `evidence.build_evidence`       | `shared/src/mekong_shared/evidence.py`                      | `shared/tests/test_evidence.py`, `backend/tests/test_evidence_api.py` | **PASS** |
+| FR-12           | PRD           | Field reports POST/GET          | `backend/src/mekong_backend/routers/communes.py`, `shared/src/mekong_shared/models.py` (`FieldReport`), `bot/src/mekong_bot/service.py` (`/report`) | `backend/tests/test_reports_api.py`, `bot/tests/test_service.py` | **PASS** |
+| FR-13           | PRD           | `POST /api/v1/advisor`          | `shared/src/mekong_shared/adk_tools.py`, `adk_agent.py` (`answer_detailed`), `backend/src/mekong_backend/routers/officer.py` | `shared/tests/test_advisor.py`, `backend/tests/test_advisor_api.py` | **PASS** |
+| FR-14           | PRD           | `digest.build_digest`           | `shared/src/mekong_shared/digest.py`, `backend/src/mekong_backend/routers/officer.py` (`/digest/send`) | `backend/tests/test_digest_api.py`, `bot/tests/test_service.py` | **PASS** |
+| FR-15           | PRD           | Khmer-first web + commune page  | `frontend/src/i18n/`, `src/app/[locale]/commune/page.tsx`, `components/EvidencePanel.tsx`, `FieldReportsList.tsx` | Frontend typecheck + static export + Firebase smoke check | **PASS** |
 | INV-01          | SRS           | Grounded telemetry verification | `shared/src/mekong_shared/mrc.py`                           | `shared/tests/test_mrc.py`                               | **PASS** |
 | INV-02          | SRS           | Fail-safe station fallback      | `shared/src/mekong_shared/mrc.py`, `pipeline.py`            | `shared/tests/test_failover.py`                          | **PASS** |
 
