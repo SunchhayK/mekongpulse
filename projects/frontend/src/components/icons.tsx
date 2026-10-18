@@ -164,3 +164,31 @@ export function SendIcon() {
     </svg>
   );
 }
+
+/** Officer assistant: speech bubble with text lines. */
+export function AssistantIcon() {
+  return (
+    <svg {...base}>
+      <path d="M20.5 11.5a7 7 0 0 1-7 7H10l-4.5 3.2V11.5a7 7 0 0 1 7-7h1a7 7 0 0 1 7 7z" />
+      <path d="M9 9.5h6M9 12.5h3.5" />
+    </svg>
+  );
+}
+
+export function MicIcon() {
+  return (
+    <svg {...base} width={18} height={18}>
+      <rect x="9" y="3" width="6" height="10.5" rx="3" />
+      <path d="M6 11.5a6 6 0 0 0 12 0" />
+      <path d="M12 17.5V21M9 21h6" />
+    </svg>
+  );
+}
+
+export function StopIcon() {
+  return (
+    <svg {...base} width={18} height={18} fill="currentColor" stroke="none">
+      <rect x="7" y="7" width="10" height="10" rx="2" />
+    </svg>
+  );
+}

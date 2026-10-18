@@ -134,3 +134,42 @@ async def test_officer_token_gates_actions_and_wires_publisher(
         assert posted == {"message_id": 7}
 
     assert telegram_app.bot.messages == [("chan-9", "សារសាធារណៈ")]
+
+
+async def test_session_bearer_authorizes_advisor(
+    repo, settings, make_pipeline, make_app, monkeypatch
+):
+    """Sign-in flow: passcode -> session -> advisor publishing authorized."""
+    locked = settings.model_copy(
+        update={"admin_token": "tok-123", "officer_passcode": "pass-9"}
+    )
+    app = make_app(repository=repo, pipeline=make_pipeline(repo), settings_override=locked)
+    captured: dict = {}
+
+    async def fake_answer_detailed(tools, history, user_text, settings, *, llm=None):
+        captured["authorized"] = tools._ctx.authorized
+        return AdvisorOutcome(text="ok", calls=[])
+
+    monkeypatch.setattr(officer, "answer_detailed", fake_answer_detailed)
+
+    async with running_client(app) as client:
+        await client.post(
+            "/api/v1/advisor",
+            json={"message": "publish please"},
+            headers={"Authorization": "Bearer v1.123.bogus"},
+        )
+        assert captured["authorized"] is False
+
+        login = await client.post("/api/v1/officer/login", json={"passcode": "pass-9"})
+        assert login.status_code == 200
+        session = login.json()["session"]
+
+        response = await client.post(
+            "/api/v1/advisor",
+            json={"message": "publish please"},
+            headers={"Authorization": f"Bearer {session}"},
+        )
+
+    assert response.status_code == 200
+    assert captured["authorized"] is True
+

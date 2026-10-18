@@ -7,14 +7,14 @@ import { AssessmentDialog } from "@/components/AssessmentDialog";
 import { BasinMap } from "@/components/BasinMap";
 import { CommuneSearch } from "@/components/CommuneSearch";
 import { HydrographChart, type HydroObservation } from "@/components/HydrographChart";
-import { AlertIcon, BrandMark, InfoIcon, MapIcon, RefreshIcon, WaveIcon } from "@/components/icons";
+import { AlertIcon, AssistantIcon, BrandMark, InfoIcon, MapIcon, RefreshIcon, WaveIcon } from "@/components/icons";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { OfficerAssistant } from "@/components/OfficerAssistant";
 import { RiskBadge } from "@/components/RiskBadge";
 import { RiskList } from "@/components/RiskList";
 import { StationMetricCard } from "@/components/StationMetricCard";
 import { StatusSummary } from "@/components/StatusSummary";
 import { VoicePlayer } from "@/components/VoicePlayer";
+import { Link } from "@/i18n/navigation";
 import {
   api,
   ApiError,
@@ -188,6 +188,19 @@ export default function DashboardPage() {
           </>
         )}
         <LanguageSwitcher />
+        <nav className="header-nav" aria-label={t("Header.assistantNavAria")}>
+          <Link
+            className="header-nav-link label-medium"
+            href={{
+              pathname: "/assistant",
+              query: selectedCommuneCode ? { code: selectedCommuneCode } : undefined,
+            }}
+            aria-label={t("Header.assistant")}
+          >
+            <AssistantIcon />
+            <span className="header-nav-label">{t("Header.assistant")}</span>
+          </Link>
+        </nav>
         <button
           type="button"
           className="btn btn--filled btn--compact label-medium"
@@ -275,6 +288,27 @@ export default function DashboardPage() {
 
       <main className="layout">
         <aside className="rail" aria-label={t("Aria.rail")}>
+          <section className="card officer-cta" aria-label={t("Officer.title")}>
+            <span className="officer-cta-icon" aria-hidden="true">
+              <AssistantIcon />
+            </span>
+            <h2 className="title-medium" style={{ margin: 0 }}>
+              {t("Officer.title")}
+            </h2>
+            <p className="body-small muted" style={{ margin: 0 }}>
+              {t("Officer.subtitle")}
+            </p>
+            <Link
+              className="btn btn--filled label-medium officer-cta-btn"
+              href={{
+                pathname: "/assistant",
+                query: selectedCommuneCode ? { code: selectedCommuneCode } : undefined,
+              }}
+            >
+              <AssistantIcon /> {t("Officer.ctaAction")}
+            </Link>
+          </section>
+
           <CommuneSearch onPick={setSelectedCommuneCode} />
 
           <section className="card" aria-label={t("Aria.highestRiskSection")}>
@@ -316,8 +350,6 @@ export default function DashboardPage() {
               </ul>
             )}
           </section>
-
-          <OfficerAssistant communeCode={selectedCommuneCode} />
         </aside>
 
         <div className="main-column">
@@ -526,6 +558,12 @@ export default function DashboardPage() {
           </span>
           <span className="label-small">{t("BottomNav.risk")}</span>
         </a>
+        <Link href={{ pathname: "/assistant", query: selectedCommuneCode ? { code: selectedCommuneCode } : undefined }}>
+          <span className="icon" aria-hidden="true">
+            <AssistantIcon />
+          </span>
+          <span className="label-small">{t("BottomNav.assistant")}</span>
+        </Link>
       </nav>
 
       <AssessmentDialog

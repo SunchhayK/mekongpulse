@@ -2,6 +2,21 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.7.0] — 2026-10-18
+
+The officer assistant becomes a first-class page with passcode sign-in and Khmer voice input — no more pasting the admin token.
+
+### Added
+
+- `shared` — 0.5.0: `stt.py` — `transcribe_audio(settings, audio, mime_type, locale_hint)` sends a recorded clip to `gemini-3.8-flash` audio understanding and returns the transcript; no key, provider failure, or an empty result raises `TranscriptionUnavailable` instead of leaking a 500. Config gains `OFFICER_PASSCODE` (falls back to `ADMIN_TOKEN`) and `OFFICER_SESSION_TTL_HOURS` (default 12).
+- `backend` — 0.4.0: `POST /api/v1/officer/login` exchanges the officer passcode for an HMAC-SHA256-signed, expiring session (`v1.<exp>.<sig>`); wrong passcode 401, sign-in unconfigured 503, five failed attempts per IP per minute 429, all comparisons constant-time. `POST /api/v1/advisor/transcribe` (`{audio_base64, mime_type, locale_hint}` → `{text}`; 413 above 4 MB decoded, 503 when transcription is unavailable). The advisor authorizes publishing with `Authorization: Bearer <session>`; the legacy `X-Officer-Token` admin header remains for scripts.
+- `frontend` — 0.6.0: dedicated assistant page `/{locale}/assistant` — full-page chat with a focus-commune chip, collapsible tool trace, and action statuses, linked from the header nav, the bottom nav, and a dashboard CTA card. Sign-in card replaces the raw token field: passcode → stored session with client-side expiry and sign-out. Khmer-capable voice input (MediaRecorder → server STT, 60 s cap, permission/size/unavailable handling, cancel discards without a request). 340 message keys per locale.
+
+### Changed
+
+- `frontend` — the sidebar officer panel is gone; the assistant now has its own surface instead of sitting at the edge of the dashboard.
+- `docs` — product and technical reports 1.5.0: FR-13 and AC-11 cover session sign-in, new AC-14 covers spoken Khmer input; the security section documents the session bearer token and the retained script header; ADR-0010 records the passcode → session and server-side STT decisions; test counts refreshed (135 shared, 73 backend, 37 bot).
+
 ## [0.6.1] — 2026-10-18
 
 The advisor degrades gracefully when the LLM provider fails (Gemini free-tier 429 exhausted).

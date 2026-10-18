@@ -52,6 +52,8 @@ class Settings(BaseSettings):
 
     # --- gateway / security ----------------------------------------------
     admin_token: str | None = None  # Bearer token for scheduler/admin endpoints
+    officer_passcode: str | None = None  # browser sign-in passcode (env OFFICER_PASSCODE)
+    officer_session_ttl_hours: int = 12  # signed officer session lifetime
     cors_origins: str = "*"  # comma-separated; restricted in production
     log_salt: str = "mekongpulse-dev-salt"  # SHA-256 salt for GPS / id anonymization
     public_base_url: str = "http://localhost:8080"  # audio URLs etc.

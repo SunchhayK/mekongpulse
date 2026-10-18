@@ -17,7 +17,9 @@
       "STALE": "stale",
       "OFFLINE": "offline",
       "UNKNOWN": "unknown"
-    }
+    },
+    "assistant": "Assistant",
+    "assistantNavAria": "Officer assistant"
   },
   "Hero": {
     "bandAria": "Basin status",
@@ -344,9 +346,9 @@
   "Officer": {
     "title": "Officer assistant",
     "subtitle": "Ask about risk, draft updates, publish to the channel",
+    "back": "Back to dashboard",
+    "ctaAction": "Open the assistant",
     "context": "focused on commune {code}",
-    "open": "Open",
-    "close": "Close",
     "empty": "Ask about current risk or request a draft update in Khmer.",
     "you": "You",
     "assistant": "Assistant",
@@ -354,7 +356,41 @@
     "inputPlaceholder": "Ask the officer assistant…",
     "inputAria": "Message to the officer assistant",
     "sendAria": "Send message",
-    "draftOnly": "Draft-only mode — add the officer token below to enable publishing to the channel.",
+    "conversationAria": "Conversation with the officer assistant",
+    "draftOnly": "Draft-only mode — sign in as an officer to publish to the channel.",
+    "signedIn": "Officer · expires {time}",
+    "signOut": "Sign out",
+    "signIn": {
+      "title": "Officer sign in",
+      "passcode": "Officer passcode",
+      "placeholder": "Enter passcode…",
+      "submit": "Sign in",
+      "working": "Signing in…",
+      "errors": {
+        "invalid": "Wrong passcode. Try again.",
+        "unavailable": "Officer sign-in is not configured on this server yet.",
+        "tooMany": "Too many attempts. Wait a minute, then try again."
+      }
+    },
+    "focusAdd": "Focus a commune",
+    "focusClear": "Clear the focused commune",
+    "focusCancel": "Cancel",
+    "voice": {
+      "start": "Record a voice message",
+      "stop": "Stop",
+      "cancel": "Cancel",
+      "recording": "Recording…",
+      "limit": "stops at 60 s",
+      "transcribing": "Transcribing…",
+      "errors": {
+        "denied": "Microphone access was denied. Allow the microphone in your browser settings, or type your message instead.",
+        "unsupported": "This browser could not start the recorder. Type your message instead.",
+        "tooLarge": "That recording was too long to transcribe. Keep it under a minute.",
+        "unavailable": "Voice transcription is unavailable right now. Type your message instead.",
+        "network": "The recording could not be sent. Check your network and try again.",
+        "failed": "That recording could not be transcribed. Try again or type your message."
+      }
+    },
     "toolsUsed": "Tools used · {count}",
     "toolStatuses": {
       "ok": "ok",
@@ -384,16 +420,11 @@
       "draft": "Draft a status update",
       "post": "Post it to the channel"
     },
-    "tokenLabel": "Officer token",
-    "tokenPlaceholder": "Paste the officer token…",
-    "tokenSet": "set",
-    "tokenUnset": "not set",
-    "tokenClear": "Clear",
-    "tokenHint": "Stored in this browser only, and sent with the X-Officer-Token header.",
     "errors": {
       "unavailable": "The assistant is unavailable right now. Try again shortly.",
       "server": "The assistant gateway hit an error",
-      "network": "Connection failed. Check your network and try again."
+      "network": "Connection failed. Check your network and try again.",
+      "sessionExpired": "Your officer session has ended. Sign in again to publish to the channel."
     }
   },
   "Footer": {
@@ -403,7 +434,8 @@
     "aria": "Primary",
     "river": "River",
     "map": "Map",
-    "risk": "Risk"
+    "risk": "Risk",
+    "assistant": "Assistant"
   },
   "LanguageSwitcher": {
     "aria": "Language",

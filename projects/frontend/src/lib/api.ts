@@ -211,6 +211,18 @@ export interface AdvisorHistoryTurn {
   content: string;
 }
 
+/** Signed-in officer session (POST /api/v1/officer/login). */
+export interface OfficerSession {
+  session: string;
+  expires_at: string;
+}
+
+export interface TranscribeRequest {
+  audio_base64: string;
+  mime_type: string;
+  locale_hint: "km" | "en";
+}
+
 export interface AdvisorToolCall {
   name: string;
   status: string;
@@ -303,11 +315,23 @@ export const api = {
     request<EvidencePayload>(`/api/v1/communes/${communeCode}/evidence`),
   reports: (communeCode: string, limit = 20) =>
     request<FieldReportList>(`/api/v1/communes/${communeCode}/reports?limit=${limit}`),
-  advisor: (body: AdvisorRequest, officerToken?: string) =>
+  advisor: (body: AdvisorRequest, session?: string) =>
     request<AdvisorReply>("/api/v1/advisor", {
       method: "POST",
       body: JSON.stringify(body),
-      // The officer token gates publishing; absent, the advisor stays draft-only.
-      ...(officerToken ? { headers: { "x-officer-token": officerToken } } : {}),
+      // Publishing actions require a signed-in officer session; asked
+      // read-only, the advisor answers without one.
+      ...(session ? { headers: { authorization: `Bearer ${session}` } } : {}),
+    }),
+  officerLogin: (passcode: string) =>
+    request<OfficerSession>("/api/v1/officer/login", {
+      method: "POST",
+      body: JSON.stringify({ passcode }),
+    }),
+  // Server-side Khmer ASR: browser speech APIs do not cover Khmer.
+  transcribe: (body: TranscribeRequest) =>
+    request<{ text: string }>("/api/v1/advisor/transcribe", {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
 };

@@ -3,7 +3,7 @@ id: REPORT-TECH-002
 document_type: technical_report
 title: MekongPulse Technical Architecture and Engineering Report
 project_name: "MekongPulse"
-version: 1.4.0
+version: 1.5.0
 status: approved
 last_updated: 2026-10-18
 owners: ["@bytelab-lead", "@tech-lead", "@backend-lead"]
@@ -27,8 +27,9 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
   - Rice-stage profiles: the bot asks once per commune subscription (Khmer inline options), stores the stage on the subscription, and reuses it for every alert and advisory answer. Escalations are dispatched per stage group, so each subscriber receives their stage's directive set; the public channel receives a single post per escalation (conservative ripening posture). `/crop` changes the stage later; the web console is read-only and never collects per-farmer data.
   - Deterministic verification layer (`shared/src/mekong_shared/evidence.py`): provenance, QC over the stored station series (gaps, stuck, spike, range), two heuristic cross-checks (rainfall agreement, upstream coherence), a confidence label with stable reason ids, a 5-step bilingual evidence chain, and the MRC-style limitations notice — no LLM in any verdict.
   - Ground-truth field reporting: `FieldReport` model + `field_reports` table (idempotent DDL), filed from the Telegram `/report` flow or `POST /api/v1/communes/{code}/reports` and listed for officials, the console, and the commune page.
-  - Officer assistant with actions (`POST /api/v1/advisor`): `get_commune_evidence`, `draft_status_update`, and `publish_to_channel` tools with tool-call tracing (`answer_detailed` → `AdvisorOutcome`); publishing is gated by the officer token (the admin token, sent as `X-Officer-Token`). A deterministic bilingual daily digest (`shared/src/mekong_shared/digest.py`) posts via admin-guarded `POST /api/v1/digest/send` or the bot's `/digest`.
-  - Bilingual Khmer-first web: next-intl `[locale]` routing (`km` default, `en` toggle) with static export (`trailingSlash`; Firebase `/` → `/km/index.html`), the public commune page at `/{locale}/commune?code=XXXXXX`, and `WEB_BASE_URL` driving the commune links appended to channel posts.
+  - Officer assistant with actions (`POST /api/v1/advisor`) on a dedicated page (`/{locale}/assistant`) and in Telegram: `get_commune_evidence`, `draft_status_update`, and `publish_to_channel` tools with tool-call tracing (`answer_detailed` → `AdvisorOutcome`); publishing is gated by an officer session issued by `POST /api/v1/officer/login` (passcode → HMAC-signed, 12 h token; the admin token never reaches the browser, while the legacy `X-Officer-Token` header remains for scripts). A deterministic bilingual daily digest (`shared/src/mekong_shared/digest.py`) posts via admin-guarded `POST /api/v1/digest/send` or the bot's `/digest`.
+  - Spoken Khmer assistant input: `POST /api/v1/advisor/transcribe` forwards a recorded clip (≤ 4 MB, ≤ 60 s) to `gemini-3.8-flash` audio understanding and returns text; provider or quota failures raise `TranscriptionUnavailable` → 503 problem, never a 500.
+  - Bilingual Khmer-first web: next-intl `[locale]` routing (`km` default, `en` toggle) with static export (`trailingSlash`; Firebase `/` → `/km/index.html`), the dedicated officer assistant page at `/{locale}/assistant`, the public commune page at `/{locale}/commune?code=XXXXXX`, and `WEB_BASE_URL` driving the commune links appended to channel posts.
   - Firestore for time-series observation snapshots, commune risk profiles, and alert history in production; PostgreSQL (asyncpg) in development, staging, and self-hosted modes; Cloud Storage for audio caching.
 - **Deferred / out-of-scope**:
   - Custom physical river buoys or ultrasonic sensor hardware.
@@ -55,7 +56,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 | Serverless Hosting           | Google Cloud Run + Firebase Hosting | Gen 2 (Singapore) | Auto-scaling API containers (`asia-southeast1`) + static dashboard on Firebase Hosting |
 | Basin Map & Charts           | Leaflet, HTML5 canvas hydrographs | 1.9.x | Interactive commune risk map with switchable Esri Light Gray, OpenStreetMap and OpenTopoMap basemaps; no API key; overlays render over a neutral canvas when tiles are slow |
 | UI Framework                 | React 18 + hand-rolled CSS design tokens | 18.3.x      | Light "river lab" theme (navy `#213a63`, sky `#0ea5e9`), IBM Plex + Kantumruy Pro fonts; no external UI library |
-| Web i18n                     | next-intl                          | 3.26.5            | Khmer-first locale routing (`/km` default, `/en` toggle) across the console and the public commune page |
+| Web i18n                     | next-intl                          | 3.26.5            | Khmer-first locale routing (`/km` default, `/en` toggle) across the console, the officer assistant page, and the public commune page |
 | Design Tokens & UI Contract  | CSS custom properties + root `DESIGN.md` | v1.0         | Tokenized palette, type scale, and component states consumed across the console |
 | Test Harness                 | Pytest, pytest-asyncio, pytest-cov | 8.3.x             | Deterministic unit and Given-When-Then integration tests           |
 
@@ -87,7 +88,8 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 - **Secret Management**: Google Cloud Secret Manager manages credentials (`TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, `GCS_BUCKET_NAME`) in the Cloud Run path; development, staging, and self-hosted modes read the same names from the gitignored `.env` presets.
 - **Data Protection**: User GPS coordinates and subscriber identifiers are anonymized via SHA-256 salting before persistent logging in Firestore. TLS 1.3 encryption is enforced in transit.
 - **Access Control**: Public endpoints allow read-only telemetry queries; administrative broadcast triggers require IAM Bearer token authentication.
-- **Officer-Gated Actions**: the advisor endpoint authenticates the officer token in the `X-Officer-Token` header (the existing admin token); only an authorized turn may call `publish_to_channel`, and the digest trigger is admin-guarded like `/telemetry/sync`.
+- **Officer Sign-In and Sessions**: `POST /api/v1/officer/login` compares the submitted passcode (`OFFICER_PASSCODE`, falling back to `ADMIN_TOKEN`) in constant time and issues an HMAC-SHA256-signed, expiring session (`v1.<exp>.<sig>`, TTL `OFFICER_SESSION_TTL_HOURS`, default 12 h); five failed attempts per IP per minute return 429. The advisor authorizes publishing from `Authorization: Bearer <session>` or, for scripts, the legacy `X-Officer-Token` admin header; the digest trigger remains admin-guarded like `/telemetry/sync`.
+- **Voice Input Boundary**: the transcribe endpoint accepts up to 4 MB of audio, forwards it to Gemini for transcription, and never persists the clip; provider failures degrade to a 503 problem.
 
 ### 1.6 Observability and telemetry
 
@@ -119,7 +121,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 flowchart TD
   subgraph ClientChannels["Client Presentation Channels"]
     Telegram["Telegram Bot & Channel\n(Relay People, Commune Chiefs,\nExtension Advisors - broadcast/fan-out)"]
-    WebDashboard["Web (Next.js 14, static export\non Firebase Hosting): Officials' Console\n+ Officer Assistant + public commune page\n(Commune Chiefs, Extension Advisors,\nPublic - Khmer-first, read-only)"]
+    WebDashboard["Web (Next.js 14, static export\non Firebase Hosting): Officials' Console\n+ Assistant Page + public commune page\n(Commune Chiefs, Extension Advisors,\nPublic - Khmer-first, read-only)"]
   end
 
   subgraph IngressPlatform["Container Runtime\n(Cloud Run target / self-hosted Docker)"]
@@ -172,7 +174,7 @@ flowchart TD
   ├── backend/src/mekong_backend/  # FastAPI gateway: routers/ (telemetry, communes + evidence + reports,
   │                                # advisor + digest, ...), deps.py, problems.py, app.py, main.py
   ├── bot/src/mekong_bot/          # Telegram service, dispatcher, PTB handlers (/report, /digest), polling entrypoint
-  ├── frontend/src/app/[locale]/   # Next.js 14 console (km default) + public commune page, static export
+  ├── frontend/src/app/[locale]/   # Next.js 14 console (km default) + assistant page + commune page, static export
   └── scripts/                     # switch_env.sh, run_dev.sh, init_db.sh, server_sync.sh, server_digest.sh, deploy_gcp.sh, build_gazetteer.py
   ```
 
@@ -564,17 +566,94 @@ paths:
               schema:
                 $ref: "#/components/schemas/FieldReportList"
 
+  /api/v1/officer/login:
+    post:
+      summary: Exchange the officer passcode for a short-lived signed session
+      operationId: officerLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [passcode]
+              properties:
+                passcode:
+                  type: string
+      responses:
+        "200":
+          description: Signed session and expiry.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session, expires_at]
+                properties:
+                  session:
+                    type: string
+                  expires_at:
+                    type: string
+                    format: date-time
+        "401":
+          description: Invalid passcode.
+        "429":
+          description: Too many failed attempts; retry later.
+        "503":
+          description: Officer sign-in is not configured.
+
+  /api/v1/advisor/transcribe:
+    post:
+      summary: Transcribe a recorded voice clip to text (server-side Khmer ASR)
+      operationId: advisorTranscribe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [audio_base64, mime_type]
+              properties:
+                audio_base64:
+                  type: string
+                  maxLength: 6000000
+                mime_type:
+                  type: string
+                locale_hint:
+                  type: string
+                  enum: [km, en]
+                  nullable: true
+      responses:
+        "200":
+          description: Transcript.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  text:
+                    type: string
+        "413":
+          description: Audio exceeds 4 MB.
+        "503":
+          description: Transcription unavailable.
+
   /api/v1/advisor:
     post:
       summary: One traced officer-assistant turn (draft then officer-gated publish)
       operationId: advisorTurn
       parameters:
+        - name: Authorization
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Bearer officer session from /api/v1/officer/login; enables the publish_to_channel action.
         - name: X-Officer-Token
           in: header
           required: false
           schema:
             type: string
-          description: Officer token (the existing admin token) enabling the publish_to_channel action.
+          description: Legacy/script officer token (the admin token); still accepted for publishing.
       requestBody:
         required: true
         content:
@@ -962,7 +1041,7 @@ components:
 
 ## 5. Test Plans and Test Cases
 
-Current suites, all green: 126 shared, 45 backend, 37 bot tests; the frontend typecheck and static export are clean. New coverage lands in `shared/tests/test_evidence.py`, `backend/tests/test_evidence_api.py`, `backend/tests/test_reports_api.py`, `backend/tests/test_advisor_api.py`, `backend/tests/test_digest_api.py`, and the extended `bot/tests/test_service.py`.
+Current suites, all green: 135 shared, 73 backend, 37 bot tests; the frontend typecheck and static export are clean. New coverage lands in `shared/tests/test_evidence.py`, `shared/tests/test_stt.py`, `backend/tests/test_evidence_api.py`, `backend/tests/test_reports_api.py`, `backend/tests/test_advisor_api.py`, `backend/tests/test_officer_auth.py`, `backend/tests/test_officer_login_api.py`, `backend/tests/test_transcribe_api.py`, `backend/tests/test_digest_api.py`, and the extended `bot/tests/test_service.py`.
 
 ### 5.1 Deterministic test matrix
 
@@ -1077,7 +1156,7 @@ def test_fertilizer_hold_during_heavy_rain_forecast():
 
 - **Status**: Accepted
 - **Context**: ADR-0003 chose Telegram as the primary delivery mechanism for farmers. Survey and channel evidence collected since (`research/farmer-reach.md`) shows Telegram in Cambodia is a broadcast institution whose audience skews to the relay layer — officials, agri-sector workers, students, family members — that Facebook/Messenger/TikTok carry the population reach, and that app-install and fact-checking competence is minimal. Treating the bot as a farmer interface overstates reach and risks designing for a user who never arrives.
-- **Decision**: Keep Telegram as a relay/broadcast surface (alerts, public channel posts, daily digest, `/report` ground truth, officer assistant) and make the web the officer/relay-facing home: the officials' console, the officer assistant panel, and the public voice-first commune page (`/{locale}/commune?code=…`) that a relay person opens and plays aloud. Direct farmer use of the bot remains supported but is not assumed anywhere in the design.
+- **Decision**: Keep Telegram as a relay/broadcast surface (alerts, public channel posts, daily digest, `/report` ground truth, officer assistant) and make the web the officer/relay-facing home: the officials' console, the dedicated officer assistant page, and the public voice-first commune page (`/{locale}/commune?code=…`) that a relay person opens and plays aloud. Direct farmer use of the bot remains supported but is not assumed anywhere in the design.
 - **Consequences**:
   - _Positive_: Product claims match evidence; relay people get purpose-built tools (evidence checks, deterministic drafting, token-gated publishing); a shareable Khmer-first page reaches farmers through people they already trust.
   - _Negative_: Reach depends on relay intermediaries and channel co-publication until a Facebook posting path lands (roadmap).
@@ -1094,11 +1173,20 @@ def test_fertilizer_hold_during_heavy_rain_forecast():
 ### ADR-0009: next-intl with Khmer-First Locale Routing
 
 - **Status**: Accepted
-- **Context**: The public surfaces must be Khmer-first for relay people and farmers, with English for a secondary audience (officials, partners, judges). Ad-hoc translation dictionaries had no routing, no locale-aware links, and no way to keep 316 message keys per locale in sync.
+- **Context**: The public surfaces must be Khmer-first for relay people and farmers, with English for a secondary audience (officials, partners, judges). Ad-hoc translation dictionaries had no routing, no locale-aware links, and no way to keep 340 message keys per locale in sync.
 - **Decision**: Adopt next-intl 3.26.5 with `[locale]` routing — `km` default, `en` toggle — on the static export (`trailingSlash`; the Firebase `/` rewrite resolves to `/km/index.html`). Commune links use `/{locale}/commune?code=…`, and channel posts always link the Khmer page.
 - **Consequences**:
   - _Positive_: One framework owns routing, messages, and links; Khmer is the default everywhere; the same page serves both audiences.
   - _Negative_: Static export constraints (no middleware locale negotiation; the root rewrite is explicit) and message-key discipline across two catalogs.
+
+### ADR-0010: Passcode Sign-In Sessions and Server-Side Khmer Speech-to-Text
+
+- **Status**: Accepted
+- **Context**: Pasting the admin token into a browser field made the officer assistant feel unsafe and put a long-lived secret in localStorage. Separately, voice input had to work in Khmer, which browser SpeechRecognition does not support; the assistant's value is highest for officers speaking Khmer.
+- **Decision**: Replace token pasting with a two-step sign-in: `POST /api/v1/officer/login` accepts the officer passcode (`OFFICER_PASSCODE`, falling back to `ADMIN_TOKEN`) and issues an HMAC-SHA256-signed, expiring session (`v1.<exp>.<sig>`, default 12 h, five failures/minute/IP). The browser stores only the derived session, and the advisor accepts `Authorization: Bearer <session>` while keeping `X-Officer-Token` for scripts. Voice input records a ≤ 60 s clip with MediaRecorder and calls `POST /api/v1/advisor/transcribe`, where `gemini-3.8-flash` audio understanding returns the transcript; no browser speech API is used. The assistant moves from a dashboard sidebar to a dedicated first-class page with nav and dashboard entry points.
+- **Consequences**:
+  - _Positive_: The admin token never reaches the browser; sessions expire and are revocable by rotating the signing secret; Khmer speech works in any browser with microphone access, and the transcript is reviewed before sending.
+  - _Negative_: A shared passcode is not per-user accountability (multi-user accounts remain a production step), and provider quota/errors surface as a friendly 503 rather than offline speech recognition.
 
 ---
 
@@ -1298,7 +1386,7 @@ curl -sf https://mekongpulse-api.labyrinth.buzz/api/v1/health | grep '"status":"
 | FR-10           | PRD           | Read-only officials console     | `frontend/src/app/[locale]/page.tsx`, `components/BasinMap.tsx`, `RiskList.tsx`, `StatusSummary.tsx`, `AlertLog.tsx`, `OfficerAssistant.tsx`, `lib/csv.ts`, `VoicePlayer.tsx` | Firebase smoke check (`curl` grep) + demo checklist      | **PASS** |
 | FR-11           | PRD           | `evidence.build_evidence`       | `shared/src/mekong_shared/evidence.py`                      | `shared/tests/test_evidence.py`, `backend/tests/test_evidence_api.py` | **PASS** |
 | FR-12           | PRD           | Field reports POST/GET          | `backend/src/mekong_backend/routers/communes.py`, `shared/src/mekong_shared/models.py` (`FieldReport`), `bot/src/mekong_bot/service.py` (`/report`) | `backend/tests/test_reports_api.py`, `bot/tests/test_service.py` | **PASS** |
-| FR-13           | PRD           | `POST /api/v1/advisor`          | `shared/src/mekong_shared/adk_tools.py`, `adk_agent.py` (`answer_detailed`), `backend/src/mekong_backend/routers/officer.py` | `shared/tests/test_advisor.py`, `backend/tests/test_advisor_api.py` | **PASS** |
+| FR-13           | PRD           | `POST /api/v1/officer/login`, `POST /api/v1/advisor`, `POST /api/v1/advisor/transcribe` | `shared/src/mekong_shared/adk_tools.py`, `adk_agent.py` (`answer_detailed`), `stt.py`, `backend/src/mekong_backend/routers/officer.py`, `officer_auth.py`, `frontend/src/app/[locale]/assistant/page.tsx`, `components/AssistantChat.tsx` | `shared/tests/test_advisor.py`, `test_stt.py`, `backend/tests/test_advisor_api.py`, `test_officer_auth.py`, `test_officer_login_api.py`, `test_transcribe_api.py`; frontend typecheck + static export | **PASS** |
 | FR-14           | PRD           | `digest.build_digest`           | `shared/src/mekong_shared/digest.py`, `backend/src/mekong_backend/routers/officer.py` (`/digest/send`) | `backend/tests/test_digest_api.py`, `bot/tests/test_service.py` | **PASS** |
 | FR-15           | PRD           | Khmer-first web + commune page  | `frontend/src/i18n/`, `src/app/[locale]/commune/page.tsx`, `components/EvidencePanel.tsx`, `FieldReportsList.tsx` | Frontend typecheck + static export + Firebase smoke check | **PASS** |
 | INV-01          | SRS           | Grounded telemetry verification | `shared/src/mekong_shared/mrc.py`                           | `shared/tests/test_mrc.py`                               | **PASS** |

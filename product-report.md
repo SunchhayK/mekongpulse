@@ -3,7 +3,7 @@ id: REPORT-PROD-002
 document_type: product_report
 title: MekongPulse Product Specification Report
 project_name: "MekongPulse"
-version: 1.4.0
+version: 1.5.0
 status: approved
 last_updated: 2026-10-18
 owners: ["@bytelab-lead", "@tech-lead", "@product-manager"]
@@ -36,8 +36,8 @@ theme: "Sustainability & Social Impact"
 MekongPulse reaches farmers through relay people and serves officials and extension advisors directly; the split is a product rule, not an implementation detail (`research/farmer-reach.md`):
 
 - **Farmers (PER-002) — reached through relay people.** Smallholder rice farmers across flood-prone lowlands in Kandal, Kampong Cham, Prey Veng, and Battambang. Direct-to-farmer delivery is relay-mediated: commune chiefs, extension officers, co-op staff, and family members forward spoken Khmer bulletins and play the public commune page aloud. The Telegram bot remains a fan-out and ground-truth surface (alerts, `/report`), not an assumption of direct farmer adoption — rural reach is Facebook/Messenger/TikTok, Telegram's observed role in Cambodia is broadcasting to the relay layer, and surveyed app-install competence is minimal.
-- **Commune chiefs and disaster committees (PER-001) — all channels.** The chief (_Mekhum_) receives alerts, forwards voice bulletins to village loudspeakers, uses the web console read-only for situational awareness and coordination, and works the officer assistant (draft → publish) from the console or Telegram.
-- **Extension advisors and agri-sector staff (PER-004) — officer assistant.** District/provincial extension officers, co-op staff, and programme officers are the trained-users audience for the officer assistant: they verify a commune's evidence, draft bilingual status updates, and publish to the broadcast channel with the officer token.
+- **Commune chiefs and disaster committees (PER-001) — all channels.** The chief (_Mekhum_) receives alerts, forwards voice bulletins to village loudspeakers, uses the web console read-only for situational awareness and coordination, and works the officer assistant (draft on Telegram; draft → publish on its dedicated web page).
+- **Extension advisors and agri-sector staff (PER-004) — officer assistant.** District/provincial extension officers, co-op staff, and programme officers are the trained-users audience for the officer assistant: they verify a commune's evidence, draft bilingual status updates, and publish to the broadcast channel after signing in with the officer passcode (a short-lived session; the admin token never reaches the browser). They can type or speak their questions and drafts in Khmer.
 - **Secondary audience (web console):** district/provincial disaster management offices (PCDM), agricultural cooperatives and contract-farming exporters (e.g. AMRU Rice) scheduling combines ahead of regional surges, and NGO anticipatory-action programme staff.
 - **Sellers, traders and the general public — public signal only.** Rice collectors, millers and dryers follow the same public Telegram broadcast channel and read-only console as everyone else. MekongPulse deliberately does not sell buyers a harvest-timing advantage: field evidence on Cambodian paddy markets documents a buyer-side information gap, inaccurate weighing and price pressure on distressed farmers, so seller-specific feeds, "verified buyer" access and distress rankings are ruled out by design (`research/sellers-market.md`). The sourced pitch is narrow: the price is published (CRF publishes district wet-paddy prices on Telegram every 1–3 days during harvest as JPG, no archive), the forward-looking commune harvest risk is not.
 - **Tertiary audience (roadmap):** microfinance institutions (Amret, Sathapana, Prasac) wanting crop climate risk feeds for portfolio planning; export and batch APIs are Phase 2, not this release.
@@ -57,13 +57,13 @@ MekongPulse reaches farmers through relay people and serves officials and extens
 5. **Vernacular Spoken Khmer Audio**: Gemini synthesizes respectful Khmer voice notes directly playable on low-cost smartphones without reading barriers, delivered as Telegram voice notes and playable from the web console for loudspeaker sharing.
 6. **Officials' Coordination Console (web)**: A read-only basin view for commune chiefs, district committees and NGO partners: commune risk map with zero external map tiles (instant load on weak networks), station hydrographs, risk register, and the Khmer voice bulletin with playback for community broadcast.
 7. **Verification & Ground-Truth Layer**: Every risk row opens to its deterministic provenance — reading source and age, 4-check QC over the stored station series (gaps, stuck values, spikes, range), heuristic cross-checks (rainfall agreement, upstream coherence), a confidence label with stable reason ids, a 5-step bilingual evidence chain, and the MRC-style limitations notice (no LLM in the trust path; `research/farmer-reach.md` §6). Relay people and officials file ground-truth reports ("did water reach the fields?") from Telegram or the web.
-8. **Officer Assistant with Actions (web console + Telegram)**: A traced agentic assistant for officials and extension advisors that grounds answers in station evidence, drafts deterministic bilingual status updates, and — with the officer token — posts them to the public Telegram channel. A deterministic bilingual daily digest summarises tier counts, elevated communes and stale readings for the broadcast channel and the bot's DM.
+8. **Officer Assistant with Actions (dedicated web page + Telegram)**: A first-class traced agentic assistant — its own page at `/{locale}/assistant` with header, bottom-nav, and dashboard entry points — for officials and extension advisors. It grounds answers in station evidence, drafts deterministic bilingual status updates, accepts typed or spoken Khmer questions (server-side transcription), and, once the officer signs in with the passcode, posts updates to the public Telegram channel. A deterministic bilingual daily digest summarises tier counts, elevated communes and stale readings for the broadcast channel and the bot's DM.
 
 ### 1.5 Channels and delivery
 
 - **Farmer delivery — relay-mediated.** Farmers are reached through relay people: commune chiefs, extension officers, co-op staff, and family members forward spoken Khmer voice bullets and play the shareable commune page aloud. The interactive Telegram bot (`@MekongPulseBot`) carries the same Khmer audio, the rice-stage onboarding, and the ground-truth `/report` flow; it is a fan-out and verification surface, not an assumption of direct farmer adoption (`research/farmer-reach.md`).
 - **Official channel — automated hazard broadcasts and a daily digest**: Sentinel alerts pushed to subscribed users and the public Telegram broadcast channel for commune/agency re-dissemination, now with a bilingual daily digest (admin-guarded `POST /api/v1/digest/send`; bot `/digest`) and a commune-page link on every escalation post. Cell broadcast, SMS and IVR remain with NCDM and EWS 1294; MekongPulse does not duplicate them.
-- **Web — coordination, verification and the officer assistant**: the basin risk map answers which communes are escalating, on what station evidence, what directive was issued, and what ground truth has been reported from the field. Public read-only, with visible data sources and thresholds for journalists, NGOs and anticipatory-action partners; officials and extension advisors use the officer assistant (draft → publish with the officer token). A public, Khmer-first commune page (`/{locale}/commune?code=XXXXXX`) carries the evidence summary, the voice bulletin and field reports for relay playout.
+- **Web — coordination, verification and the officer assistant**: the basin risk map answers which communes are escalating, on what station evidence, what directive was issued, and what ground truth has been reported from the field. Public read-only, with visible data sources and thresholds for journalists, NGOs and anticipatory-action partners; officials and extension advisors use the dedicated officer assistant page (draft → publish after passcode sign-in; typed or spoken Khmer input). A public, Khmer-first commune page (`/{locale}/commune?code=XXXXXX`) carries the evidence summary, the voice bulletin and field reports for relay playout.
 
 ### 1.6 Financial model
 
@@ -132,10 +132,10 @@ The system MUST NOT attempt to solve the following items in this release:
 | FR-07          | Autonomous Sentinel Background Patrol | P0   | Sentinel Agent   | 15-minute background patrol trigger                      | Evaluates every station-mapped commune (1,544 of the 1,661-commune gazetteer; 117 have no mapped station) against risk escalation triggers; dispatches stage-grouped unsolicited broadcast alerts with voice |
 | FR-08          | Conversational ReAct Advisor Agent| P1       | User (retargeted: officials, extension advisors) | Natural language text or voice query in Telegram         | Google ADK ReAct loop invokes domain tools dynamically; returns stateful bilingual agronomic counsel     |
 | FR-09          | Commune Subscription Management   | P1       | User, Chief      | Telegram `/subscribe <commune>` or inline button click   | Records chat ID to commune binding in PostgreSQL, stores the crop-stage profile, and pushes alerts scored with the stored stage |
-| FR-10          | Officials' Coordination Console   | P1       | PER-001, PER-003, public | Web browser (static export on Firebase Hosting)          | Renders basin risk map, station hydrographs, commune risk register, printable status summary, CSV export, alert dispatch log, playable Khmer bulletin, and the officer assistant panel, read-only; collects no per-farmer data |
+| FR-10          | Officials' Coordination Console   | P1       | PER-001, PER-003, public | Web browser (static export on Firebase Hosting)          | Renders basin risk map, station hydrographs, commune risk register, printable status summary, CSV export, alert dispatch log, and playable Khmer bulletin, read-only; the officer assistant lives on its own page (FR-13); collects no per-farmer data |
 | FR-11          | Deterministic Verification & Evidence Layer | P1 | Public, PER-001, PER-004 | Commune code (`GET /api/v1/communes/{code}/evidence`) | Returns a provenance payload: reading source and freshness, 4-check QC block (gaps, stuck, spike, range), heuristic cross-checks (rainfall agreement, upstream coherence), confidence label with stable reason ids, 5-step bilingual evidence chain, and the MRC-style limitations notice; no LLM in any verdict |
 | FR-12          | Ground-Truth Field Reporting Loop | P1       | PER-001, PER-004, relay people | Telegram `/report` flow or `POST /api/v1/communes/{code}/reports` | Records a `water_reached` / `no_water` / `other` report with optional note and reporter label (source `telegram` or `web`); `GET /api/v1/communes/{code}/reports` lists it; shown in the web console, the commune page, and the bot |
-| FR-13          | Officer Assistant (agentic, with actions) | P1 | PER-001, PER-004 | `POST /api/v1/advisor` (web console or Telegram)         | One traced agentic turn returns `{reply, tool_calls, actions}`; tools include `get_commune_evidence`, `draft_status_update` (deterministic bilingual text), and `publish_to_channel` (a real channel post, officer token required) |
+| FR-13          | Officer Assistant (agentic, signed-in, voice-enabled) | P1 | PER-001, PER-004 | Dedicated `/{locale}/assistant` page; `POST /api/v1/officer/login`, `POST /api/v1/advisor`, `POST /api/v1/advisor/transcribe`; Telegram drafts | One traced agentic turn returns `{reply, tool_calls, actions}`; tools include `get_commune_evidence`, `draft_status_update` (deterministic bilingual text), and `publish_to_channel` (a real channel post, officer session required; Telegram stays draft-only). Passcode sign-in issues a 12 h session; spoken Khmer input is transcribed server-side |
 | FR-14          | Bilingual Daily Digest            | P1       | System, public   | Admin-guarded `POST /api/v1/digest/send`; bot `/digest`  | Posts a Khmer-first bilingual digest (tier counts, top elevated communes with lead times, stale-telemetry line, dashboard link) to the public Telegram channel; `/digest` returns it in a Telegram DM |
 | FR-15          | Khmer-First Bilingual Web & Commune Page | P1 | Public, relay people | `/{locale}/commune?code=XXXXXX` (`km` default, `en` toggle) | Renders the public commune page: one-tap voice bulletin with text fallback when audio is null, crop-stage chips, evidence summary, field reports, and share; console dialogs link to the full page |
 
@@ -262,16 +262,16 @@ Scenario: Relay person files a ground-truth report from Telegram
   And the same report MUST be filable via POST /api/v1/communes/{code}/reports with source "web"
 ```
 
-#### AC-11: Publish Action Requires the Officer Token
+#### AC-11: Publish Action Requires Officer Sign-In
 
 ```gherkin
 Scenario: Officer publishes a status update through the assistant
-  Given an officer chats with the assistant on the web console or Telegram
-  When they ask it to draft a status update for a set of communes
+  Given the officer assistant page or Telegram
+  When an officer asks it to draft a status update for a set of communes
   Then the assistant MUST return a deterministic bilingual draft built from stored risk rows only
-  And when they ask to publish it, the request MUST carry the officer token (X-Officer-Token)
-  And without the token the publish action MUST return "denied" and nothing MUST be posted
-  And with the token the post MUST appear on the public broadcast channel and its status MUST be reported back
+  And publishing MUST require a valid officer session obtained from POST /api/v1/officer/login (passcode → 12 h signed session); scripts MAY instead use the legacy X-Officer-Token admin header
+  And without a session the publish action MUST return "denied" or "unavailable" and nothing MUST be posted
+  And with a session the post MUST appear on the public broadcast channel and its status MUST be reported back
 ```
 
 #### AC-12: Daily Digest Reaches the Broadcast Channel
@@ -294,6 +294,17 @@ Scenario: Relay person plays the commune page aloud
   Then a one-tap Listen control MUST play the Khmer voice bulletin for the selected rice stage
   And if audio is unavailable (null), the page MUST show the Khmer text bulletin instead of a broken player
   And the page MUST show the evidence summary and the commune's field reports, and offer a share action
+```
+
+#### AC-14: Spoken Khmer Question Is Transcribed
+
+```gherkin
+Scenario: Officer speaks a question on the assistant page
+  Given a browser with microphone access on /{locale}/assistant
+  When the officer records a Khmer question (up to 60 s) and stops
+  Then the clip MUST be sent to POST /api/v1/advisor/transcribe and the returned Khmer text MUST be placed in the composer for review before sending
+  And a denied microphone, an oversized clip, or an unavailable transcription service MUST surface friendly bilingual guidance without breaking the chat
+  And cancelling a recording MUST discard it without calling the API
 ```
 
 ### 2.6 Edge cases and boundary conditions
@@ -322,7 +333,7 @@ These invariants are immutable system rules. The implementation MUST NOT violate
 
 - **User Interfaces**:
   - Interactive Telegram Bot interface supporting inline keyboard navigation, location sharing, direct audio note streaming, the ground-truth `/report` flow, and the `/digest` digest. The bot is the only place rice-stage profiles are collected (once per season); it serves relay people and officials as a broadcast/fan-out surface.
-  - Responsive web console for officials and the public, read-only: Leaflet basin map with switchable Esri Light Gray, OpenStreetMap and OpenTopoMap basemaps (overlays render over the neutral canvas when tiles are slow), station hydrographs, commune risk register, Khmer voice bulletin playback, the officer assistant panel (draft → publish with the officer token), and the deterministic evidence panel.
+  - Responsive web console for officials and the public, read-only: Leaflet basin map with switchable Esri Light Gray, OpenStreetMap and OpenTopoMap basemaps (overlays render over the neutral canvas when tiles are slow), station hydrographs, commune risk register, Khmer voice bulletin playback, and the deterministic evidence panel. The officer assistant has its own page (`/{locale}/assistant`, draft → publish after passcode sign-in, typed or spoken Khmer).
   - Public commune page (`/{locale}/commune?code=XXXXXX`, Khmer default with an English toggle): one-tap voice bulletin with a text fallback when audio is null, crop-stage chips, evidence summary, field reports, and share — designed for a relay person to open and play aloud.
 - **Hardware Interfaces**: Google Cloud Run serverless execution container (2 vCPU, 2 GiB RAM, Generation 2 environment).
 - **Software Interfaces**:
@@ -345,7 +356,7 @@ These invariants are immutable system rules. The implementation MUST NOT violate
 
 - **Tier 1 (Walking Skeleton / Hackathon MVP)**: Live MRC API polling for Prek Kdam and Chaktomuk stations; spatial elevation lookup for top 10 flood-prone communes in Kandal and Kampong Cham; Telegram bot responding to location pins with text risk card and agronomic advice; Cloud Run deployment with health probe.
 - **Tier 2 (Target Competition Scope)**: Full 1,661 commune MEF gazetteer integration; spoken Khmer voice note audio generation via Gemini 3 Flash TTS; Next.js web console with an interactive Leaflet basin map and switchable basemaps; Cloud Scheduler cron job polling telemetry every 15 minutes.
-- **Tier 3 (Deferred / Phase 2 Roadmap)**: Officials' console add-ons over existing data only. Shipped in 0.4.0: printable basin status summary (tier counts, station status, top elevated communes, limited to fields the engine actually holds), CSV export of commune risk states, and the alert dispatch log over existing escalation records. Shipped in 0.6.0: the deterministic evidence/verification layer (FR-11), the text ground-truth reporting loop (FR-12, Telegram + web), the officer assistant with its officer-token publish action (FR-13), the bilingual daily digest (FR-14), and the Khmer-first bilingual web with the public commune page (FR-15). Remaining: SitRep household, hectare, casualty and evacuation fields (needs an official data partner) and commune subscriber coverage as aggregate counts only (ranked #3 in `research/features-scan.md` §2). Public harvest-urgency layer (commune × ripening stage × 36–72h risk window, rendered from existing engine outputs) published to the broadcast channel and console — public signal, never a buyer feed. Planting-date onboarding (ask once, derive stage automatically through the season; ranked #1). Upstream→downstream crest-arrival lag display (pairs existing station series; ranked #5). Photo-attached field reports (optional photo on the shipped text-only loop) and crowdsourced community dike-breach reporting, only with a named validation partner (ranked #2). Social-media posting (Facebook) for the digest and bulletins — Facebook/Messenger/TikTok carry the rural reach Telegram cannot (`research/farmer-reach.md` §1–2). Anticipatory-action readiness/activation triggers with a partner webhook (WFP-style 7-day readiness / 3-day activation; ranked #6). Post-flood recovery directives (ranked #8). Subscription into official NCDM cell-broadcast dissemination once the standard lands. MFI portfolio credit scoring API for climate insurance underwriting. Rationale and sources: `research/features-scan.md`, `research/gov-workflow.md`, `research/sellers-market.md`, `research/farmer-reach.md`.
+- **Tier 3 (Deferred / Phase 2 Roadmap)**: Officials' console add-ons over existing data only. Shipped in 0.4.0: printable basin status summary (tier counts, station status, top elevated communes, limited to fields the engine actually holds), CSV export of commune risk states, and the alert dispatch log over existing escalation records. Shipped in 0.6.0: the deterministic evidence/verification layer (FR-11), the text ground-truth reporting loop (FR-12, Telegram + web), the officer assistant with its officer-session publish action (FR-13), the bilingual daily digest (FR-14), and the Khmer-first bilingual web with the public commune page (FR-15). Shipped in 0.7.0: the dedicated assistant page with passcode sign-in and server-side Khmer voice input. Remaining: SitRep household, hectare, casualty and evacuation fields (needs an official data partner) and commune subscriber coverage as aggregate counts only (ranked #3 in `research/features-scan.md` §2). Public harvest-urgency layer (commune × ripening stage × 36–72h risk window, rendered from existing engine outputs) published to the broadcast channel and console — public signal, never a buyer feed. Planting-date onboarding (ask once, derive stage automatically through the season; ranked #1). Upstream→downstream crest-arrival lag display (pairs existing station series; ranked #5). Photo-attached field reports (optional photo on the shipped text-only loop) and crowdsourced community dike-breach reporting, only with a named validation partner (ranked #2). Social-media posting (Facebook) for the digest and bulletins — Facebook/Messenger/TikTok carry the rural reach Telegram cannot (`research/farmer-reach.md` §1–2). Anticipatory-action readiness/activation triggers with a partner webhook (WFP-style 7-day readiness / 3-day activation; ranked #6). Post-flood recovery directives (ranked #8). Subscription into official NCDM cell-broadcast dissemination once the standard lands. MFI portfolio credit scoring API for climate insurance underwriting. Rationale and sources: `research/features-scan.md`, `research/gov-workflow.md`, `research/sellers-market.md`, `research/farmer-reach.md`.
 
 ---
 
@@ -368,11 +379,11 @@ device_profile: Smartphone (OPPO Reno, 1080p, 4G Data)
 primary_interfaces:
   - "Telegram Groups (District & Commune Administration)"
   - "Web console (read-only, for situational awareness and verification)"
-  - "Officer assistant (web console and Telegram) — evidence checks, status drafting, and publishing"
+  - "Officer assistant (dedicated web page and Telegram) — evidence checks, status drafting, typed or spoken Khmer input, and publishing after sign-in"
 rbac_permissions:
   - "alerts:forward"
   - "commune:status:read"
-  - "commune:status:publish (officer token)"
+  - "commune:status:publish (officer session)"
 jobs_to_be_done:
   - "Receive 48-hour advance notice before upstream Bassac river waters overtop village levees."
   - "Verify a warning against its evidence chain and field reports before forwarding it."
@@ -452,11 +463,11 @@ demographics:
 technical_proficiency: High
 device_profile: Laptop (web console) and smartphone (Telegram)
 primary_interfaces:
-  - "Officer assistant (web console and Telegram) — evidence checks, status drafting, channel publishing"
+  - "Officer assistant (dedicated web page and Telegram) — evidence checks, status drafting, channel publishing"
   - "Public commune page for member playout and field-report follow-up"
 rbac_permissions:
   - "commune:status:read"
-  - "commune:status:publish (officer token)"
+  - "commune:status:publish (officer session)"
   - "reports:read:all"
 jobs_to_be_done:
   - "Verify a warning against the station evidence and QC state before advising members."
@@ -481,7 +492,7 @@ Two tracks share one engine. Farmer-reach (JRN-03..07) is relay-mediated: the bo
 | JRN-09  | Coordination | PER-001, PER-003 | Reviews escalating communes, station evidence, and ground-truth field reports | Web console (`/`, read-only) | Risk map, hydrographs, and risk register rendered | Leaflet map renders commune and station overlays over a neutral canvas; basemaps switch between Esri Light Gray, OSM and OpenTopoMap |
 | JRN-10  | Verification | PER-001, PER-004 | Opens the evidence behind an escalation (QC, confidence, chain, limitations) | Evidence panel / `/{locale}/commune?code=…` | Warning accepted, amended with a field report, or held back | Checks that did not run show "unavailable"; confidence reasons name what actually held |
 | JRN-11  | Ground truth | Relay person | Files "did water reach the fields?" via `/report` or the web form | `@MekongPulseBot` / `POST /api/v1/communes/{code}/reports` | Report stored with reporter label and source; visible to officials on the console and commune page | Unreachable API → clear error, report retriable; no partial record |
-| JRN-12  | Officer action | PER-001, PER-004 | Asks the assistant to draft, then to publish, a status update | Officer assistant (console or Telegram) | Bilingual draft returned from stored rows; publish posts to the public channel with its status traced | No officer token → drafts stay private, publish returns "denied" |
+| JRN-12  | Officer action | PER-001, PER-004 | Asks the assistant to draft, then to publish, a status update | Officer assistant page (signed in); Telegram for drafts | Bilingual draft returned from stored rows; publish posts to the public channel with its status traced | No officer session → drafts stay private, publish returns "denied" |
 | JRN-13  | Broadcast | System, relay people | Digest posts to the channel; relay people follow the commune link and play it aloud | Public Telegram channel / commune page | Tier picture and commune detail reach the relay layer | Telegram not configured → digest returns "unavailable"; the page still loads |
 
 ---
