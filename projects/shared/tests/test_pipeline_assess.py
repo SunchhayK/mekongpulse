@@ -6,9 +6,22 @@ from datetime import datetime, timezone
 
 import pytest
 
+from mekong_shared.agronomy import AgriDecisionEngine
 from mekong_shared.audio_store import LocalAudioStore
-from mekong_shared.models import CropStage, RiskTier, StationSnapshot, WeatherSnapshot
-from mekong_shared.pipeline import AssessmentUnavailable, CommuneNotFound, Pipeline
+from mekong_shared.models import (
+    CommuneRisk,
+    CropStage,
+    FloodReason,
+    RiskTier,
+    StationSnapshot,
+    WeatherSnapshot,
+)
+from mekong_shared.pipeline import (
+    AssessmentUnavailable,
+    CommuneNotFound,
+    Pipeline,
+    audio_cache_signature,
+)
 from mekong_shared.stations import load_stations
 from mekong_shared.tts import AudioArtifact
 
@@ -110,6 +123,56 @@ async def test_assess_with_audio_uses_store_and_stub_tts(
     # the object really landed in the store
     key = result.audio.uri.removeprefix("local:")
     assert (tmp_path / "audio" / key).exists()
+
+
+def test_audio_signature_buckets_small_telemetry_changes():
+    risk = CommuneRisk(
+        commune_code=COMMUNE,
+        commune_name_kh="កំពង់ចាម",
+        commune_name_en="Kampong Cham",
+        province="Kampong Cham",
+        tier=RiskTier.WARNING,
+        score=70,
+        reason=FloodReason.RIVER_OVERFLOW,
+        lead_time_hours=35,
+        station_id=STATION,
+        updated_at=datetime.now(timezone.utc),
+    )
+    weather = WeatherSnapshot(
+        province_code="03",
+        latitude=12.0,
+        longitude=105.46,
+        precipitation_48h_mm=13.0,
+        precipitation_7d_mm=25.0,
+        max_rain_24h_mm=10.0,
+        soil_moisture_pct=55.0,
+        fetched_at=datetime.now(timezone.utc),
+    )
+    directives = AgriDecisionEngine().evaluate(RiskTier.WARNING, CropStage.RIPENING)
+    station = _warning_snapshot()
+    base = audio_cache_signature(COMMUNE, CropStage.RIPENING, risk, station, weather, directives)
+
+    # 15.50 -> 15.54 m and 13 -> 15 mm stay inside the spoken buckets.
+    same = audio_cache_signature(
+        COMMUNE,
+        CropStage.RIPENING,
+        risk,
+        station.model_copy(update={"level_m": 15.54}),
+        weather.model_copy(update={"precipitation_48h_mm": 15.0}),
+        directives,
+    )
+    assert same == base
+
+    # Crossing a 0.1 m bucket is a meaningful change and must regenerate.
+    changed = audio_cache_signature(
+        COMMUNE,
+        CropStage.RIPENING,
+        risk,
+        station.model_copy(update={"level_m": 15.65}),
+        weather,
+        directives,
+    )
+    assert changed != base
 
 
 async def test_assess_audio_reuses_cache_for_identical_briefing(

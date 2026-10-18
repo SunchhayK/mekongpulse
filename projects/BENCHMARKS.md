@@ -116,6 +116,11 @@ costs 33% less on audio output, and its first generation after a restart was
 35.9 s versus 74 s for Flash TTS, while warm-path synthesis is similar. Repeats
 stay instant because both the MP3 and the polished text are cached.
 
+The cache signature now buckets river level to 0.1 m and 48-hour rain to 5 mm,
+and rate to the bulletin's fast/slow/stable wording (namespace `v3`), so a
+15-minute telemetry tick no longer forces a new MP3 for a shared link. Shared
+commune URLs also carry the selected crop stage.
+
 ## Cost implications
 
 - On PostgreSQL these writes are not billed; the savings are CPU, WAL, and

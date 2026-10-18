@@ -20,6 +20,20 @@ import { formatDateTime } from "@/lib/design";
 
 const CROP_STAGES: CropStage[] = ["TILLERING", "VEGETATIVE", "FLOWERING", "RIPENING"];
 
+/** Keep the selected stage in the URL so shared links reuse the same briefing/audio. */
+function setStageInUrl(next: CropStage | null) {
+  if (typeof window === "undefined") return;
+  const params = new URLSearchParams(window.location.search);
+  if (next) params.set("stage", next);
+  else params.delete("stage");
+  const query = params.toString();
+  window.history.replaceState(
+    null,
+    "",
+    `${window.location.pathname}${query ? `?${query}` : ""}`,
+  );
+}
+
 type LoadError = "notFound" | "noTelemetry" | "unavailable";
 
 interface ErrorState {
@@ -60,6 +74,10 @@ function CommuneView() {
   const locale = useLocale();
   const searchParams = useSearchParams();
   const code = searchParams.get("code")?.trim() ?? "";
+  const stageParam = searchParams.get("stage");
+  const initialStage = CROP_STAGES.includes(stageParam as CropStage)
+    ? (stageParam as CropStage)
+    : null;
 
   const [evidence, setEvidence] = useState<EvidencePayload | null>(null);
   const [loading, setLoading] = useState(false);
@@ -67,7 +85,7 @@ function CommuneView() {
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [assessing, setAssessing] = useState(false);
   const [assessError, setAssessError] = useState<string | null>(null);
-  const [stage, setStage] = useState<CropStage | null>(null);
+  const [stage, setStage] = useState<CropStage | null>(initialStage);
   const [shareState, setShareState] = useState<"idle" | "copied" | "failed">("idle");
   const requestId = useRef(0);
 
@@ -80,7 +98,7 @@ function CommuneView() {
     setEvidence(null);
     setAssessment(null);
     setAssessError(null);
-    setStage(null);
+    setStage(initialStage);
     setShareState("idle");
     api
       .evidence(code)
@@ -105,7 +123,7 @@ function CommuneView() {
     return () => {
       cancelled = true;
     };
-  }, [code]);
+  }, [code, initialStage]);
 
   /** Fetch the bulletin (with Khmer TTS) for the chosen rice stage. */
   const requestAssessment = useCallback(
@@ -119,6 +137,7 @@ function CommuneView() {
         if (requestId.current !== id) return;
         setAssessment(result);
         setStage(nextStage);
+        setStageInUrl(nextStage);
       } catch (err) {
         if (requestId.current !== id) return;
         setAssessError(

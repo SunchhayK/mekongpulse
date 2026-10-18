@@ -2,6 +2,19 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.13.0] — 2026-10-18
+
+Shared links keep their voice note instead of regenerating it on every view.
+
+### Fixed
+
+- Voice-cache churn: the audio signature now buckets river level to 0.1 m, 48-hour rain to 5 mm, and rate to the bulletin's fast/slow/stable wording; score and exact rate are no longer part of the key. A 15-minute telemetry tick reuses the MP3, while a tier, reason, directive, lead-time, or meaningful level change still regenerates it. Cache namespace bumped to `v3`.
+- Commune share links now carry the selected crop stage (`?stage=`), and selecting a stage updates the URL, so recipients request the same briefing and hit the same cached audio.
+
+### Changed
+
+- `shared` — 0.10.0; `frontend` — 0.8.0; `technical-report.md` 1.10.0; `product-report.md` 1.6.1.
+
 ## [0.12.1] — 2026-10-18
 
 Voice bulletins use the cheaper, lower-latency Flash-Lite TTS model.

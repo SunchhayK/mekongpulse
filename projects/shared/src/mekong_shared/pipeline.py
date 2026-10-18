@@ -42,8 +42,8 @@ import logging
 
 log = logging.getLogger("mekongpulse.pipeline")
 
-# Bump when the TTS voice/model changes so cached bulletins are not reused.
-AUDIO_CACHE_VERSION = "v2"
+# Bump when the TTS voice/model or signature semantics change.
+AUDIO_CACHE_VERSION = "v3"
 
 
 def _risk_changed(prev: CommuneRisk | None, current: CommuneRisk) -> bool:
@@ -74,25 +74,33 @@ def audio_cache_signature(
     The Khmer text may be LLM-polished, so its wording is not stable across
     requests; hashing the final text would miss the cache every time. The
     deterministic inputs are, so identical situations reuse one MP3.
+
+    Values are bucketed to what the spoken bulletin materially says: 10 cm of
+    river level, 5 mm of 48-hour rain, and the same qualitative rate buckets as
+    the template (fast / slow / stable). A 15-minute telemetry tick therefore
+    does not mint a new voice note for a shared link, while a tier, reason,
+    directive, lead-time, or meaningful level change still does.
     """
     parts = [
         commune_code,
         crop_stage.value,
         risk.tier.value,
-        f"{risk.score:.1f}",
         risk.reason.value,
         str(risk.lead_time_hours or 0),
     ]
     if station is not None:
+        rate = station.rate_of_rise_m_per_hr
+        rate_bucket = "fast" if rate >= 0.08 else "slow" if rate > 0.01 else "stable"
         parts += [
             station.station_id,
-            f"{station.level_m:.2f}",
-            f"{station.rate_of_rise_m_per_hr:.2f}",
+            f"{round(station.level_m, 1):.1f}",
+            rate_bucket,
             f"{station.alarm_stage_m:.2f}",
             f"{station.flood_stage_m:.2f}",
         ]
     if weather is not None:
-        parts.append(f"{weather.precipitation_48h_mm:.0f}")
+        rain_bucket = int(round(weather.precipitation_48h_mm / 5.0) * 5)
+        parts.append(str(rain_bucket))
     parts += [f"{d.action_code}:{d.urgency.value}" for d in directives]
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:32]
 

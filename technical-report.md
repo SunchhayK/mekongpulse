@@ -3,7 +3,7 @@ id: REPORT-TECH-002
 document_type: technical_report
 title: MekongPulse Technical Architecture and Engineering Report
 project_name: "MekongPulse"
-version: 1.9.1
+version: 1.10.0
 status: approved
 last_updated: 2026-10-18
 owners: ["@bytelab-lead", "@tech-lead", "@backend-lead"]
@@ -32,7 +32,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
   - Spoken Khmer assistant input: `POST /api/v1/advisor/transcribe` forwards a recorded clip (≤ 4 MB, ≤ 60 s) to `gemini-3.8-flash` audio understanding and returns text; provider or quota failures raise `TranscriptionUnavailable` → 503 problem, never a 500.
   - Model resilience: an ordered Gemini text chain (`GEMINI_TEXT_MODEL`, then `GEMINI_FALLBACK_MODELS`; default `gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite`) rotates inside the model-call layer — an ADK `BaseLlm` wrapper for the primary engine and the same loop in the native ReAct caller; STT uses the chain too. Quota (429), overload (503), and missing-model (404) failures cool down per model (1 h / 60 s / 6 h) without replaying a turn. Gemma 4 was evaluated and rejected: `gemma-4-26b-a4b-it` emits tool calls but leaks reasoning and ignores language instructions in final answers, and `gemma-4-31b-it` fails with tools.
   - Bilingual Khmer-first web: next-intl `[locale]` routing (`km` default, `en` toggle) with static export (`trailingSlash`; Firebase `/` → `/km/index.html`), the dedicated officer assistant page at `/{locale}/assistant`, the public commune page at `/{locale}/commune?code=XXXXXX`, and `WEB_BASE_URL` driving the commune links appended to channel posts.
-  - Firestore for time-series observation snapshots, commune risk profiles, and alert history in production; PostgreSQL (asyncpg) in development, staging, and self-hosted modes; Cloud Storage for audio caching. Spoken bulletins are content-addressed (digest of the deterministic briefing inputs) and served from the store when unchanged, so repeated commune views reuse one MP3.
+  - Firestore for time-series observation snapshots, commune risk profiles, and alert history in production; PostgreSQL (asyncpg) in development, staging, and self-hosted modes; Cloud Storage for audio caching. Spoken bulletins are content-addressed from the deterministic briefing inputs — river level bucketed to 0.1 m, 48-hour rain to 5 mm, and the bulletin's fast/slow/stable rate wording — so repeated and shared commune views reuse one MP3 across 15-minute telemetry ticks. The commune page keeps the chosen crop stage in `?stage=`, so a shared link reproduces the same briefing.
   - Sync cost discipline: the 15-minute trigger calls `/patrol/run` only (patrol performs the sync itself), weather is refreshed hourly, unchanged commune-risk rows are not rewritten, and polished Khmer bulletins are cached by template digest. Reproducible measurements and scripts live in `projects/BENCHMARKS.md` and `projects/scripts/benchmark_*.py`.
   - Vertex AI mode: `USE_VERTEX_AI=true` routes bulletin polish, TTS, STT, and the advisor through Vertex AI (`VERTEX_PROJECT=ai-builder-cup-9f8cd`, `VERTEX_LOCATION=global`) using a read-only service-account key mounted at `/secrets/vertex-sa.json` (`docker-compose.vertex.yml`; the key lives outside the repository with mode 600). ADK's `GoogleLLM` stalls against Vertex in the current SDK, so `ADVISOR_USE_ADK=false` selects the equivalent native ReAct loop; ADK remains the default for Gemini API keys.
 - **Deferred / out-of-scope**:
@@ -1075,7 +1075,7 @@ components:
 
 ## 5. Test Plans and Test Cases
 
-Current suites, all green: 150 shared, 83 backend, 37 bot tests; the frontend typecheck and static export are clean. New coverage lands in `shared/tests/test_evidence.py`, `shared/tests/test_stt.py`, `shared/tests/test_model_rotation.py`, `shared/tests/test_adk_rotation.py`, `shared/tests/test_sync_cost.py`, `backend/tests/test_evidence_api.py`, `backend/tests/test_reports_api.py`, `backend/tests/test_advisor_api.py`, `backend/tests/test_officer_auth.py`, `backend/tests/test_officer_login_api.py`, `backend/tests/test_officer_channel_api.py`, `backend/tests/test_transcribe_api.py`, `backend/tests/test_digest_api.py`, and the extended `bot/tests/test_service.py`.
+Current suites, all green: 152 shared, 83 backend, 37 bot tests; the frontend typecheck and static export are clean. New coverage lands in `shared/tests/test_evidence.py`, `shared/tests/test_stt.py`, `shared/tests/test_model_rotation.py`, `shared/tests/test_adk_rotation.py`, `shared/tests/test_sync_cost.py`, `backend/tests/test_evidence_api.py`, `backend/tests/test_reports_api.py`, `backend/tests/test_advisor_api.py`, `backend/tests/test_officer_auth.py`, `backend/tests/test_officer_login_api.py`, `backend/tests/test_officer_channel_api.py`, `backend/tests/test_transcribe_api.py`, `backend/tests/test_digest_api.py`, and the extended `bot/tests/test_service.py`.
 
 ### 5.1 Deterministic test matrix
 
