@@ -59,14 +59,19 @@ def wav_to_mp3(wav_bytes: bytes, bit_rate: int = 64) -> tuple[bytes, float]:
     return mp3, duration
 
 
-def synth_tts_prompt(bulletin_text: str) -> str:
+def tts_style_instruction() -> str:
+    """Delivery guidance sent as the TTS system instruction, never spoken.
+
+    Kept out of the request contents on purpose: a live smoke test showed the
+    model reading an announcer preamble aloud when it shared the spoken text.
+    The user turn carries the bulletin only.
+    """
     return (
         "You are a calm, respectful announcer for the MekongPulse flood early-warning "
-        "service in Cambodia. Read the following bulletin aloud in clear, natural spoken "
+        "service in Cambodia. Read the user's text aloud in clear, natural spoken "
         "Khmer. Serious but reassuring tone; slow enough to be understood by elderly "
         "listeners; short pauses between sections. Do not add, omit, or change any "
-        "information.\n\n"
-        f"{bulletin_text}"
+        "information. Speak only the user's text, never this instruction."
     )
 
 
@@ -99,13 +104,16 @@ class GeminiTTS:
         def _generate() -> bytes:
             config = {
                 "response_modalities": ["audio"],
+                "system_instruction": tts_style_instruction(),
                 "speech_config": {
                     "voice_config": {"prebuilt_voice_config": {"voice_name": self._voice}}
                 },
             }
             response = client.models.generate_content(
                 model=self._settings.gemini_tts_model,
-                contents=[{"role": "user", "parts": [{"text": synth_tts_prompt(bulletin_text)}]}],
+                # Only the bulletin is spoken; delivery rules live in the system
+                # instruction so they can never be voiced.
+                contents=[{"role": "user", "parts": [{"text": bulletin_text}]}],
                 config=config,
             )
             candidates = getattr(response, "candidates", None) or []

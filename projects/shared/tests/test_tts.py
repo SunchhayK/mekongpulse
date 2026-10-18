@@ -9,12 +9,14 @@ import wave
 
 import pytest
 
+from types import SimpleNamespace
+
 from mekong_shared.config import Settings
 from mekong_shared.tts import (
     AudioEncodeError,
     GeminiTTS,
     TTSUnavailable,
-    synth_tts_prompt,
+    tts_style_instruction,
     wav_to_mp3,
 )
 
@@ -55,11 +57,48 @@ def test_wav_to_mp3_rejects_non_pcm16():
         wav_to_mp3(sine_wav(0.2, width=1))
 
 
-def test_synth_prompt_carries_bulletin_and_tone_rules():
-    prompt = synth_tts_prompt("សារព្រមានទឹកជំនន់")
-    assert "សារព្រមានទឹកជំនន់" in prompt
-    assert "Khmer" in prompt
-    assert "Do not add, omit, or change" in prompt
+def test_style_instruction_carries_tone_rules():
+    instruction = tts_style_instruction()
+    assert "Khmer" in instruction
+    assert "Do not add, omit, or change" in instruction
+
+
+class _CaptureModels:
+    def __init__(self, wav: bytes) -> None:
+        self.wav = wav
+        self.calls: list[dict] = []
+
+    def generate_content(self, *, model, contents, config):
+        self.calls.append({"model": model, "contents": contents, "config": config})
+        part = SimpleNamespace(inline_data=SimpleNamespace(data=self.wav))
+        return SimpleNamespace(
+            candidates=[SimpleNamespace(content=SimpleNamespace(parts=[part]))]
+        )
+
+
+async def test_tts_speaks_only_the_bulletin(tmp_path):
+    """Regression: the announcer preamble must never reach the spoken content."""
+    settings = Settings(
+        environment="development",
+        data_dir=tmp_path,
+        audio_dir=tmp_path / "audio",
+        gemini_api_key="test-key",
+        use_vertex_ai=False,
+    )
+    tts = GeminiTTS(settings)
+    models = _CaptureModels(sine_wav(0.4))
+    tts._client = SimpleNamespace(models=models)  # type: ignore[assignment]
+
+    bulletin = "សារព្រមានទឹកជំនន់សម្រាប់ឃុំ"
+    artifact = await tts.synthesize(bulletin)
+
+    call = models.calls[0]
+    spoken = call["contents"][0]["parts"][0]["text"]
+    assert spoken == bulletin  # the spoken turn is exactly the bulletin
+    assert "announcer" not in spoken.lower()
+    assert "announcer" in call["config"]["system_instruction"].lower()
+    assert artifact.mime_type == "audio/mpeg"
+    assert artifact.duration_seconds == pytest.approx(0.4, abs=0.05)
 
 
 async def test_tts_without_key_raises_unavailable(tmp_path):

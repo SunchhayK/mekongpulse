@@ -2,6 +2,14 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.4.1] — 2026-10-18
+
+Voice notes no longer read the announcer instructions aloud.
+
+### Fixed
+
+- `shared` — 0.3.1: the TTS request no longer carries the announcer preamble in the spoken content. `synth_tts_prompt()` concatenated the delivery instructions and the bulletin into one user turn, and a live voice note read the preamble ("You are a calm, respectful announcer…") aloud before the bulletin. It is replaced by `tts_style_instruction()`, passed as the request's `system_instruction`; the spoken turn is exactly the bulletin. Regression test `test_tts_speaks_only_the_bulletin` captures the outgoing request and asserts the spoken text is the bulletin alone.
+
 ## [0.4.0] — 2026-10-18
 
 The officials' console gets its Tier 3 read-path tools: a printable status summary, CSV export, alert dispatch log, and an interactive basin map.
