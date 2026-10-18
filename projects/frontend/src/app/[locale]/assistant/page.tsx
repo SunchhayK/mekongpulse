@@ -3,16 +3,25 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { AssistantChat } from "@/components/AssistantChat";
+import { AssistantChat, type ChatMessage } from "@/components/AssistantChat";
 import { CommuneSearch } from "@/components/CommuneSearch";
 import { ArrowLeftIcon, CloseIcon, MapPinIcon } from "@/components/icons";
 import { Link } from "@/i18n/navigation";
-import { api, ApiError, type OfficerSession } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type AdvisorAction,
+  type AdvisorToolCall,
+  type OfficerSession,
+} from "@/lib/api";
 import { intlLocale } from "@/lib/design";
 
 const SESSION_KEY = "mekongpulse.officer_session";
 /** Pre-sign-in builds kept the raw officer token here; the UI no longer uses it. */
 const LEGACY_TOKEN_KEY = "mekongpulse.officer_token";
+const CONVERSATION_KEY = "mekongpulse.assistant_conversation.v1";
+const FOCUS_KEY = "mekongpulse.assistant_focus.v1";
+const MAX_STORED_MESSAGES = 60;
 
 /** Stored session, or null when absent, malformed, or already expired. */
 function readStoredSession(): OfficerSession | null {
@@ -42,6 +51,88 @@ function writeStoredSession(value: OfficerSession | null) {
     }
   } catch {
     // storage unavailable (private mode) — the in-memory session still works
+  }
+}
+
+/** Stored threads come from the network: accept only the shape we render. */
+function readToolCall(value: unknown): AdvisorToolCall | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.name !== "string" || typeof raw.status !== "string" || typeof raw.summary !== "string") {
+    return null;
+  }
+  return { name: raw.name, status: raw.status, summary: raw.summary };
+}
+
+function readAction(value: unknown): AdvisorAction | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.type !== "string" || typeof raw.status !== "string") return null;
+  return { type: raw.type, status: raw.status, detail: typeof raw.detail === "string" ? raw.detail : null };
+}
+
+function readMessage(value: unknown): ChatMessage | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const role = raw.role;
+  if ((role !== "user" && role !== "assistant") || typeof raw.content !== "string") return null;
+
+  const message: ChatMessage = { role, content: raw.content };
+  if (Array.isArray(raw.toolCalls)) {
+    const toolCalls = raw.toolCalls.map(readToolCall).filter((call): call is AdvisorToolCall => call !== null);
+    if (toolCalls.length > 0) message.toolCalls = toolCalls;
+  }
+  if (Array.isArray(raw.actions)) {
+    const actions = raw.actions.map(readAction).filter((action): action is AdvisorAction => action !== null);
+    if (actions.length > 0) message.actions = actions;
+  }
+  return message;
+}
+
+function readStoredConversation(): ChatMessage[] {
+  try {
+    const raw = window.localStorage.getItem(CONVERSATION_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map(readMessage)
+      .filter((message): message is ChatMessage => message !== null)
+      .slice(-MAX_STORED_MESSAGES);
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredConversation(messages: ChatMessage[]) {
+  try {
+    if (messages.length === 0) {
+      window.localStorage.removeItem(CONVERSATION_KEY);
+    } else {
+      window.localStorage.setItem(CONVERSATION_KEY, JSON.stringify(messages.slice(-MAX_STORED_MESSAGES)));
+    }
+  } catch {
+    // storage unavailable (private mode) — the thread still works in memory
+  }
+}
+
+function readStoredFocus(): string {
+  try {
+    return window.localStorage.getItem(FOCUS_KEY)?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeStoredFocus(code: string) {
+  try {
+    if (code) {
+      window.localStorage.setItem(FOCUS_KEY, code);
+    } else {
+      window.localStorage.removeItem(FOCUS_KEY);
+    }
+  } catch {
+    // storage unavailable (private mode)
   }
 }
 
@@ -89,12 +180,40 @@ function AssistantView() {
   const [passcode, setPasscode] = useState("");
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
-  const [communeCode, setCommuneCode] = useState(() => searchParams.get("code")?.trim() ?? "");
+  const initialCode = searchParams.get("code")?.trim() ?? "";
+  const [communeCode, setCommuneCode] = useState(initialCode);
   const [pickingCommune, setPickingCommune] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversationReady, setConversationReady] = useState(false);
+  const [focusReady, setFocusReady] = useState(false);
 
   useEffect(() => {
     setSession(readStoredSession());
   }, []);
+
+  // Hydrate the thread after mount so the static export prerenders empty.
+  useEffect(() => {
+    setMessages(readStoredConversation());
+    setConversationReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (conversationReady) writeStoredConversation(messages);
+  }, [messages, conversationReady]);
+
+  // ?code= wins on load; otherwise fall back to the last focused commune.
+  useEffect(() => {
+    if (!initialCode) {
+      const stored = readStoredFocus();
+      if (stored) setCommuneCode(stored);
+    }
+    setFocusReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (focusReady) writeStoredFocus(communeCode);
+  }, [communeCode, focusReady]);
 
   // Expired sessions count as signed out; a 401 mid-conversation signs out too.
   const activeSession = useMemo(
@@ -106,6 +225,11 @@ function AssistantView() {
     setSession(null);
     setSignInError(null);
     writeStoredSession(null);
+  }, []);
+
+  const clearConversation = useCallback(() => {
+    setMessages([]);
+    writeStoredConversation([]);
   }, []);
 
   async function signIn(event: React.FormEvent) {
@@ -152,6 +276,15 @@ function AssistantView() {
           </span>
         </span>
         <div className="spacer" />
+        <button
+          type="button"
+          className="btn assistant-signout assistant-clear label-small"
+          aria-label={t("clearConversationAria")}
+          title={t("clearConversationAria")}
+          onClick={clearConversation}
+        >
+          {t("clearConversation")}
+        </button>
         {activeSession && (
           <>
             <span className="session-chip label-small">
@@ -255,6 +388,8 @@ function AssistantView() {
           communeCode={communeCode || null}
           session={activeSession?.session ?? null}
           onSessionInvalid={clearSession}
+          messages={messages}
+          setMessages={setMessages}
         />
       </main>
     </div>

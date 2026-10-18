@@ -16,9 +16,14 @@ class FakeBot:
         return SimpleNamespace(message_id=11)
 
 
+class FailingBot:
+    async def send_message(self, chat_id, text):
+        raise Exception("Bad Request: chat not found")
+
+
 class FakeTelegramApp:
-    def __init__(self) -> None:
-        self.bot = FakeBot()
+    def __init__(self, bot=None) -> None:
+        self.bot = bot or FakeBot()
 
     async def shutdown(self) -> None:
         pass
@@ -67,3 +72,25 @@ async def test_digest_posts_to_channel_when_wired(repo, settings, make_pipeline,
     assert chat_id == "chan-42"
     assert "MekongPulse" in text
     assert body["digest_preview"] in text
+
+
+async def test_digest_reports_actionable_publish_error(
+    repo, settings, make_pipeline, make_app
+):
+    wired = settings.model_copy(update={"telegram_broadcast_channel_id": "chan-42"})
+    app = make_app(
+        repository=repo,
+        pipeline=make_pipeline(repo),
+        settings_override=wired,
+        telegram_app=FakeTelegramApp(bot=FailingBot()),
+    )
+    async with running_client(app) as client:
+        response = await client.post("/api/v1/digest/send")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "error"
+    assert "administrator" in body["detail"]
+    assert "TELEGRAM_BROADCAST_CHANNEL_ID" in body["detail"]
+    assert body["digest_preview"]
+    assert "chat not found" not in body["detail"].lower()

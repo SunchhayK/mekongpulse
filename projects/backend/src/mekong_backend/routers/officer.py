@@ -9,7 +9,8 @@ the legacy X-Officer-Token header kept for scripts. `POST
 the chat itself is open). `POST /api/v1/digest/send` posts the deterministic
 bilingual digest to the public Telegram channel and is admin-guarded like
 /telemetry/sync (cron-friendly: missing Telegram config is an "unavailable"
-status, not an error).
+status, not an error). `GET /api/v1/telegram/channel` is an admin diagnostic
+that verifies the bot can see the configured broadcast channel.
 """
 
 from __future__ import annotations
@@ -79,6 +80,46 @@ def _login_limiter(request: Request) -> PasscodeRateLimiter:
     return limiter
 
 
+def _telegram_error_detail(exc: Exception) -> str:
+    """Map a Telegram failure to operator guidance without echoing raw payloads."""
+    message = str(exc).lower()
+    kind = type(exc).__name__.lower()
+    if "chat not found" in message:
+        return (
+            "Telegram channel not found: add the bot as an administrator of the "
+            "broadcast channel, then set TELEGRAM_BROADCAST_CHANNEL_ID to the "
+            "channel's -100... id or @username."
+        )
+    if "blocked by the user" in message or "kicked" in message or "deactivated" in message:
+        return (
+            "Telegram bot was blocked or removed: re-add it as an administrator "
+            "of the broadcast channel."
+        )
+    if (
+        "not enough rights" in message
+        or "not a member" in message
+        or "forbidden" in message
+        or "forbidden" in kind
+    ):
+        return (
+            'Telegram bot lacks permission: grant it the "Post messages" '
+            "administrator permission on the broadcast channel."
+        )
+    if (
+        "timed out" in message
+        or "timeout" in message
+        or "network" in message
+        or "connection" in message
+        or "timedout" in kind
+        or "networkerror" in kind
+    ):
+        return "Telegram is unreachable (timeout or network error); retry shortly."
+    return (
+        "Telegram rejected the post: verify TELEGRAM_BROADCAST_CHANNEL_ID and "
+        "the bot's administrator permissions."
+    )
+
+
 def _channel_publisher(request: Request):
     """Publisher closure for the public channel; None when Telegram is not wired."""
     settings = request.app.state.settings
@@ -88,7 +129,17 @@ def _channel_publisher(request: Request):
         return None
 
     async def publish(text: str) -> dict:
-        message = await telegram_app.bot.send_message(chat_id=channel, text=text)
+        try:
+            message = await telegram_app.bot.send_message(chat_id=channel, text=text)
+        except Exception as exc:  # noqa: BLE001 - action failures are values
+            detail = _telegram_error_detail(exc)
+            log_event(
+                log,
+                "TELEGRAM_PUBLISH_FAILED",
+                trace_id=getattr(request.state, "trace_id", None),
+                error=type(exc).__name__,
+            )
+            return {"status": "error", "detail": detail}
         return {"message_id": getattr(message, "message_id", None)}
 
     return publish
@@ -266,15 +317,86 @@ async def send_digest(request: Request) -> dict:
 
     message = f"{khmer}\n\n{english}"[:TELEGRAM_MESSAGE_LIMIT]
     try:
-        await publisher(message)
+        result = await publisher(message)
     except Exception as exc:  # noqa: BLE001 - cron-friendly: report, never fail the run
+        detail = _telegram_error_detail(exc)
         log_event(
             log,
             "DIGEST_SEND_FAILED",
             trace_id=getattr(request.state, "trace_id", None),
-            error=str(exc),
+            error=detail,
         )
-        return {"status": "error", "detail": str(exc), "digest_preview": preview}
+        return {"status": "error", "detail": detail, "digest_preview": preview}
+
+    if result.get("status") == "error":
+        detail = str(result.get("detail"))
+        log_event(
+            log,
+            "DIGEST_SEND_FAILED",
+            trace_id=getattr(request.state, "trace_id", None),
+            error=detail,
+        )
+        return {"status": "error", "detail": detail, "digest_preview": preview}
 
     log_event(log, "DIGEST_SENT", trace_id=getattr(request.state, "trace_id", None))
     return {"status": "posted", "digest_preview": preview}
+
+
+@router.get("/telegram/channel", dependencies=[Depends(require_admin)])
+async def telegram_channel(request: Request) -> dict:
+    """Admin diagnostic: confirm the bot can see the broadcast channel.
+
+    Unconfigured Telegram is a 503 problem, but a Telegram-side failure is a
+    200 with ``ok: false`` and an actionable detail. Keeping transport failures
+    out of the problem contract lets a setup script read one response shape
+    instead of branching on status codes.
+    """
+    settings = request.app.state.settings
+    channel = settings.telegram_broadcast_channel_id
+    telegram_app = getattr(request.app.state, "telegram_app", None)
+    trace_id = getattr(request.state, "trace_id", None)
+    if telegram_app is None or not channel:
+        detail = (
+            "Telegram bot is not initialized: verify TELEGRAM_BOT_TOKEN and backend startup logs"
+            if telegram_app is None
+            else "Set TELEGRAM_BROADCAST_CHANNEL_ID to the channel's -100... id or @username"
+        )
+        return problem(
+            503,
+            "Telegram not configured",
+            detail,
+            type_suffix="telegram-not-configured",
+            trace_id=trace_id,
+        )
+
+    try:
+        chat = await telegram_app.bot.get_chat(chat_id=channel)
+    except Exception as exc:  # noqa: BLE001 - report the channel state, don't fail the check
+        detail = _telegram_error_detail(exc)
+        log_event(
+            log,
+            "TELEGRAM_CHANNEL_CHECK_FAILED",
+            trace_id=trace_id,
+            error=type(exc).__name__,
+        )
+        return {"configured_id": str(channel), "ok": False, "detail": detail}
+
+    chat_type = getattr(chat, "type", None)
+    if chat_type is not None:
+        chat_type = str(getattr(chat_type, "value", chat_type))
+    result = {
+        "configured_id": str(channel),
+        "ok": True,
+        "id": getattr(chat, "id", None),
+        "type": chat_type,
+        "title": getattr(chat, "title", None),
+        "username": getattr(chat, "username", None),
+    }
+    log_event(
+        log,
+        "TELEGRAM_CHANNEL_CHECK",
+        trace_id=trace_id,
+        ok=True,
+        chat_type=chat_type,
+    )
+    return {key: value for key, value in result.items() if value is not None}

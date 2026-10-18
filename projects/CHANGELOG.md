@@ -2,6 +2,20 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.9.0] — 2026-10-18
+
+Assistant replies render as markdown, the officer thread survives refresh, and channel-post failures explain themselves.
+
+### Added
+
+- `frontend` — 0.7.0: assistant replies render through `react-markdown` + `remark-gfm` — headings, bold/italic, lists, tables, code, blockquotes, and safe external links, with no raw HTML — styled at chat scale for Khmer text. The conversation and focused commune now persist in `localStorage` (60-message cap, defensive validation, storage failures degrade silently) with a clear-conversation control. 342 message keys per locale.
+- `backend` — 0.5.0: admin `GET /api/v1/telegram/channel` verifies that the bot can see the configured broadcast channel and returns its id/type/title/username, or `ok: false` with actionable setup guidance. Publish and digest failures now map Telegram errors (`chat not found`, missing rights, blocked/kicked, timeout/network) to operator instructions instead of raw error text; the digest reports publisher errors as `status: error` rather than claiming success.
+
+### Changed
+
+- `technical-report.md` 1.6.0 → 1.7.0 — markdown rendering, client-side thread persistence, and the channel diagnostic endpoint documented; test counts refreshed (146 shared, 83 backend, 37 bot).
+- `product-report.md` 1.5.0 → 1.6.0 — assistant formatting/history and channel-setup guidance reflected in FR-13.
+
 ## [0.8.0] — 2026-10-18
 
 The advisor survives one model's daily quota by rotating to sibling Gemini Flash models at the call level.

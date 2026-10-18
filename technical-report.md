@@ -3,7 +3,7 @@ id: REPORT-TECH-002
 document_type: technical_report
 title: MekongPulse Technical Architecture and Engineering Report
 project_name: "MekongPulse"
-version: 1.6.0
+version: 1.7.0
 status: approved
 last_updated: 2026-10-18
 owners: ["@bytelab-lead", "@tech-lead", "@backend-lead"]
@@ -28,6 +28,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
   - Deterministic verification layer (`shared/src/mekong_shared/evidence.py`): provenance, QC over the stored station series (gaps, stuck, spike, range), two heuristic cross-checks (rainfall agreement, upstream coherence), a confidence label with stable reason ids, a 5-step bilingual evidence chain, and the MRC-style limitations notice — no LLM in any verdict.
   - Ground-truth field reporting: `FieldReport` model + `field_reports` table (idempotent DDL), filed from the Telegram `/report` flow or `POST /api/v1/communes/{code}/reports` and listed for officials, the console, and the commune page.
   - Officer assistant with actions (`POST /api/v1/advisor`) on a dedicated page (`/{locale}/assistant`) and in Telegram: `get_commune_evidence`, `draft_status_update`, and `publish_to_channel` tools with tool-call tracing (`answer_detailed` → `AdvisorOutcome`); publishing is gated by an officer session issued by `POST /api/v1/officer/login` (passcode → HMAC-signed, 12 h token; the admin token never reaches the browser, while the legacy `X-Officer-Token` header remains for scripts). A deterministic bilingual daily digest (`shared/src/mekong_shared/digest.py`) posts via admin-guarded `POST /api/v1/digest/send` or the bot's `/digest`.
+  - Assistant web surface: replies render as GFM markdown (`react-markdown` + `remark-gfm`; raw HTML disabled, external links open safely) at chat scale for Khmer; the thread and focused commune persist in `localStorage` (60-message cap) across refreshes. Admin `GET /api/v1/telegram/channel` verifies that the bot can see the configured broadcast channel, and publish/digest failures map Telegram errors to setup guidance.
   - Spoken Khmer assistant input: `POST /api/v1/advisor/transcribe` forwards a recorded clip (≤ 4 MB, ≤ 60 s) to `gemini-3.8-flash` audio understanding and returns text; provider or quota failures raise `TranscriptionUnavailable` → 503 problem, never a 500.
   - Model resilience: an ordered Gemini text chain (`GEMINI_TEXT_MODEL`, then `GEMINI_FALLBACK_MODELS`; default `gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite`) rotates inside the model-call layer — an ADK `BaseLlm` wrapper for the primary engine and the same loop in the native ReAct caller; STT uses the chain too. Quota (429), overload (503), and missing-model (404) failures cool down per model (1 h / 60 s / 6 h) without replaying a turn. Gemma 4 was evaluated and rejected: `gemma-4-26b-a4b-it` emits tool calls but leaks reasoning and ignores language instructions in final answers, and `gemma-4-31b-it` fails with tools.
   - Bilingual Khmer-first web: next-intl `[locale]` routing (`km` default, `en` toggle) with static export (`trailingSlash`; Firebase `/` → `/km/index.html`), the dedicated officer assistant page at `/{locale}/assistant`, the public commune page at `/{locale}/commune?code=XXXXXX`, and `WEB_BASE_URL` driving the commune links appended to channel posts.
@@ -708,6 +709,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/DigestSendResult"
 
+  /api/v1/telegram/channel:
+    get:
+      summary: Admin diagnostic for the configured broadcast channel
+      operationId: checkTelegramChannel
+      responses:
+        "200":
+          description: ok true with id/type/title/username, or ok false with actionable detail.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [configured_id, ok]
+                properties:
+                  configured_id:
+                    type: string
+                  ok:
+                    type: boolean
+                  id:
+                    type: integer
+                  type:
+                    type: string
+                  title:
+                    type: string
+                  username:
+                    type: string
+                  detail:
+                    type: string
+        "503":
+          description: Telegram bot token or channel id is not configured.
+
   /api/v1/telegram/webhook:
     post:
       summary: Telegram Bot Webhook Endpoint
@@ -1042,7 +1073,7 @@ components:
 
 ## 5. Test Plans and Test Cases
 
-Current suites, all green: 146 shared, 73 backend, 37 bot tests; the frontend typecheck and static export are clean. New coverage lands in `shared/tests/test_evidence.py`, `shared/tests/test_stt.py`, `shared/tests/test_model_rotation.py`, `shared/tests/test_adk_rotation.py`, `backend/tests/test_evidence_api.py`, `backend/tests/test_reports_api.py`, `backend/tests/test_advisor_api.py`, `backend/tests/test_officer_auth.py`, `backend/tests/test_officer_login_api.py`, `backend/tests/test_transcribe_api.py`, `backend/tests/test_digest_api.py`, and the extended `bot/tests/test_service.py`.
+Current suites, all green: 146 shared, 83 backend, 37 bot tests; the frontend typecheck and static export are clean. New coverage lands in `shared/tests/test_evidence.py`, `shared/tests/test_stt.py`, `shared/tests/test_model_rotation.py`, `shared/tests/test_adk_rotation.py`, `backend/tests/test_evidence_api.py`, `backend/tests/test_reports_api.py`, `backend/tests/test_advisor_api.py`, `backend/tests/test_officer_auth.py`, `backend/tests/test_officer_login_api.py`, `backend/tests/test_officer_channel_api.py`, `backend/tests/test_transcribe_api.py`, `backend/tests/test_digest_api.py`, and the extended `bot/tests/test_service.py`.
 
 ### 5.1 Deterministic test matrix
 
@@ -1174,7 +1205,7 @@ def test_fertilizer_hold_during_heavy_rain_forecast():
 ### ADR-0009: next-intl with Khmer-First Locale Routing
 
 - **Status**: Accepted
-- **Context**: The public surfaces must be Khmer-first for relay people and farmers, with English for a secondary audience (officials, partners, judges). Ad-hoc translation dictionaries had no routing, no locale-aware links, and no way to keep 340 message keys per locale in sync.
+- **Context**: The public surfaces must be Khmer-first for relay people and farmers, with English for a secondary audience (officials, partners, judges). Ad-hoc translation dictionaries had no routing, no locale-aware links, and no way to keep 342 message keys per locale in sync.
 - **Decision**: Adopt next-intl 3.26.5 with `[locale]` routing — `km` default, `en` toggle — on the static export (`trailingSlash`; the Firebase `/` rewrite resolves to `/km/index.html`). Commune links use `/{locale}/commune?code=…`, and channel posts always link the Khmer page.
 - **Consequences**:
   - _Positive_: One framework owns routing, messages, and links; Khmer is the default everywhere; the same page serves both audiences.

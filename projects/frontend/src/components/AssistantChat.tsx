@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { api, ApiError, type AdvisorAction, type AdvisorToolCall } from "@/lib/api";
 import { MicIcon, SendIcon, StopIcon } from "./icons";
 
@@ -12,14 +14,27 @@ export interface AssistantChatProps {
   session?: string | null;
   /** Called when /advisor rejects the session (401) so the page can sign out. */
   onSessionInvalid?: () => void;
+  /** Thread state is owned by the page so its header can clear it. */
+  messages: ChatMessage[];
+  setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
 }
 
-interface ChatMessage {
+export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   toolCalls?: AdvisorToolCall[];
   actions?: AdvisorAction[];
 }
+
+/** Markdown replies never load raw HTML; links leave the app safely. */
+const MARKDOWN_COMPONENTS: Components = {
+  a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+  table: ({ node: _node, ...props }) => (
+    <div className="assistant-md-table">
+      <table {...props} />
+    </div>
+  ),
+};
 
 const HISTORY_TURNS = 6;
 /** Hard cap: the transcribe endpoint rejects long uploads. */
@@ -53,10 +68,15 @@ function readAsDataUrl(blob: Blob): Promise<string> {
  * a pinned composer row, and Khmer voice input transcribed by the server
  * (browser speech APIs do not cover Khmer).
  */
-export function AssistantChat({ communeCode, session, onSessionInvalid }: AssistantChatProps) {
+export function AssistantChat({
+  communeCode,
+  session,
+  onSessionInvalid,
+  messages,
+  setMessages,
+}: AssistantChatProps) {
   const t = useTranslations("Officer");
   const locale = useLocale() === "en" ? "en" : "km";
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -279,7 +299,15 @@ export function AssistantChat({ communeCode, session, onSessionInvalid }: Assist
               {message.role === "user" ? t("you") : t("assistant")}
             </span>
             <div className="officer-bubble body-medium" data-role={message.role}>
-              {message.content}
+              {message.role === "assistant" ? (
+                <div className="assistant-md">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+                    {message.content}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                message.content
+              )}
             </div>
             {message.toolCalls && message.toolCalls.length > 0 && (
               <details className={`officer-tools assistant-tools--${message.role}`}>

@@ -360,6 +360,8 @@
     "draftOnly": "Draft-only mode — sign in as an officer to publish to the channel.",
     "signedIn": "Officer · expires {time}",
     "signOut": "Sign out",
+    "clearConversation": "Clear conversation",
+    "clearConversationAria": "Clear the conversation and its saved history",
     "signIn": {
       "title": "Officer sign in",
       "passcode": "Officer passcode",
