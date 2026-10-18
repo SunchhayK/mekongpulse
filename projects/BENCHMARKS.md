@@ -98,6 +98,24 @@ Gemini calls.
 - `backend` 90 MiB / 0.18% CPU, `db` 57 MiB / 0.00%, `bot` 54 MiB / 0.00%.
 - Database: 10 MB total; largest table `communes` 1.6 MB.
 
+## Vertex AI runtime (current, 2026-10-18)
+
+The deployment now runs through Vertex AI (`global`) with the native ReAct advisor engine.
+
+| metric | value |
+|---|---:|
+| Advisor turn (one tool call) | 11.5 s |
+| Khmer STT (≈60 s clip) | 6.3 s |
+| New bulletin TTS — Flash-Lite, 58.6 s audio | 35.9 s |
+| Repeat assessment, cached audio + polish | 25 ms |
+| Audio delivery | `200 audio/mpeg` (469 KiB) |
+
+Model: `gemini-3.8-flash-lite-tts` (cache namespace `v2`). The earlier voice
+numbers above were measured on the Gemini API with Flash TTS; Vertex Flash-Lite
+costs 33% less on audio output, and its first generation after a restart was
+35.9 s versus 74 s for Flash TTS, while warm-path synthesis is similar. Repeats
+stay instant because both the MP3 and the polished text are cached.
+
 ## Cost implications
 
 - On PostgreSQL these writes are not billed; the savings are CPU, WAL, and
