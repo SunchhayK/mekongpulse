@@ -1145,7 +1145,7 @@ dev = [
 
 [[package]]
 name = "mekong-shared"
-version = "0.5.0"
+version = "0.6.0"
 source = { editable = "shared" }
 dependencies = [
     { name = "asyncpg" },

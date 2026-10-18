@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     # --- gemini -----------------------------------------------------------
     gemini_api_key: str | None = None
     gemini_text_model: str = "gemini-3.8-flash"
+    # Comma-separated ordered fallbacks; quotas are per model per day.
+    gemini_fallback_models: str = "gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite"
     gemini_tts_model: str = "gemini-3.8-flash-tts"
     use_vertex_ai: bool = False
     vertex_project: str | None = None
@@ -80,6 +82,12 @@ class Settings(BaseSettings):
     @property
     def has_gemini(self) -> bool:
         return bool(self.gemini_api_key) or self.use_vertex_ai
+
+    @property
+    def gemini_model_chain(self) -> list[str]:
+        """Primary text model followed by configured fallbacks, deduplicated."""
+        names = [self.gemini_text_model, *self.gemini_fallback_models.split(",")]
+        return list(dict.fromkeys(name.strip() for name in names if name and name.strip()))
 
     @property
     def cors_origin_list(self) -> list[str]:

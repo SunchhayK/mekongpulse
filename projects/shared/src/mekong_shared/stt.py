@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 
 from .config import Settings
+from .model_rotation import rotator_for
 
 
 class TranscriptionUnavailable(Exception):
@@ -66,19 +67,31 @@ async def transcribe_audio(
     instruction = transcribe_instruction(locale_hint)
 
     def _generate() -> str:
-        response = client.models.generate_content(
-            model=settings.gemini_text_model,
-            contents=[
-                {
-                    "role": "user",
-                    "parts": [
-                        {"inline_data": {"mime_type": mime_type, "data": audio}},
-                        {"text": instruction},
+        rotator = rotator_for(settings.gemini_model_chain)
+        last_error: BaseException | None = None
+        for model in rotator.ordered():
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=[
+                        {
+                            "role": "user",
+                            "parts": [
+                                {"inline_data": {"mime_type": mime_type, "data": audio}},
+                                {"text": instruction},
+                            ],
+                        }
                     ],
-                }
-            ],
-        )
-        return _extract_transcript(response)
+                )
+            except Exception as exc:  # noqa: BLE001 - provider failure, rotate
+                if not rotator.should_rotate(exc):
+                    raise
+                rotator.mark_failed(model, exc)
+                last_error = exc
+                continue
+            rotator.mark_ok(model)
+            return _extract_transcript(response)
+        raise last_error or TranscriptionUnavailable("No Gemini model configured")
 
     try:
         transcript = await asyncio.to_thread(_generate)

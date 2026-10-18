@@ -85,6 +85,36 @@ async def test_transcribe_defaults_to_bilingual_instruction(tmp_path, monkeypatc
     assert models.calls[0]["contents"][0]["parts"][1]["text"] == TRANSCRIBE_INSTRUCTION
 
 
+async def test_quota_rotates_to_the_next_model(tmp_path, monkeypatch):
+    class _RotatingModels:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def generate_content(self, *, model, contents):
+            self.calls.append(model)
+            if model == "unit-stt-primary":
+                raise RuntimeError("429 RESOURCE_EXHAUSTED")
+            return _response(SimpleNamespace(text="fallback transcript"))
+
+    models = _RotatingModels()
+    patch_genai_client(monkeypatch, models)
+    settings = Settings(
+        _env_file=None,
+        environment="development",
+        data_dir=tmp_path,
+        audio_dir=tmp_path / "audio",
+        gemini_api_key="test-key",
+        use_vertex_ai=False,
+        gemini_text_model="unit-stt-primary",
+        gemini_fallback_models="unit-stt-secondary",
+    )
+
+    text = await transcribe_audio(settings, b"audio", "audio/webm", "en")
+
+    assert text == "fallback transcript"
+    assert models.calls == ["unit-stt-primary", "unit-stt-secondary"]
+
+
 async def test_provider_error_degrades_to_unavailable(tmp_path, monkeypatch):
     """Quota/transport failures must surface as TranscriptionUnavailable, never 500."""
     models = _CaptureModels(RuntimeError("429 RESOURCE_EXHAUSTED"))

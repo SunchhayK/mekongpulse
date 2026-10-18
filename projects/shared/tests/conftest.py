@@ -22,6 +22,16 @@ from support import healthy_handlers, mrc_transport, weather_payload, weather_tr
 DATA_DIR = PROJECTS_ROOT / "data"
 
 
+@pytest.fixture(autouse=True)
+def reset_model_rotators():
+    """Cooldowns are process-wide; keep one test's quota failure out of the next."""
+    from mekong_shared import model_rotation
+
+    yield
+    with model_rotation._ROTATORS_LOCK:
+        model_rotation._ROTATORS.clear()
+
+
 @pytest.fixture(scope="session")
 def data_dir():
     return DATA_DIR

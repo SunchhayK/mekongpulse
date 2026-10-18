@@ -23,6 +23,7 @@ from typing import Protocol
 
 from .adk_tools import FUNCTION_DECLARATIONS, AdvisorTools
 from .config import Settings
+from .model_rotation import rotator_for
 from .models import ConversationTurn
 
 log = logging.getLogger("mekongpulse.advisor")
@@ -129,13 +130,15 @@ class ScriptedLLM:
 class GeminiFunctionCaller:
     """google-genai function-calling step (sync SDK wrapped in a thread)."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, client=None) -> None:
         self._settings = settings
-        self._client = None
+        self._client = client
 
     async def step(self, contents: list[dict]) -> StepResult:
         if not self._settings.has_gemini:
             raise AdvisorUnavailable("GEMINI_API_KEY / Vertex configuration is missing")
+
+        rotator = rotator_for(self._settings.gemini_model_chain)
 
         def _run() -> StepResult:
             from google import genai
@@ -149,32 +152,53 @@ class GeminiFunctionCaller:
                     )
                 else:
                     self._client = genai.Client(api_key=self._settings.gemini_api_key)
-            response = self._client.models.generate_content(
-                model=self._settings.gemini_text_model,
-                contents=contents,
-                config={
-                    "temperature": 0.3,
-                    "system_instruction": ADVISOR_INSTRUCTION,
-                    "tools": [{"function_declarations": FUNCTION_DECLARATIONS}],
-                },
-            )
-            parts = []
-            candidates = getattr(response, "candidates", None) or []
-            if candidates:
-                parts = candidates[0].content.parts or []
-            calls: list[tuple[str, dict]] = []
-            texts: list[str] = []
-            for part in parts:
-                function_call = getattr(part, "function_call", None)
-                if function_call is not None and getattr(function_call, "name", None):
-                    calls.append((function_call.name, dict(function_call.args or {})))
-                else:
-                    text = getattr(part, "text", None)
-                    if text:
-                        texts.append(text)
-            return StepResult(text="\n".join(texts).strip() or None, calls=calls)
+            config = {
+                "temperature": 0.3,
+                "system_instruction": ADVISOR_INSTRUCTION,
+                "tools": [{"function_declarations": FUNCTION_DECLARATIONS}],
+            }
+            last_error: BaseException | None = None
+            for model in rotator.ordered():
+                try:
+                    response = self._client.models.generate_content(
+                        model=model,
+                        contents=contents,
+                        config=config,
+                    )
+                except Exception as exc:  # noqa: BLE001 - provider failure, rotate
+                    if not rotator.should_rotate(exc):
+                        raise
+                    log.warning(
+                        "Model %s failed (%s); trying the next fallback",
+                        model,
+                        type(exc).__name__,
+                    )
+                    rotator.mark_failed(model, exc)
+                    last_error = exc
+                    continue
+                rotator.mark_ok(model)
+                return _step_from_response(response)
+            raise last_error or AdvisorUnavailable("No Gemini model configured")
 
         return await asyncio.to_thread(_run)
+
+
+def _step_from_response(response) -> StepResult:
+    parts = []
+    candidates = getattr(response, "candidates", None) or []
+    if candidates:
+        parts = candidates[0].content.parts or []
+    calls: list[tuple[str, dict]] = []
+    texts: list[str] = []
+    for part in parts:
+        function_call = getattr(part, "function_call", None)
+        if function_call is not None and getattr(function_call, "name", None):
+            calls.append((function_call.name, dict(function_call.args or {})))
+        else:
+            text = getattr(part, "text", None)
+            if text:
+                texts.append(text)
+    return StepResult(text="\n".join(texts).strip() or None, calls=calls)
 
 
 _SUMMARY_PRIORITY_KEYS = (
@@ -312,6 +336,67 @@ async def run_react(
     return last_text or "(advisor reached the tool-call limit)"
 
 
+_ADK_LLM_CACHE: dict[str, object] = {}
+_ROTATING_LLM_CLASS = None
+
+
+def _adk_llm(model: str):
+    """One ADK Gemini model instance per id (the client is reused across calls)."""
+    llm = _ADK_LLM_CACHE.get(model)
+    if llm is None:
+        from google.adk.models.registry import LLMRegistry  # type: ignore
+
+        llm = LLMRegistry.resolve(model)(model=model)
+        _ADK_LLM_CACHE[model] = llm
+    return llm
+
+
+def _rotating_llm_class():
+    """ADK BaseLlm that rotates models per call, never replaying a turn."""
+    global _ROTATING_LLM_CLASS
+    if _ROTATING_LLM_CLASS is not None:
+        return _ROTATING_LLM_CLASS
+
+    from google.adk.models import BaseLlm  # type: ignore
+    from pydantic import Field
+
+    class RotatingGeminiLlm(BaseLlm):
+        models: list[str] = Field(default_factory=list)
+
+        async def generate_content_async(self, llm_request, stream: bool = False):
+            rotator = rotator_for(self.models)
+            last_error: BaseException | None = None
+            for model in rotator.ordered():
+                produced = False
+                try:
+                    llm = _adk_llm(model)
+                    # Gemini reads the model from the request, not from self.model.
+                    request = llm_request.model_copy(update={"model": model})
+                    async for response in llm.generate_content_async(request, stream=stream):
+                        produced = True
+                        yield response
+                except Exception as exc:  # noqa: BLE001 - provider failure, rotate
+                    # A failure after partial output cannot be replayed safely.
+                    if produced or not rotator.should_rotate(exc):
+                        raise
+                    log.warning(
+                        "Model %s failed (%s); trying the next fallback",
+                        model,
+                        type(exc).__name__,
+                    )
+                    rotator.mark_failed(model, exc)
+                    last_error = exc
+                    continue
+                rotator.mark_ok(model)
+                return
+            if last_error is not None:
+                raise last_error
+            raise AdvisorUnavailable("No Gemini model configured")
+
+    _ROTATING_LLM_CLASS = RotatingGeminiLlm
+    return RotatingGeminiLlm
+
+
 def build_adk_agent(tools: AdvisorTools, settings: Settings):
     """Best-effort Google ADK LlmAgent; returns None when ADK is unavailable."""
     try:
@@ -319,9 +404,15 @@ def build_adk_agent(tools: AdvisorTools, settings: Settings):
     except Exception:  # noqa: BLE001 - ADK is optional at runtime
         return None
     try:
+        chain = settings.gemini_model_chain
+        model = _rotating_llm_class()(model=chain[0], models=chain)
+    except Exception as exc:  # noqa: BLE001 - fall back to the single configured model
+        log.warning("ADK rotating model setup failed; using %s: %s", settings.gemini_text_model, exc)
+        model = settings.gemini_text_model
+    try:
         return LlmAgent(
             name="mekong_advisor",
-            model=settings.gemini_text_model,
+            model=model,
             instruction=ADVISOR_INSTRUCTION,
             tools=[getattr(tools, decl["name"]) for decl in FUNCTION_DECLARATIONS],
         )

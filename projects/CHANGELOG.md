@@ -2,6 +2,19 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.8.0] — 2026-10-18
+
+The advisor survives one model's daily quota by rotating to sibling Gemini Flash models at the call level.
+
+### Added
+
+- `shared` — 0.6.0: `model_rotation.py` — an ordered chain from `GEMINI_TEXT_MODEL` plus `GEMINI_FALLBACK_MODELS` (default `gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite`) with in-process cooldowns: quota 429 for one hour, overload 503 for one minute, missing model 404 for six hours. Both engines rotate per model call — an ADK `BaseLlm` wrapper and the native google-genai ReAct caller — and STT follows the same chain, so a failed turn is never replayed and `publish_to_channel` cannot post twice. A failure after partial output is raised, not retried.
+
+### Changed
+
+- `technical-report.md` 1.5.0 → 1.6.0 — model fallback documented in the architecture and security notes; ADR-0011 records why rotation happens per call and why Gemma was rejected. Verified against the live key: `gemini-3.7-flash`, `gemini-3.6-flash`, and `gemini-3.5-flash-lite` each return tool calls; `gemma-4-26b-a4b-it` emits a correct function call but leaks its reasoning and ignored the Khmer instruction in the final answer, while `gemma-4-31b-it` returns 500 with tools.
+- Test counts refreshed: 146 shared, 73 backend, 37 bot.
+
 ## [0.7.0] — 2026-10-18
 
 The officer assistant becomes a first-class page with passcode sign-in and Khmer voice input — no more pasting the admin token.
