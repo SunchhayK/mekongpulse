@@ -47,6 +47,7 @@ MAX_MESSAGE_CHARS = 2000
 MAX_HISTORY_TURNS = 6
 MAX_AUDIO_BASE64_CHARS = 6_000_000
 MAX_AUDIO_BYTES = 4_000_000
+MIN_AUDIO_BYTES = 1_500  # Opus silence/DTX clips are ~1 KB; real speech is much larger
 
 
 class HistoryTurn(BaseModel):
@@ -289,8 +290,26 @@ async def transcribe(request: Request, body: TranscribeRequest) -> dict:
             trace_id=trace_id,
         )
 
+    mime_type = (body.mime_type or "").split(";")[0].strip().lower()
+    if not mime_type.startswith("audio/"):
+        return problem(
+            422,
+            "Invalid audio type",
+            "mime_type must be an audio/* type",
+            type_suffix="invalid-audio-type",
+            trace_id=trace_id,
+        )
+    if len(audio) < MIN_AUDIO_BYTES:
+        return problem(
+            422,
+            "Audio too short",
+            "Record at least one second of speech.",
+            type_suffix="audio-too-short",
+            trace_id=trace_id,
+        )
+
     try:
-        text = await transcribe_audio(settings, audio, body.mime_type, body.locale_hint)
+        text = await transcribe_audio(settings, audio, mime_type, body.locale_hint)
     except TranscriptionUnavailable as exc:
         return problem(
             503,
@@ -300,7 +319,14 @@ async def transcribe(request: Request, body: TranscribeRequest) -> dict:
             trace_id=trace_id,
         )
 
-    log_event(log, "TRANSCRIPTION_DONE", trace_id=trace_id, bytes=len(audio), chars=len(text))
+    log_event(
+        log,
+        "TRANSCRIPTION_DONE",
+        trace_id=trace_id,
+        bytes=len(audio),
+        mime_type=mime_type,
+        chars=len(text),
+    )
     return {"text": text}
 
 

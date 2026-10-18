@@ -2,6 +2,19 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.16.1] — 2026-10-19
+
+Voice input rejects silence and tiny clips instead of hallucinating a transcript.
+
+### Fixed
+
+- `frontend` — 0.10.1: microphone capture now uses echo cancellation, noise suppression, and auto gain; a live input-level bar shows whether the mic is hearing anything. Recordings shorter than 1.2 s, with no signal, or under 2.5 KB are rejected with a clear “too short / no speech captured” message before transcription.
+- `backend` — 0.6.1: `POST /api/v1/advisor/transcribe` normalizes MIME (`audio/webm;codecs=opus` → `audio/webm`) and rejects decoded clips under 1.5 KB with HTTP 422 `audio-too-short`, so Opus silence/DTX never reaches the model. The live request that produced a meaningless 47-character transcript was 1,192 bytes.
+
+### Changed
+
+- `technical-report.md` 1.13.0 → 1.13.1 and `product-report.md` 1.7.2 → 1.7.3 — voice capture safeguards documented; backend tests now 89.
+
 ## [0.16.0] — 2026-10-19
 
 The officer page separates chat from watch approvals; Telegram stops blocking on long turns.

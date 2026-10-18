@@ -86,6 +86,7 @@ export function AssistantChat({
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [level, setLevel] = useState(0);
   const [transcribing, setTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
@@ -97,6 +98,10 @@ export function AssistantChat({
   const discardRef = useRef(false);
   const startedAtRef = useRef(0);
   const timerRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const levelTimerRef = useRef<number | null>(null);
+  const peakLevelRef = useRef(0);
+  const levelSupportedRef = useRef(false);
 
   useEffect(() => {
     setVoiceSupported(
@@ -129,7 +134,55 @@ export function AssistantChat({
     }
   }
 
+  function stopLevelMonitor() {
+    if (levelTimerRef.current !== null) {
+      window.clearInterval(levelTimerRef.current);
+      levelTimerRef.current = null;
+    }
+    const context = audioContextRef.current;
+    audioContextRef.current = null;
+    if (context) void context.close().catch(() => undefined);
+    setLevel(0);
+  }
+
+  function startLevelMonitor(stream: MediaStream) {
+    stopLevelMonitor();
+    const AudioCtor =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtor) {
+      levelSupportedRef.current = false;
+      return;
+    }
+    try {
+      const context = new AudioCtor();
+      const source = context.createMediaStreamSource(stream);
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      audioContextRef.current = context;
+      levelSupportedRef.current = true;
+      peakLevelRef.current = 0;
+      const data = new Uint8Array(analyser.fftSize);
+      void context.resume().catch(() => undefined);
+      levelTimerRef.current = window.setInterval(() => {
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (const value of data) {
+          const centred = (value - 128) / 128;
+          sum += centred * centred;
+        }
+        const rms = Math.sqrt(sum / data.length);
+        if (rms > peakLevelRef.current) peakLevelRef.current = rms;
+        setLevel((current) => current * 0.65 + Math.min(1, rms * 8) * 0.35);
+      }, 100);
+    } catch {
+      levelSupportedRef.current = false;
+    }
+  }
+
   function releaseStream() {
+    stopLevelMonitor();
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
   }
@@ -151,12 +204,19 @@ export function AssistantChat({
     setVoiceError(null);
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
     } catch {
       setVoiceError(t("voice.errors.denied"));
       return;
     }
     streamRef.current = stream;
+    startLevelMonitor(stream);
 
     let recorder: MediaRecorder;
     try {
@@ -195,35 +255,52 @@ export function AssistantChat({
   }
 
   async function transcribeRecording(recorder: MediaRecorder) {
-    const mimeType = recorder.mimeType || "audio/webm";
+    const durationMs = Date.now() - startedAtRef.current;
+    const peak = peakLevelRef.current;
+    const hadLevel = levelSupportedRef.current;
+    const fullMime = recorder.mimeType || "audio/webm";
+    const mimeType = fullMime.split(";")[0] || "audio/webm";
     recorderRef.current = null;
-    releaseStream();
     const chunks = chunksRef.current;
     chunksRef.current = [];
+    const blob = new Blob(chunks, { type: fullMime });
+    releaseStream();
     if (discardRef.current || chunks.length === 0) return;
+    if (durationMs < 1200) {
+      setVoiceError(t("voice.errors.tooShort"));
+      return;
+    }
+    if ((hadLevel && peak < 0.01) || blob.size < 2500) {
+      setVoiceError(t("voice.errors.silent"));
+      return;
+    }
 
     setTranscribing(true);
     try {
-      const dataUrl = await readAsDataUrl(new Blob(chunks, { type: mimeType }));
+      const dataUrl = await readAsDataUrl(blob);
       const { text } = await api.transcribe({
         audio_base64: dataUrl.slice(dataUrl.indexOf(",") + 1),
         mime_type: mimeType,
         locale_hint: locale,
       });
       const transcript = text.trim();
-      if (transcript) {
-        // Append and focus; the officer reviews before sending.
-        setInput((current) => (current ? `${current} ${transcript}` : transcript));
-        window.requestAnimationFrame(() => inputRef.current?.focus());
+      if (!transcript) {
+        setVoiceError(t("voice.errors.noSpeech"));
+        return;
       }
+      // Append and focus; the officer reviews before sending.
+      setInput((current) => (current ? `${current} ${transcript}` : transcript));
+      window.requestAnimationFrame(() => inputRef.current?.focus());
     } catch (err) {
       setVoiceError(
         err instanceof ApiError
           ? err.status === 413
             ? t("voice.errors.tooLarge")
-            : err.status === 503
-              ? t("voice.errors.unavailable")
-              : t("voice.errors.failed")
+            : err.status === 422
+              ? t("voice.errors.tooShort")
+              : err.status === 503
+                ? t("voice.errors.unavailable")
+                : t("voice.errors.failed")
           : t("voice.errors.network"),
       );
     } finally {
@@ -360,6 +437,11 @@ export function AssistantChat({
             <span className="voice-dot" aria-hidden="true" />
             <span className="label-medium">{t("voice.recording")}</span>
             <span className="voice-time body-medium">{clock}</span>
+            <span className="voice-level" aria-hidden="true">
+              <span
+                style={{ width: `${Math.round(Math.max(0.02, Math.min(1, level)) * 100)}%` }}
+              />
+            </span>
             <span className="body-small muted">{t("voice.limit")}</span>
             <span className="spacer" />
             <button

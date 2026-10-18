@@ -1601,6 +1601,21 @@ button.station-card[aria-pressed="true"] {
   font-variant-numeric: tabular-nums;
   color: var(--tier-danger-ink);
 }
+.voice-level {
+  width: 72px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--tier-danger) 18%, var(--paper));
+}
+.voice-level > span {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--tier-danger);
+  transition: width 100ms linear;
+}
 .voice-strip .btn { min-height: 34px; padding: 0 14px; }
 .voice-cancel {
   background: var(--paper);
