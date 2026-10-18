@@ -23,7 +23,7 @@ from mekong_shared.security import new_trace_id, parse_traceparent
 from mekong_shared.sentinel import SentinelPatrol
 
 from .problems import register_exception_handlers
-from .routers import communes, health, patrol, subscriptions, telegram, telemetry
+from .routers import alerts, communes, health, patrol, subscriptions, telegram, telemetry
 
 log = logging.getLogger("mekongpulse.backend")
 
@@ -130,6 +130,7 @@ def create_app(
     app.include_router(communes.router)
     app.include_router(subscriptions.router)
     app.include_router(patrol.router)
+    app.include_router(alerts.router)
     app.include_router(telegram.router)
 
     if not app_settings.is_production:

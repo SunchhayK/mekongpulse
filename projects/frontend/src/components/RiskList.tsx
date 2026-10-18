@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { CommuneRiskRow } from "@/lib/api";
+import { downloadCsv, riskRegisterCsv } from "@/lib/csv";
 import { formatMeters, TIER_META, tierSeverity } from "@/lib/design";
 
 export interface RiskListProps {
@@ -36,29 +37,50 @@ export function RiskList({ rows, onSelect }: RiskListProps) {
 
   const total = province === "ALL" ? rows.length : rows.filter((r) => r.province === province).length;
 
+  function exportCsv() {
+    const now = new Date();
+    const stamp = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+    ].join("-");
+    downloadCsv(`mekongpulse-risk-register-${stamp}.csv`, riskRegisterCsv(rows));
+  }
+
   return (
     <div className="card" id="risk">
       <div className="card-title-row">
         <h2 className="title-medium" style={{ margin: 0 }}>
           Risk register / តារាងហានិភ័យ
         </h2>
-        <label className="body-small muted">
-          <span className="sr-only">Filter by province</span>
-          <select
-            className="province-select label-medium"
-            id="province-filter"
-            name="province"
-            value={province}
-            onChange={(event) => setProvince(event.target.value)}
+        <span className="card-actions">
+          <label className="body-small muted">
+            <span className="sr-only">Filter by province</span>
+            <select
+              className="province-select label-medium"
+              id="province-filter"
+              name="province"
+              value={province}
+              onChange={(event) => setProvince(event.target.value)}
+            >
+              <option value="ALL">All provinces · {rows.length.toLocaleString()}</option>
+              {provinces.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="btn btn--filled btn--compact label-medium no-print"
+            onClick={exportCsv}
+            disabled={rows.length === 0}
+            aria-label="Download the commune risk register as a CSV file"
           >
-            <option value="ALL">All provinces · {rows.length.toLocaleString()}</option>
-            {provinces.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
+            Export CSV / ទាញយក CSV
+          </button>
+        </span>
       </div>
       {filtered.length === 0 ? (
         <p className="empty-state body-medium" data-empty="true">

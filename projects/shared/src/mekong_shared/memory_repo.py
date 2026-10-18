@@ -184,6 +184,10 @@ class MemoryRepository:
             return None
         return max(matches, key=lambda a: a.dispatched_at)
 
+    async def recent_sentinel_alerts(self, limit: int = 50) -> list[SentinelAlert]:
+        by_newest = sorted(self.sentinel_alerts, key=lambda a: a.dispatched_at, reverse=True)
+        return by_newest[:limit]
+
     async def save_alert_dispatch(
         self,
         commune_id: str,

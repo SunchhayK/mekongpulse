@@ -3,7 +3,7 @@ id: REPORT-TECH-002
 document_type: technical_report
 title: MekongPulse Technical Architecture and Engineering Report
 project_name: "MekongPulse"
-version: 1.2.0
+version: 1.3.0
 status: approved
 last_updated: 2026-10-18
 owners: ["@bytelab-lead", "@tech-lead", "@backend-lead"]
@@ -49,7 +49,7 @@ dependencies: ["REPORT-PROD-002", "REPORT-DSGN-002", "DESIGN.md"]
 | Secret Management            | google-cloud-secret-manager        | 2.20.x            | Zero-leak credential injection for Telegram and Gemini keys        |
 | Task Scheduling              | Google Cloud Scheduler             | Managed           | Scheduled 15-minute HTTP cron triggers to `/api/v1/telemetry/sync` (mirrored by host cron when self-hosted) |
 | Serverless Hosting           | Google Cloud Run + Firebase Hosting | Gen 2 (Singapore) | Auto-scaling API containers (`asia-southeast1`) + static dashboard on Firebase Hosting |
-| Basin Map & Charts           | Hand-rolled React + SVG map, HTML5 canvas hydrographs | n/a | Zero-tile commune risk map and canvas hydrograph curves; no external map provider, API key, or tile requests |
+| Basin Map & Charts           | Leaflet, HTML5 canvas hydrographs | 1.9.x | Interactive commune risk map with switchable Esri Light Gray, OpenStreetMap and OpenTopoMap basemaps; no API key; overlays render over a neutral canvas when tiles are slow |
 | UI Framework                 | React 18 + hand-rolled CSS design tokens | 18.3.x      | Light "river lab" theme (navy `#213a63`, sky `#0ea5e9`), IBM Plex + Kantumruy Pro fonts; no external UI library |
 | Design Tokens & UI Contract  | CSS custom properties + root `DESIGN.md` | v1.0         | Tokenized palette, type scale, and component states consumed across the console |
 | Test Harness                 | Pytest, pytest-asyncio, pytest-cov | 8.3.x             | Deterministic unit and Given-When-Then integration tests           |
@@ -402,6 +402,63 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/v1/alerts/log:
+    get:
+      summary: List dispatched sentinel alerts, newest first
+      operationId: getAlertLog
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: Newest-first dispatched escalation records with gazetteer-enriched commune names.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      nullable: true
+                    commune_code:
+                      type: string
+                    commune_name_kh:
+                      type: string
+                    commune_name_en:
+                      type: string
+                    province:
+                      type: string
+                      nullable: true
+                    station_id:
+                      type: string
+                      nullable: true
+                    risk_tier:
+                      type: string
+                      enum: [NORMAL, ADVISORY, WARNING, DANGER]
+                    lead_time_hours:
+                      type: integer
+                      nullable: true
+                    directive_title:
+                      type: string
+                    bulletin_text:
+                      type: string
+                    audio_url:
+                      type: string
+                      nullable: true
+                    dispatched_at:
+                      type: string
+                      format: date-time
+                    recipients_count:
+                      type: integer
+
   /api/v1/telegram/webhook:
     post:
       summary: Telegram Bot Webhook Endpoint
@@ -718,7 +775,7 @@ with httpx.Client(timeout=10.0) as client:
   - Scope: Ingestion of all 4 Cambodian stations, Open-Meteo rain forecast, 1,661 commune R-Tree index, and `AgriDecisionEngine` directives.
   - Verification: Replay test with 2022 Kandal flood telemetry data confirming accurate risk tiering.
 - **Milestone 3: Vernacular Khmer Speech & Console Dashboard (Hours 24–36)**
-  - Scope: Gemini TTS (`gemini-3.8-flash-tts`) spoken Khmer audio generation, Telegram voice note delivery, and the zero-tile SVG risk console.
+  - Scope: Gemini TTS (`gemini-3.8-flash-tts`) spoken Khmer audio generation, Telegram voice note delivery, and the officials' console with its interactive basin map.
   - Verification: Automated probe asserting valid MP3 audio stream and < 2.5s synthesis time.
 - **Milestone 4: Production Hardening & Cloud Run Deployment (Hours 36–48)**
   - Scope: Google Cloud Run deployment (`asia-southeast1`), Cloud Scheduler 15-min polling cron, Secret Manager integration, and station failover testing.
@@ -829,7 +886,7 @@ curl -sf https://mekongpulse-api.labyrinth.buzz/api/v1/health | grep '"status":"
 | Functional Requirements (PRD/SRS) |  **PASS**   |     10 / 10      |        0         | FR-01..09 verified with Gherkin; FR-10 by smoke check + demo checklist |
 | Technology Stack & Tooling        |  **PASS**   |  17 components   |        0         | Google ADK (2.12.0), gemini-3.8-flash + gemini-3.8-flash-tts, asyncpg verified |
 | High-Risk Domain Buy vs Build     |  **PASS**   |    6 domains     |        0         | Secret Manager, GCS, Cloud Scheduler, STRtree enforced    |
-| API Contract Compliance (OpenAPI) |  **PASS**   |     6 routes     |        0         | Validated OpenAPI 3.1.0 schema with Subscriptions & Patrol|
+| API Contract Compliance (OpenAPI) |  **PASS**   |     7 routes     |        0         | Validated OpenAPI 3.1.0 schema with Subscriptions, Patrol & Alert Log|
 | Database Schema Alignment (ERD)   |  **PASS**   |    7 entities    |        0         | PostgreSQL & Firestore subscriptions, sentinel runs/alerts|
 | Design Tokens & UI Contract       |  **PASS**   | brand token set  |        0         | Light theme tokens in `globals.css`; no external UI library |
 | System Invariants Compliance      |  **PASS**   |   4 invariants   |        0         | Grounded telemetry and zero-hardware invariant confirmed  |
@@ -848,7 +905,7 @@ curl -sf https://mekongpulse-api.labyrinth.buzz/api/v1/health | grep '"status":"
 | FR-07           | PRD / SRS     | `MekongSentinel Background`     | `shared/src/mekong_shared/sentinel.py`, backend `patrol.py` | `shared/tests/test_sentinel.py`, `backend/tests/test_patrol_api.py` | **PASS** |
 | FR-08           | PRD / SRS     | `MekongAdvisor ReAct Agent`     | `shared/src/mekong_shared/adk_agent.py`, `mekong_bot/`      | `shared/tests/test_advisor.py`                           | **PASS** |
 | FR-09           | PRD / SRS     | `Commune Subscriptions Store`   | `backend/src/mekong_backend/routers/subscriptions.py`       | `backend/tests/test_subscriptions_api.py`                | **PASS** |
-| FR-10           | PRD           | Read-only officials console     | `frontend/src/app/page.tsx`, `components/BasinMap.tsx`, `RiskList.tsx`, `VoicePlayer.tsx` | Firebase smoke check (`curl` grep) + demo checklist      | **PASS** |
+| FR-10           | PRD           | Read-only officials console     | `frontend/src/app/page.tsx`, `components/BasinMap.tsx`, `RiskList.tsx`, `StatusSummary.tsx`, `AlertLog.tsx`, `lib/csv.ts`, `VoicePlayer.tsx` | Firebase smoke check (`curl` grep) + demo checklist      | **PASS** |
 | INV-01          | SRS           | Grounded telemetry verification | `shared/src/mekong_shared/mrc.py`                           | `shared/tests/test_mrc.py`                               | **PASS** |
 | INV-02          | SRS           | Fail-safe station fallback      | `shared/src/mekong_shared/mrc.py`, `pipeline.py`            | `shared/tests/test_failover.py`                          | **PASS** |
 
