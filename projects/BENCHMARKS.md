@@ -57,6 +57,11 @@ risk-map **25–66 ms**, evidence **7–21 ms** across runs. The risk-map payloa
 | Weather rows per day | ~3,700 | ~480 (hourly refresh) |
 | Observations per day | 768 | 384 |
 
+Steady-state syncs reuse the cached forecast. The first sync after a backend
+restart, or after the 60-minute window expires, still fetches Open-Meteo for all
+provinces and takes roughly the pre-change 8–9 s; the table's after numbers
+describe the 95% of ticks that hit the cache.
+
 The 15-minute cron now calls `/patrol/run` only; patrol performs the sync
 first. Unchanged risk rows are skipped by comparing tier, score, reason, lead
 time, drivers, station, and estimate (timestamps excluded). Tests:
