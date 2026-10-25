@@ -1,0 +1,29 @@
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Arial", "fontSize": "15px", "primaryColor": "#e8f2fb", "primaryBorderColor": "#213a63", "primaryTextColor": "#14213d", "lineColor": "#5b7a99"}}}%%
+flowchart TB
+  MRC["MRC telemetry<br/>4 stations"]
+  OM["Open-Meteo<br/>rain + soil"]
+  CRON["Scheduler<br/>15 min"]
+
+  ENGINE["Shared engine<br/>ingest · spatial · agronomy · evidence"]
+
+  MRC --> ENGINE
+  OM --> ENGINE
+  CRON --> ENGINE
+
+  ENGINE --> GEM["Gemini 3.8 Flash<br/>text + ReAct"]
+  ENGINE --> TTS["Gemini 3.8<br/>Flash-Lite TTS"]
+  ENGINE --> PG[("PostgreSQL<br/>dev / staging")]
+  ENGINE --> FS[("Firestore<br/>cloud target")]
+
+  TTS --> AUDIO[("Audio store<br/>local / GCS")]
+
+  ENGINE --> API["FastAPI gateway<br/>Caddy blue/green"]
+  API --> STT["Gemini audio<br/>Khmer STT"]
+  API --> WEB["Next.js 14<br/>Firebase Hosting"]
+  API --> BOT["Telegram bot"]
+
+  BOT --> TG["Telegram"]
+  BOT --> RELAY["Commune chief / relay"]
+  WEB --> RELAY
+  AUDIO --> WEB
+  AUDIO --> BOT

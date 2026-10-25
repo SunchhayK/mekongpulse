@@ -1,0 +1,87 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Inter, system-ui, -apple-system, sans-serif",
+    "fontSize": "14px",
+    "primaryColor": "#ffffff",
+    "primaryBorderColor": "#3b82f6",
+    "primaryTextColor": "#0f172a",
+    "lineColor": "#64748b",
+    "secondaryColor": "#f8fafc",
+    "tertiaryColor": "#f1f5f9"
+  }
+}}%%
+flowchart TB
+  subgraph INGEST["1. Data Ingestion Layer"]
+    direction LR
+    MRC["<b>MRC Telemetry</b><br/>4 river stations"]
+    OM["<b>Open-Meteo</b><br/>Precipitation + soil moisture"]
+    CRON["<b>Scheduler</b><br/>15-min cadence"]
+  end
+
+  subgraph CORE["2. Core Platform Engine"]
+    ENGINE["<b>Shared Ingestion & Agronomy Engine</b><br/>Data Ingest · Spatial Proximity · Risk Scoring · Evidence Trace"]
+  end
+
+  subgraph AI["3. Google Gemini AI Stack"]
+    direction LR
+    GEM["<b>Gemini 3.8 Flash</b><br/>Khmer Bulletin Polish & ReAct Loop"]
+    TTS["<b>Gemini 3.8 Flash-Lite</b><br/>Khmer Neural TTS Synthesis"]
+    STT["<b>Gemini Audio</b><br/>Khmer Voice Understanding & STT"]
+  end
+
+  subgraph STORAGE["4. Persistence & Storage Layer"]
+    direction LR
+    PG[("<b>PostgreSQL</b><br/>Dev / Staging DB")]
+    FS[("<b>Firestore</b><br/>Cloud Serverless Target")]
+    AUDIO[("<b>Audio Store</b><br/>Local Disk / Cloud Storage")]
+  end
+
+  subgraph GATEWAY["5. API Gateway Layer"]
+    API["<b>FastAPI Application Gateway</b><br/>Containerized Caddy Blue/Green Reverse Proxy"]
+  end
+
+  subgraph CLIENTS["6. Client Delivery Layer"]
+    direction LR
+    WEB["<b>Next.js 14 Web App</b><br/>Firebase Hosting Static Export"]
+    BOT["<b>Telegram Bot</b><br/>Broadcast & Interaction"]
+    RELAY["<b>Commune Chief / Relay</b><br/>Local Audio & Community Bulletins"]
+    TG["<b>Telegram Subscribers</b><br/>Farmers & Officers"]
+  end
+
+  %% Connections
+  MRC --> ENGINE
+  OM --> ENGINE
+  CRON --> ENGINE
+
+  ENGINE --> GEM
+  ENGINE --> TTS
+  ENGINE --> PG
+  ENGINE --> FS
+  TTS --> AUDIO
+
+  ENGINE --> API
+  API --> STT
+  API --> WEB
+  API --> BOT
+
+  AUDIO --> WEB
+  AUDIO --> BOT
+  WEB --> RELAY
+  BOT --> RELAY
+  BOT --> TG
+
+  %% Styling
+  classDef ingest fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1;
+  classDef core fill:#eff6ff,stroke:#2563eb,stroke-width:2.5px,color:#1e40af;
+  classDef ai fill:#faf5ff,stroke:#9333ea,stroke-width:2px,color:#6b21a8;
+  classDef storage fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#92400e;
+  classDef gateway fill:#fff7ed,stroke:#ea580c,stroke-width:2px,color:#9a3412;
+  classDef client fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#166534;
+
+  class MRC,OM,CRON ingest;
+  class ENGINE core;
+  class GEM,TTS,STT ai;
+  class PG,FS,AUDIO storage;
+  class API gateway;
+  class WEB,BOT,RELAY,TG client;

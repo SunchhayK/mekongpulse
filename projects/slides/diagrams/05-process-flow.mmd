@@ -1,0 +1,6 @@
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Arial", "fontSize": "15px", "primaryColor": "#e8f2fb", "primaryBorderColor": "#213a63", "primaryTextColor": "#14213d", "lineColor": "#5b7a99"}}}%%
+flowchart LR
+  A["1. Telemetry<br/><br/>4 MRC gauges<br/>Open-Meteo rain<br/>soil moisture"] --> B["2. Risk engine<br/><br/>QC gaps, spikes, range<br/>1,544 scored / 1,661 indexed<br/>4 risk tiers"]
+  B --> C["3. Agronomy<br/><br/>rice stage + rain<br/>harvest or hold<br/>36-72 h lead"]
+  C --> D["4. Khmer bulletin<br/><br/>Gemini text polish<br/>Flash-Lite TTS<br/>cached MP3"]
+  D --> E["5. Delivery<br/><br/>Telegram bot + channel<br/>web console<br/>commune voice page"]
