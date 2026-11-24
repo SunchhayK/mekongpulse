@@ -314,7 +314,7 @@ erDiagram
 - `idx_observations_station_time`: Firestore composite index on `(station_id ASC, recorded_at DESC)` for 7-day hydrograph queries.
 - `idx_communes_risk_province`: Firestore composite index on `(current_risk_tier ASC, province_name ASC)` for regional flood map filtering.
 - `idx_alerts_commune_time`: Firestore composite index on `(commune_id ASC, dispatched_at DESC)` for alert deduplication and auditing.
-- `idx_field_reports_commune_time`: PostgreSQL index on `field_reports(commune_code, reported_at DESC)` for the per-commune report list. All `field_reports` DDL is `CREATE ... IF NOT EXISTS` and appended to the idempotent init script, so it is backward-compatible for the color still serving during a blue-green switch.
+- `idx_field_reports_commune_time`: PostgreSQL index on `field_reports(commune_code, reported_at DESC)` for the per-commune report list. All `field_reports` DDL is `CREATE ... IF NOT EXISTS` and appended to the idempotent init script.
 - `spatial_rtree_communes`: In-memory R-Tree spatial index mapping latitude/longitude coordinates to MEF commune boundaries in <15ms.
 
 ---

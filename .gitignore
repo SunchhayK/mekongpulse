@@ -10,6 +10,7 @@ htmlcov/
 .env
 .env.*
 !.env.example
+secrets/
 
 # --- Node / Next.js ---
 node_modules/
@@ -20,6 +21,7 @@ out/
 # --- Runtime artifacts ---
 projects/data/audio/
 *.mp3
+cron.log
 
 # --- Firebase CLI local state ---
 .firebase/

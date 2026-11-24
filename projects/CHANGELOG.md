@@ -2,6 +2,21 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.17.1] — 2026-11-24
+
+Removed unused blue-green/Caddy deployment scaffolding and switched `labyrinth` to git-tracked single-container deployment. No package versions changed.
+
+### Removed
+
+- `.github/workflows/deploy.yml`, `projects/caddy/Caddyfile`, and `projects/scripts/deploy_blue_green.sh`.
+
+### Changed
+
+- `projects/docker-compose.server.yml`: restored the single-container stack (`db`, `backend` on `127.0.0.1:8080:8080`, `bot` under `--profile bot`).
+- `projects/docker-compose.vertex.yml`: updated header comments for the single-container stack while keeping the read-only `/secrets` mounts on `backend` and `bot`.
+- `.gitignore`: added `secrets/` and `cron.log` so server checkouts stay clean.
+- `README.md` & `technical-report.md`: documented git-tracked single-container deployment on `labyrinth` (`docker-compose.server.yml` + `docker-compose.vertex.yml`), refreshed test counts (156 shared / 44 bot / 90 backend), and removed stale blue-green references.
+
 ## [0.17.0] — 2026-10-19
 
 Officers can force-regenerate a commune briefing; the watch inbox separates actions from runs.
