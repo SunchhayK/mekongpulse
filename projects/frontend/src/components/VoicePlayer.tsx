@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { PauseIcon, PlayIcon, VolumeIcon } from "./icons";
 
@@ -32,6 +32,7 @@ export function VoicePlayer({
   autoPlay = false,
 }: VoicePlayerProps) {
   const t = useTranslations("Voice");
+  const scrubId = useId();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
@@ -92,7 +93,7 @@ export function VoicePlayer({
       <div className="scrub">
         <input
           type="range"
-          id="voice-scrub"
+          id={scrubId}
           name="voice-scrub"
           min={0}
           max={duration || 1}
@@ -107,7 +108,8 @@ export function VoicePlayer({
           }}
         />
         <div className="label-small time">
-          {formatClock(current)} / {formatClock(duration)} · <VolumeIcon />
+          {formatClock(current)} / {formatClock(duration)}
+          <VolumeIcon />
         </div>
         {audioSrc ? (
           <button

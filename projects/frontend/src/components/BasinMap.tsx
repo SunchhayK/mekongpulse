@@ -32,8 +32,6 @@ const BASEMAPS: Record<
 > = {
   light: {
     labelKey: "basemapLight",
-    // CARTO's keyless Positron endpoint now serves watermarked
-    // "API KEY REQUIRED" tiles; Esri's light-gray canvas stays keyless.
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     attribution:
       "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors",
@@ -57,8 +55,6 @@ const KH_CENTER: [number, number] = [
   (KH_BBOX.minLng + KH_BBOX.maxLng) / 2,
 ];
 
-// TIER_META colours are CSS custom properties, which CanvasRenderingContext2D
-// cannot parse. Resolve them once per rebuild before handing them to Leaflet.
 function cssColor(value: string): string {
   if (!value.startsWith("var(")) return value;
   const property = value.slice(4, -1).trim();
@@ -90,7 +86,6 @@ export function BasinMap({
     [communes],
   );
 
-  // Keep click handlers current without rebuilding markers on every parent render.
   useEffect(() => {
     handlersRef.current = { onSelectCommune, onSelectStation };
   }, [onSelectCommune, onSelectStation]);
@@ -139,8 +134,6 @@ export function BasinMap({
     };
   }, [t]);
 
-  // Swap the raster basemap in place; Leaflet's attribution control follows
-  // the layer add/remove events, so the credits change with the tiles.
   useEffect(() => {
     const L = leafletRef.current;
     const map = mapRef.current;
@@ -188,10 +181,10 @@ export function BasinMap({
 
       const meta = TIER_META[row.tier];
       const lead =
-        row.lead_time_hours != null ? t("floodArrival", { hours: row.lead_time_hours }) : "";
+        row.lead_time_hours != null ? `, ${t("floodArrival", { hours: row.lead_time_hours })}` : "";
       const forecast =
         row.forecast_tier != null
-          ? ` · ${
+          ? `, ${
               row.forecast_lead_days != null
                 ? tierT("forecastDays", {
                     days: row.forecast_lead_days,
@@ -202,7 +195,7 @@ export function BasinMap({
           : "";
       const options: CircleMarkerOptions & { keyboard: boolean } = {
         renderer,
-        radius: 5,
+        radius: 5.5,
         fillColor: colorOf(meta.color),
         fillOpacity: 1,
         color: paper,
@@ -214,7 +207,7 @@ export function BasinMap({
       };
       const marker = L.circleMarker([row.lat, row.lng], options);
       marker.bindTooltip(
-        `${row.commune_name_kh} · ${row.commune_name_en} - ${tierT(row.tier)}${lead}${forecast}`,
+        `${row.commune_name_kh} (${row.commune_name_en}) — ${tierT(row.tier)}${lead}${forecast}`,
         { direction: "top", offset: [0, -6], opacity: 1, className: "basin-tooltip" },
       );
       marker.on("click", () => handlersRef.current.onSelectCommune(row.commune_code));
@@ -298,7 +291,6 @@ export function BasinMap({
   );
 }
 
-// Station geometry from projects/data/stations.json (8 live Cambodian MRC gauges).
 const STATION_POSITIONS: Record<string, { lat: number; lng: number }> = {
   "014501": { lat: 13.5333, lng: 105.95 }, // Stung Treng
   "014901": { lat: 12.481, lng: 106.017 }, // Kratie

@@ -12,30 +12,30 @@ const base = {
   "aria-hidden": true,
 };
 
-/** Roundel brand mark: stacked river waves on navy, with a sky accent dot. */
-export function BrandMark({ size = 38 }: { size?: number }) {
+/** Roundel brand mark: stacked river waves on deep Mekong teal. */
+export function BrandMark({ size = 34 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
-      <rect width="40" height="40" rx="11" fill="var(--navy)" />
+      <rect width="40" height="40" rx="10" fill="var(--brand-deep)" />
       <path
         d="M8 15.5c3 0 3-2.6 6-2.6s3 2.6 6 2.6 3-2.6 6-2.6 3 2.6 6 2.6"
         fill="none"
         stroke="#ffffff"
-        strokeWidth="2.6"
+        strokeWidth="2.5"
         strokeLinecap="round"
       />
       <path
         d="M8 23.5c3 0 3-2.6 6-2.6s3 2.6 6 2.6 3-2.6 6-2.6 3 2.6 6 2.6"
         fill="none"
-        stroke="#7cc7f2"
-        strokeWidth="2.6"
+        stroke="#5eead4"
+        strokeWidth="2.5"
         strokeLinecap="round"
       />
       <path
         d="M8 31.5c3 0 3-2.6 6-2.6s3 2.6 6 2.6 3-2.6 6-2.6 3 2.6 6 2.6"
         fill="none"
-        stroke="#3f5f94"
-        strokeWidth="2.6"
+        stroke="#2c6e70"
+        strokeWidth="2.5"
         strokeLinecap="round"
       />
     </svg>
@@ -44,7 +44,7 @@ export function BrandMark({ size = 38 }: { size?: number }) {
 
 export function WaveIcon() {
   return (
-    <svg {...base} width={22} height={22}>
+    <svg {...base} width={20} height={20}>
       <path d="M2 12c2.5 0 2.5-3 5-3s2.5 3 5 3 2.5-3 5-3 2.5 3 5 3" />
       <path d="M2 18c2.5 0 2.5-3 5-3s2.5 3 5 3 2.5-3 5-3 2.5 3 5 3" />
     </svg>
@@ -53,7 +53,7 @@ export function WaveIcon() {
 
 export function MapPinIcon() {
   return (
-    <svg {...base}>
+    <svg {...base} width={18} height={18}>
       <path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z" />
       <circle cx="12" cy="10" r="2.5" />
     </svg>
@@ -71,7 +71,7 @@ export function MapIcon() {
 
 export function SearchIcon() {
   return (
-    <svg {...base}>
+    <svg {...base} width={18} height={18}>
       <circle cx="11" cy="11" r="7" />
       <path d="m20 20-3.5-3.5" />
     </svg>
@@ -96,7 +96,7 @@ export function PauseIcon() {
 
 export function VolumeIcon() {
   return (
-    <svg {...base} width={16} height={16}>
+    <svg {...base} width={18} height={18}>
       <path d="M11 5 6 9H3v6h3l5 4V5z" />
       <path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a8 8 0 0 1 0 11" />
     </svg>
@@ -113,7 +113,7 @@ export function CloseIcon() {
 
 export function InfoIcon() {
   return (
-    <svg {...base}>
+    <svg {...base} width={18} height={18}>
       <circle cx="12" cy="12" r="9" />
       <path d="M12 11v6M12 7.5v.5" />
     </svg>
@@ -122,7 +122,7 @@ export function InfoIcon() {
 
 export function AlertIcon() {
   return (
-    <svg {...base}>
+    <svg {...base} width={18} height={18}>
       <path d="M12 3.5 2.5 20h19L12 3.5z" />
       <path d="M12 10v4.5M12 17.4v.1" />
     </svg>
@@ -131,7 +131,7 @@ export function AlertIcon() {
 
 export function RefreshIcon() {
   return (
-    <svg {...base} width={18} height={18}>
+    <svg {...base} width={16} height={16}>
       <path d="M20 11a8 8 0 1 0-2.5 6.5" />
       <path d="M20 5v6h-6" />
     </svg>
@@ -157,6 +157,14 @@ export function ArrowLeftIcon() {
   );
 }
 
+export function ChevronRightIcon() {
+  return (
+    <svg {...base} width={16} height={16}>
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
 export function SendIcon() {
   return (
     <svg {...base} width={18} height={18}>
@@ -165,10 +173,10 @@ export function SendIcon() {
   );
 }
 
-/** Officer assistant: speech bubble with text lines. */
+/** Flood assistant: speech bubble with text lines. */
 export function AssistantIcon() {
   return (
-    <svg {...base}>
+    <svg {...base} width={19} height={19}>
       <path d="M20.5 11.5a7 7 0 0 1-7 7H10l-4.5 3.2V11.5a7 7 0 0 1 7-7h1a7 7 0 0 1 7 7z" />
       <path d="M9 9.5h6M9 12.5h3.5" />
     </svg>
@@ -189,6 +197,15 @@ export function StopIcon() {
   return (
     <svg {...base} width={18} height={18} fill="currentColor" stroke="none">
       <rect x="7" y="7" width="10" height="10" rx="2" />
+    </svg>
+  );
+}
+
+export function ShieldIcon() {
+  return (
+    <svg {...base} width={18} height={18}>
+      <path d="M12 3 4 6v6c0 5 3.4 8.2 8 9 4.6-.8 8-4 8-9V6l-8-3z" />
+      <path d="m9 12 2 2 4-4" />
     </svg>
   );
 }

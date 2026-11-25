@@ -2,6 +2,18 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.19.0] — 2026-11-25
+
+Mekong River Almanac UI revamp: decluttered dashboard, plain-language Khmer & English copy, unified navigation, native `<dialog>` and `<details>` disclosures, and Khmer typography fixes. Per SemVer 0.x (rule 4), pre-1.0.0 releases may introduce breaking changes.
+
+Package versions: `shared` — 0.13.1, `backend` — 0.8.0, `bot` — 0.7.0, `frontend` — 0.13.0.
+
+### Changed
+
+- `frontend` — 0.13.0: redesigned Dashboard, Commune Detail, and Assistant pages around the "Mekong River Almanac" civic river-teal design system (`Plus Jakarta Sans` + `Kantumruy Pro` with `letter-spacing: 0` on Khmer text + `IBM Plex Mono` for tabular readings).
+- `frontend` — 0.13.0: consolidated Dashboard from 17 cards and 4 tables into 3 calm zones — Hero status with instant search, GPS lookup, and clickable risk-tier filters; 60/40 interactive `BasinMap` + `Areas to watch` commune list; unified `River levels` station strip + 7-day `HydrographChart`; and collapsible native `<details>` disclosures for `AlertLog` and printable `StatusSummary`.
+- `frontend` — 0.13.0: upgraded `AssessmentDialog` to native `<dialog>` with `showModal()`, `closedby="any"` + Safari pointer-bounds light-dismiss fallback, `overscroll-behavior: contain`, and collapsible verification/reports panels; replaced hardcoded `VoicePlayer` scrubber ID with `useId()`; unified `LanguageSwitcher` to preserve `?code=` and `?stage=` across all routes; added Khmer/CJK IME-safe Enter submit guard in `AssistantChat`; moved officer sign-in behind a header disclosure so everyday visitors can chat immediately; rewrote `en.json` and `km.json` in 1:1 sync with plain-language copy.
+
 ## [0.18.1] — 2026-11-25
 
 Live MRC telemetry calibration, gauge roster cleanup, and patrol concurrency hardening. Per SemVer 0.x (rule 4), pre-1.0.0 releases may introduce breaking changes.

@@ -2,15 +2,15 @@ import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages, getTranslations, setRequestLocale } from "next-intl/server";
-import { IBM_Plex_Mono, IBM_Plex_Sans, Kantumruy_Pro } from "next/font/google";
+import { IBM_Plex_Mono, Kantumruy_Pro, Plus_Jakarta_Sans } from "next/font/google";
 import { routing, type Locale } from "@/i18n/routing";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import "../globals.css";
 
-const plexSans = IBM_Plex_Sans({
+const jakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-plex",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-jakarta",
   display: "swap",
 });
 
@@ -21,10 +21,10 @@ const plexMono = IBM_Plex_Mono({
   display: "swap",
 });
 
-// Khmer coverage; falls back for any glyphs IBM Plex Sans does not carry.
+// Khmer primary typeface; carries both Khmer and Latin glyphs cleanly.
 const kantumruy = Kantumruy_Pro({
   subsets: ["khmer", "latin"],
-  weight: ["400", "500", "600"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-kantumruy",
   display: "swap",
 });
@@ -52,7 +52,7 @@ export async function generateMetadata({
 }
 
 export const viewport: Viewport = {
-  themeColor: "#eef2f7",
+  themeColor: "#F6F8F7",
   width: "device-width",
   initialScale: 1,
 };
@@ -77,7 +77,7 @@ export default async function LocaleLayout({
   return (
     <html
       lang={locale}
-      className={`${plexSans.variable} ${plexMono.variable} ${kantumruy.variable}`}
+      className={`${jakartaSans.variable} ${plexMono.variable} ${kantumruy.variable}`}
     >
       <body>
         <NextIntlClientProvider

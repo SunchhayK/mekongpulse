@@ -7,14 +7,13 @@ import { formatDateTime } from "@/lib/design";
 
 export interface FieldReportsListProps {
   communeCode: string;
-  /** Render without the surrounding card (used inside the assessment dialog). */
+  /** Render without the surrounding surface (used inside disclosures/dialog). */
   plain?: boolean;
 }
 
 const DEFAULT_LIMIT = 20;
 const KNOWN_SOURCES = new Set(["web", "telegram"]);
 
-/** Relative bucket first ("2 h ago"), absolute Phnom Penh time second. */
 function relativeParts(iso: string): { unit: "justNow" | "minutes" | "hours" | "days"; count: number } | null {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return null;
@@ -26,7 +25,7 @@ function relativeParts(iso: string): { unit: "justNow" | "minutes" | "hours" | "
   return { unit: "days", count: Math.round(hours / 24) };
 }
 
-/** Ground-truth reports filed by officials on the ground (verification layer). */
+/** Ground-truth reports filed by local officials and residents. */
 export function FieldReportsList({ communeCode, plain = false }: FieldReportsListProps) {
   const t = useTranslations("FieldReports");
   const locale = useLocale();
@@ -67,23 +66,16 @@ export function FieldReportsList({ communeCode, plain = false }: FieldReportsLis
     // eslint-disable-next-line react-hooks/exhaustive-deps -- t is memoized per namespace
   }, [communeCode]);
 
-  return (
-    <section className={plain ? "reports-plain" : "card"} aria-label={t("title")}>
-      <div className="card-title-row">
-        <h2 className="title-medium" style={{ margin: 0 }}>
-          {t("title")}
-        </h2>
-        <span className="body-small muted">{t("hint", { limit: DEFAULT_LIMIT })}</span>
-      </div>
-
+  const body = (
+    <>
       {loading ? (
-        <div className="shimmer" style={{ height: 96 }} aria-busy="true" />
+        <div className="shimmer" style={{ height: 84 }} aria-busy="true" />
       ) : error ? (
-        <p className="error-banner body-medium" role="alert">
+        <p className="body-small muted" style={{ margin: 0 }}>
           {error}
         </p>
       ) : reports.length === 0 ? (
-        <p className="empty-state body-medium" data-empty="true" style={{ margin: 0 }}>
+        <p className="empty-state body-small" data-empty="true" style={{ margin: 0 }}>
           {t("empty")}
         </p>
       ) : (
@@ -95,26 +87,34 @@ export function FieldReportsList({ communeCode, plain = false }: FieldReportsLis
                   {t(`statuses.${report.status}`)}
                 </span>
                 <span className="body-small muted">
-                  {relativeLabel(report.reported_at)} ·{" "}
-                  {formatDateTime(report.reported_at, locale)}
+                  {relativeLabel(report.reported_at)} ({formatDateTime(report.reported_at, locale)})
                 </span>
               </div>
               {report.note && (
-                <p className="body-medium" style={{ margin: 0 }}>
+                <p className="body-small" style={{ margin: 0 }}>
                   {report.note}
                 </p>
               )}
               <p className="body-small muted" style={{ margin: 0 }}>
                 {report.reporter_label ? t("reportedBy", { name: report.reporter_label }) : t("anonymous")}
-                {" · "}
-                {KNOWN_SOURCES.has(report.source)
-                  ? t(`sources.${report.source}`)
-                  : report.source}
+                {", "}
+                {KNOWN_SOURCES.has(report.source) ? t(`sources.${report.source}`) : report.source}
               </p>
             </li>
           ))}
         </ul>
       )}
+    </>
+  );
+
+  if (plain) return <div className="reports-plain">{body}</div>;
+
+  return (
+    <section className="surface surface--padded" aria-label={t("title")}>
+      <div className="section-header">
+        <h2 className="title-medium section-title">{t("title")}</h2>
+      </div>
+      {body}
     </section>
   );
 }

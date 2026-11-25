@@ -5,9 +5,10 @@ import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { EvidencePanel } from "@/components/EvidencePanel";
 import { FieldReportsList } from "@/components/FieldReportsList";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { RiskBadge } from "@/components/RiskBadge";
 import { VoicePlayer } from "@/components/VoicePlayer";
-import { ArrowLeftIcon, BrandMark, ShareIcon, VolumeIcon, WaveIcon } from "@/components/icons";
+import { ArrowLeftIcon, BrandMark, ShareIcon, VolumeIcon } from "@/components/icons";
 import { Link } from "@/i18n/navigation";
 import {
   api,
@@ -21,7 +22,6 @@ import { formatDateTime } from "@/lib/design";
 const CROP_STAGES: CropStage[] = ["TILLERING", "VEGETATIVE", "FLOWERING", "RIPENING"];
 const OFFICER_SESSION_KEY = "mekongpulse.officer_session";
 
-/** Read the assistant page's signed officer session (same origin). */
 function readOfficerToken(): string | null {
   try {
     const raw = window.localStorage.getItem(OFFICER_SESSION_KEY);
@@ -36,7 +36,6 @@ function readOfficerToken(): string | null {
   }
 }
 
-/** Keep the selected stage in the URL so shared links reuse the same briefing/audio. */
 function setStageInUrl(next: CropStage | null) {
   if (typeof window === "undefined") return;
   const params = new URLSearchParams(window.location.search);
@@ -54,17 +53,8 @@ type LoadError = "notFound" | "noTelemetry" | "unavailable";
 
 interface ErrorState {
   kind: LoadError;
-  detail: string | null;
 }
 
-/**
- * Public commune bulletin page (static export): voice-first, built for relay
- * people — commune chiefs and extension workers — who receive a link like
- * /{locale}/commune/?code=080404 and forward it to farmers.
- *
- * Client-only data (evidence, assessment + TTS, field reports, share):
- * useSearchParams therefore sits inside the Suspense boundary below.
- */
 export default function CommunePage() {
   return (
     <Suspense fallback={<CommuneSkeleton />}>
@@ -75,10 +65,10 @@ export default function CommunePage() {
 
 function CommuneSkeleton() {
   return (
-    <div className="app commune-app">
+    <div className="app">
       <div className="commune-main" aria-busy="true">
         <div className="shimmer" style={{ height: 240 }} />
-        <div className="shimmer" style={{ height: 180 }} />
+        <div className="shimmer" style={{ height: 160 }} />
       </div>
     </div>
   );
@@ -86,6 +76,7 @@ function CommuneSkeleton() {
 
 function CommuneView() {
   const t = useTranslations("Commune");
+  const headerT = useTranslations("Header");
   const evidenceT = useTranslations("Evidence");
   const tierT = useTranslations("Tier");
   const locale = useLocale();
@@ -133,7 +124,6 @@ function CommuneView() {
               : err instanceof ApiError && err.status === 409
                 ? "noTelemetry"
                 : "unavailable",
-          detail: err instanceof ApiError ? err.message : null,
         });
       })
       .finally(() => {
@@ -153,7 +143,6 @@ function CommuneView() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  /** Fetch the bulletin (with Khmer TTS) for the chosen rice stage. */
   const requestAssessment = useCallback(
     async (nextStage: CropStage | null, force = false) => {
       if (!code) return;
@@ -176,13 +165,13 @@ function CommuneView() {
           try {
             window.localStorage.removeItem(OFFICER_SESSION_KEY);
           } catch {
-            // storage unavailable; the in-memory token is cleared below
+            // ignore storage errors
           }
           setOfficerToken(null);
           setAssessError(t("regenerateAuth"));
         } else {
           setAssessError(
-            err instanceof ApiError && err.status === 409 ? t("errorNoTelemetry") : t("assessFailed"),
+            err instanceof ApiError && err.status === 409 ? t("errorNoTelemetry", { code }) : t("assessFailed"),
           );
         }
       } finally {
@@ -214,27 +203,42 @@ function CommuneView() {
       setShareState("copied");
       window.setTimeout(() => setShareState("idle"), 3200);
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return; // user dismissed the sheet
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setShareState("failed");
       window.setTimeout(() => setShareState("idle"), 3200);
     }
   }
 
   return (
-    <div className="app commune-app">
+    <div className="app">
       <header className="top-app-bar">
-        <Link className="brand" href="/">
-          <BrandMark />
-          <span className="brand-text">
+        <div className="top-app-bar-inner">
+          <Link className="brand" href="/">
+            <BrandMark />
             <span className="brand-name">MekongPulse</span>
-            <span className="body-small subtitle">{t("brandSubtitle")}</span>
-          </span>
-        </Link>
-        <div className="spacer" />
-        <CommuneLangSwitch />
+          </Link>
+          <div className="spacer" />
+          <nav className="primary-nav" aria-label={headerT("navAria")}>
+            <Link className="nav-link label-medium" href="/">
+              {headerT("floodMap")}
+            </Link>
+            <Link
+              className="nav-link label-medium"
+              href={{ pathname: "/assistant", query: code ? { code } : undefined }}
+            >
+              {headerT("assistant")}
+            </Link>
+          </nav>
+          <LanguageSwitcher />
+        </div>
       </header>
 
       <main className="commune-main">
+        <Link className="back-link label-medium" href="/">
+          <ArrowLeftIcon />
+          <span>{t("backToDashboard")}</span>
+        </Link>
+
         {!code ? (
           <section className="empty-state" aria-label={t("missingCodeTitle")}>
             <h1 className="title-large" style={{ marginTop: 0 }}>
@@ -242,70 +246,66 @@ function CommuneView() {
             </h1>
             <p className="body-medium muted">{t("missingCodeBody")}</p>
             <Link className="btn btn--filled label-medium" href="/">
-              <ArrowLeftIcon /> {t("backToDashboard")}
+              <ArrowLeftIcon />
+              <span>{t("backToDashboard")}</span>
             </Link>
           </section>
         ) : loading ? (
           <div aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             <div className="shimmer" style={{ height: 240 }} />
-            <div className="shimmer" style={{ height: 180 }} />
+            <div className="shimmer" style={{ height: 160 }} />
           </div>
         ) : loadError ? (
           <section aria-label={t("errorAria")}>
             <p className="error-banner body-medium" role="alert">
-              <span>
-                <strong>
-                  {t(
-                    loadError.kind === "notFound"
-                      ? "errorNotFound"
-                      : loadError.kind === "noTelemetry"
-                        ? "errorNoTelemetry"
-                        : "errorUnavailable",
-                    { code },
-                  )}
-                </strong>
-                {loadError.detail && (
-                  <>
-                    <br />
-                    <span className="body-small">{loadError.detail}</span>
-                  </>
-                )}
-              </span>
-            </p>
-            <p style={{ marginTop: 16 }}>
-              <Link className="hero-link label-medium" href="/">
-                <ArrowLeftIcon /> {t("backToDashboard")}
-              </Link>
+              {t(
+                loadError.kind === "notFound"
+                  ? "errorNotFound"
+                  : loadError.kind === "noTelemetry"
+                    ? "errorNoTelemetry"
+                    : "errorUnavailable",
+                { code },
+              )}
             </p>
           </section>
         ) : (
           <>
-            <section className="card commune-hero" aria-label={t("heroAria", { name: nameKh })}>
-              <p className="eyebrow">{t("eyebrow")}</p>
-              <h1 className="commune-name" lang="km">
-                {nameKh}
-              </h1>
-              <p className="body-medium muted" style={{ margin: 0 }}>
-                {nameEn} · <span className="mono">{code}</span>
-                {assessment && (
-                  <>
-                    {" · "}
-                    {t("updated", { time: formatDateTime(assessment.generated_at, locale) })}
-                  </>
-                )}
-              </p>
-
+            <section className="surface surface--padded commune-hero" aria-label={t("heroAria", { name: nameKh || nameEn })}>
               <div className="commune-facts">
-                {tier && <RiskBadge tier={tier} leadTimeHours={assessment?.lead_time_hours ?? undefined} size="large" />}
+                {tier && (
+                  <RiskBadge
+                    tier={tier}
+                    leadTimeHours={assessment?.lead_time_hours ?? undefined}
+                    size="large"
+                  />
+                )}
                 {forecastTier && (
-                  <span className="forecast-badge label-medium" data-tier={forecastTier}>
+                  <span className="forecast-badge label-small" data-tier={forecastTier}>
                     {forecastLeadDays != null
                       ? tierT("forecastDays", { days: forecastLeadDays, tier: tierT(forecastTier) })
                       : tierT("forecast", { tier: tierT(forecastTier) })}
                   </span>
                 )}
-                {assessment?.estimated && <span className="status-pill label-medium">{t("estimated")}</span>}
+                {assessment?.estimated && <span className="status-pill label-small">{t("estimated")}</span>}
               </div>
+
+              <div>
+                <h1 className="commune-name" lang="km">
+                  {nameKh}
+                </h1>
+                <p className="body-medium muted" style={{ margin: "4px 0 0" }}>
+                  {nameEn}
+                  {assessment
+                    ? `, ${t("updated", { time: formatDateTime(assessment.generated_at, locale) })}`
+                    : ""}
+                </p>
+              </div>
+
+              {tier && (
+                <p className="body-medium" style={{ margin: 0, maxWidth: "60ch" }}>
+                  {t(`statusSummary.${tier}`)}
+                </p>
+              )}
 
               <div className="commune-actions">
                 <button
@@ -314,12 +314,15 @@ function CommuneView() {
                   onClick={() => void requestAssessment(stage)}
                   disabled={assessing}
                 >
-                  <VolumeIcon /> {assessing ? t("listenLoading") : t("listen")}
+                  <VolumeIcon />
+                  <span>{assessing ? t("listenLoading") : t("listen")}</span>
                 </button>
                 <button type="button" className="btn btn--outline label-medium" onClick={() => void share()}>
-                  <ShareIcon /> {t("share")}
+                  <ShareIcon />
+                  <span>{t("share")}</span>
                 </button>
               </div>
+
               {shareState !== "idle" && (
                 <p className="body-small muted" role="status" style={{ margin: 0 }}>
                   {shareState === "copied" ? t("shareCopied") : t("shareFailed")}
@@ -327,14 +330,14 @@ function CommuneView() {
               )}
 
               {assessError && (
-                <p className="error-banner body-medium" role="alert">
+                <p className="error-banner body-small" role="alert">
                   {assessError}
                 </p>
               )}
 
               {assessment &&
                 (assessment.audio ? (
-                  <div className="voice-card voice-card--inset">
+                  <div className="voice-card">
                     <VoicePlayer
                       audioSrc={assessment.audio.url}
                       durationSeconds={assessment.audio.duration_seconds ?? undefined}
@@ -344,7 +347,7 @@ function CommuneView() {
                   </div>
                 ) : (
                   <div className="commune-bulletin">
-                    <p className="body-medium transcript" lang="km" style={{ margin: 0 }}>
+                    <p className="body-medium transcript" lang="km">
                       {assessment.khmer_bulletin}
                     </p>
                     {assessment.english_bulletin && (
@@ -352,7 +355,7 @@ function CommuneView() {
                         {assessment.english_bulletin}
                       </p>
                     )}
-                    <p className="body-small commune-voice-note" role="note">
+                    <p className="body-small muted" role="note">
                       {t("voiceUnavailable")}
                     </p>
                   </div>
@@ -362,7 +365,7 @@ function CommuneView() {
                 <div className="commune-regenerate">
                   <button
                     type="button"
-                    className="btn btn--outline label-small"
+                    className="btn btn--outline btn--compact label-small"
                     onClick={() => void requestAssessment(stage, true)}
                     disabled={assessing}
                   >
@@ -392,92 +395,53 @@ function CommuneView() {
             </section>
 
             {assessment && assessment.directives.length > 0 && (
-              <section className="card" aria-label={t("directivesAria")}>
-                <div className="card-title-row">
-                  <h2 className="title-medium" style={{ margin: 0 }}>
-                    {t("directivesTitle")}
-                  </h2>
+              <section className="surface surface--padded" aria-label={t("directivesAria")}>
+                <div className="section-header">
+                  <h2 className="title-large section-title">{t("directivesTitle")}</h2>
                   <span className="body-small muted">
                     {t("stageSelected", {
                       stage: stage ? t(`stage.${stage}`) : t("stageDefault"),
                     })}
                   </span>
                 </div>
-                <ul className="directive-list" style={{ marginTop: 0 }}>
+                <ol className="directive-list">
                   {assessment.directives.map((directive) => (
                     <li key={directive.action_code}>
-                      <span className="urgency label-small">{directive.family}</span>
-                      <div className="title-small" lang="km">
-                        {directive.title_kh}
-                      </div>
-                      <div className="body-medium" lang="km">
-                        {directive.instruction_kh}
-                      </div>
-                      <div className="body-small muted" lang="en" style={{ marginTop: 4 }}>
-                        <strong>{directive.title_en}</strong> — {directive.instruction_en}
+                      <div className="directive-content">
+                        <div className="title-small" lang="km">
+                          {directive.title_kh}
+                        </div>
+                        <div className="body-medium" lang="km">
+                          {directive.instruction_kh}
+                        </div>
+                        <div className="body-small muted" lang="en">
+                          {directive.title_en}: {directive.instruction_en}
+                        </div>
                       </div>
                     </li>
                   ))}
-                </ul>
-              </section>
-            )}
-
-            {evidence && (
-              <section className="card" aria-label={evidenceT("title")}>
-                <div className="card-title-row">
-                  <h2 className="title-medium" style={{ margin: 0 }}>
-                    {evidenceT("title")}
-                  </h2>
-                  <span className="body-small muted">{t("evidenceHint")}</span>
-                </div>
-                <EvidencePanel evidence={evidence} />
+                </ol>
               </section>
             )}
 
             <FieldReportsList communeCode={code} />
 
-            <p style={{ margin: 0 }}>
-              <Link className="hero-link label-medium" href="/">
-                <WaveIcon /> {t("backToDashboard")}
-              </Link>
-            </p>
+            {evidence && (
+              <details className="disclosure">
+                <summary className="label-large">
+                  <span>{evidenceT("title")}</span>
+                  <span className="disclosure-summary-meta label-small">
+                    {evidenceT(`confidence.levels.${evidence.confidence}`)}
+                  </span>
+                </summary>
+                <div className="disclosure-body">
+                  <EvidencePanel evidence={evidence} />
+                </div>
+              </details>
+            )}
           </>
         )}
       </main>
     </div>
-  );
-}
-
-/**
- * Locale pill for this page: next-intl's LanguageSwitcher (untouched) drops
- * the ?code= query, which would strand relay links on the "missing code"
- * screen, so the commune page keeps the query while switching locales.
- */
-function CommuneLangSwitch() {
-  const locale = useLocale();
-  const t = useTranslations("LanguageSwitcher");
-  const searchParams = useSearchParams();
-  const code = searchParams.get("code") ?? undefined;
-
-  return (
-    <span className="lang-switch label-small" role="group" aria-label={t("aria")}>
-      {(["km", "en"] as const).map((option, index) => (
-        <span key={option} className="lang-switch-option">
-          {index > 0 && (
-            <span className="lang-sep" aria-hidden="true">
-              |
-            </span>
-          )}
-          <Link
-            href={{ pathname: "/commune", query: code ? { code } : undefined }}
-            locale={option}
-            aria-current={option === locale ? "true" : undefined}
-            lang={option}
-          >
-            {option === "km" ? t("km") : t("en")}
-          </Link>
-        </span>
-      ))}
-    </span>
   );
 }

@@ -5,8 +5,9 @@ import { useLocale, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { AssistantChat, type ChatMessage } from "@/components/AssistantChat";
 import { CommuneSearch } from "@/components/CommuneSearch";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { WatchRuns } from "@/components/WatchRuns";
-import { ArrowLeftIcon, CloseIcon, MapPinIcon } from "@/components/icons";
+import { BrandMark, CloseIcon, MapPinIcon, ShieldIcon } from "@/components/icons";
 import { Link } from "@/i18n/navigation";
 import {
   api,
@@ -19,13 +20,11 @@ import {
 import { intlLocale } from "@/lib/design";
 
 const SESSION_KEY = "mekongpulse.officer_session";
-/** Pre-sign-in builds kept the raw officer token here; the UI no longer uses it. */
 const LEGACY_TOKEN_KEY = "mekongpulse.officer_token";
 const CONVERSATION_KEY = "mekongpulse.assistant_conversation.v1";
 const FOCUS_KEY = "mekongpulse.assistant_focus.v1";
 const MAX_STORED_MESSAGES = 60;
 
-/** Stored session, or null when absent, malformed, or already expired. */
 function readStoredSession(): OfficerSession | null {
   try {
     window.localStorage.removeItem(LEGACY_TOKEN_KEY);
@@ -57,11 +56,10 @@ function writeStoredSession(value: OfficerSession | null) {
       window.localStorage.removeItem(SESSION_KEY);
     }
   } catch {
-    // storage unavailable (private mode) — the in-memory session still works
+    // ignore storage errors
   }
 }
 
-/** Stored threads come from the network: accept only the shape we render. */
 function readToolCall(value: unknown): AdvisorToolCall | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
@@ -119,7 +117,7 @@ function writeStoredConversation(messages: ChatMessage[]) {
       window.localStorage.setItem(CONVERSATION_KEY, JSON.stringify(messages.slice(-MAX_STORED_MESSAGES)));
     }
   } catch {
-    // storage unavailable (private mode) — the thread still works in memory
+    // ignore storage errors
   }
 }
 
@@ -139,7 +137,7 @@ function writeStoredFocus(code: string) {
       window.localStorage.removeItem(FOCUS_KEY);
     }
   } catch {
-    // storage unavailable (private mode)
+    // ignore storage errors
   }
 }
 
@@ -154,13 +152,6 @@ function formatExpiry(iso: string, locale: string): string {
   }).format(date);
 }
 
-/**
- * Officer assistant page (static export): full-page chat with officer sign-in
- * and server-side Khmer voice input.
- *
- * Client-only concerns (stored session, recording, useSearchParams) sit inside
- * the Suspense boundary below.
- */
 export default function AssistantPage() {
   return (
     <Suspense fallback={<AssistantSkeleton />}>
@@ -181,10 +172,12 @@ function AssistantSkeleton() {
 
 function AssistantView() {
   const t = useTranslations("Officer");
+  const headerT = useTranslations("Header");
   const locale = useLocale();
   const searchParams = useSearchParams();
   const [session, setSession] = useState<OfficerSession | null>(null);
   const firebaseEnabled = isFirebaseAuthConfigured();
+  const [showSignIn, setShowSignIn] = useState(false);
   const [authTab, setAuthTab] = useState<"passcode" | "firebase">("passcode");
   const [passcode, setPasscode] = useState("");
   const [email, setEmail] = useState("");
@@ -204,7 +197,6 @@ function AssistantView() {
     setSession(readStoredSession());
   }, []);
 
-  // Hydrate the thread after mount so the static export prerenders empty.
   useEffect(() => {
     setMessages(readStoredConversation());
     setConversationReady(true);
@@ -214,7 +206,6 @@ function AssistantView() {
     if (conversationReady) writeStoredConversation(messages);
   }, [messages, conversationReady]);
 
-  // ?code= wins on load; otherwise fall back to the last focused commune.
   useEffect(() => {
     if (!initialCode) {
       const stored = readStoredFocus();
@@ -228,7 +219,6 @@ function AssistantView() {
     if (focusReady) writeStoredFocus(communeCode);
   }, [communeCode, focusReady]);
 
-  // Expired sessions count as signed out; a 401 mid-conversation signs out too.
   const activeSession = useMemo(
     () => (session && Date.parse(session.expires_at) > Date.now() ? session : null),
     [session],
@@ -257,13 +247,14 @@ function AssistantView() {
         const result = await api.firebaseOfficerLogin(trimmedEmail, password);
         setSession(result);
         setPassword("");
+        setShowSignIn(false);
         writeStoredSession(result);
       } catch (err) {
         if (err instanceof ApiError) {
           setSignInError(
             err.status === 401
               ? t("signIn.errors.invalidCredentials")
-              : `${t("errors.server")} (${err.status})`,
+              : t("errors.server"),
           );
         } else {
           setSignInError(t("errors.network"));
@@ -282,6 +273,7 @@ function AssistantView() {
       const result = await api.officerLogin(code);
       setSession(result);
       setPasscode("");
+      setShowSignIn(false);
       writeStoredSession(result);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -292,7 +284,7 @@ function AssistantView() {
               ? t("signIn.errors.tooMany")
               : err.status === 503
                 ? t("signIn.errors.unavailable")
-                : `${t("errors.server")} (${err.status})`,
+                : t("errors.server"),
         );
       } else {
         setSignInError(t("errors.network"));
@@ -304,50 +296,96 @@ function AssistantView() {
 
   return (
     <div className="app assistant-app">
-      <header className="top-app-bar assistant-bar">
-        <Link className="assistant-back label-medium" href="/">
-          <ArrowLeftIcon />
-          <span className="assistant-back-text">{t("back")}</span>
-        </Link>
-        <span className="assistant-head">
-          <h1 className="title-medium assistant-title">{t("title")}</h1>
-          <span className="body-small subtitle">
-            {communeCode ? t("context", { code: communeCode }) : t("subtitle")}
-          </span>
-        </span>
-        <div className="spacer" />
-        {(!activeSession || view === "chat") && (
-          <button
-            type="button"
-            className="btn assistant-signout assistant-clear label-small"
-            aria-label={t("clearConversationAria")}
-            title={t("clearConversationAria")}
-            onClick={clearConversation}
-          >
-            {t("clearConversation")}
-          </button>
-        )}
-        {activeSession && (
-          <>
-            <span className="session-chip label-small">
-              {activeSession.email
-                ? t("signedInAs", {
-                    officer: activeSession.email,
-                    time: formatExpiry(activeSession.expires_at, locale),
-                  })
-                : t("signedIn", { time: formatExpiry(activeSession.expires_at, locale) })}
-            </span>
-            <button type="button" className="btn assistant-signout label-small" onClick={clearSession}>
-              {t("signOut")}
-            </button>
-          </>
-        )}
-        <AssistantLangSwitch />
+      <header className="top-app-bar">
+        <div className="top-app-bar-inner">
+          <Link className="brand" href="/">
+            <BrandMark />
+            <span className="brand-name">MekongPulse</span>
+          </Link>
+          <div className="spacer" />
+          <nav className="primary-nav" aria-label={headerT("navAria")}>
+            <Link className="nav-link label-medium" href="/">
+              {headerT("floodMap")}
+            </Link>
+            <Link className="nav-link label-medium" href="/assistant" aria-current="page">
+              {headerT("assistant")}
+            </Link>
+          </nav>
+          <LanguageSwitcher />
+        </div>
       </header>
 
       <main className="assistant-main">
-        {!activeSession && (
-          <section className="card assistant-signin" aria-label={t("signIn.title")}>
+        <div className="assistant-focus-row">
+          {communeCode ? (
+            <span className="assistant-focus-chip label-small">
+              <MapPinIcon />
+              <span>{t("context", { code: communeCode })}</span>
+              <button
+                type="button"
+                className="assistant-focus-clear"
+                aria-label={t("focusClear")}
+                title={t("focusClear")}
+                onClick={() => setCommuneCode("")}
+              >
+                <CloseIcon />
+              </button>
+            </span>
+          ) : (
+            !pickingCommune && (
+              <button
+                type="button"
+                className="chip label-small"
+                aria-expanded={pickingCommune}
+                onClick={() => setPickingCommune(true)}
+              >
+                <MapPinIcon />
+                <span>{t("focusAdd")}</span>
+              </button>
+            )
+          )}
+
+          {messages.length > 0 && (!activeSession || view === "chat") && (
+            <button
+              type="button"
+              className="btn btn--outline btn--compact label-small"
+              onClick={clearConversation}
+            >
+              {t("clearConversation")}
+            </button>
+          )}
+
+          {activeSession ? (
+            <button
+              type="button"
+              className="btn btn--outline btn--compact label-small"
+              onClick={clearSession}
+              title={
+                activeSession.email
+                  ? t("signedInAs", {
+                      officer: activeSession.email,
+                      time: formatExpiry(activeSession.expires_at, locale),
+                    })
+                  : t("signedIn", { time: formatExpiry(activeSession.expires_at, locale) })
+              }
+            >
+              {t("signOut")}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--outline btn--compact label-small"
+              aria-expanded={showSignIn}
+              onClick={() => setShowSignIn((prev) => !prev)}
+            >
+              <ShieldIcon />
+              <span>{t("signIn.title")}</span>
+            </button>
+          )}
+        </div>
+
+        {!activeSession && showSignIn && (
+          <section className="surface assistant-signin-panel" aria-label={t("signIn.title")}>
             <div className="assistant-signin-head">
               <h2 className="title-small" style={{ margin: 0 }}>
                 {t("signIn.title")}
@@ -452,50 +490,24 @@ function AssistantView() {
           </section>
         )}
 
-        <div className="assistant-focus-row">
-          {communeCode ? (
-            <span className="assistant-focus-chip label-small">
-              <MapPinIcon />
-              <span>{t("context", { code: communeCode })}</span>
-              <button
-                type="button"
-                className="assistant-focus-clear"
-                aria-label={t("focusClear")}
-                title={t("focusClear")}
-                onClick={() => setCommuneCode("")}
-              >
-                <CloseIcon />
-              </button>
-            </span>
-          ) : (
-            !pickingCommune && (
-              <button
-                type="button"
-                className="chip label-small"
-                aria-expanded={pickingCommune}
-                onClick={() => setPickingCommune(true)}
-              >
-                <MapPinIcon /> {t("focusAdd")}
-              </button>
-            )
-          )}
-        </div>
-
         {pickingCommune && !communeCode && (
-          <section className="assistant-focus-search" aria-label={t("focusAdd")}>
+          <section aria-label={t("focusAdd")}>
             <CommuneSearch
+              compact
               onPick={(code) => {
                 setCommuneCode(code);
                 setPickingCommune(false);
               }}
             />
-            <button
-              type="button"
-              className="btn assistant-signout label-small"
-              onClick={() => setPickingCommune(false)}
-            >
-              {t("focusCancel")}
-            </button>
+            <div style={{ marginTop: 8, textAlign: "end" }}>
+              <button
+                type="button"
+                className="btn btn--outline btn--compact label-small"
+                onClick={() => setPickingCommune(false)}
+              >
+                {t("focusCancel")}
+              </button>
+            </div>
           </section>
         )}
 
@@ -568,38 +580,5 @@ function AssistantView() {
         )}
       </main>
     </div>
-  );
-}
-
-/**
- * Locale pill for this page: next-intl's LanguageSwitcher drops the ?code=
- * query, which would silently clear the focused commune on a locale switch.
- */
-function AssistantLangSwitch() {
-  const locale = useLocale();
-  const t = useTranslations("LanguageSwitcher");
-  const searchParams = useSearchParams();
-  const code = searchParams.get("code") ?? undefined;
-
-  return (
-    <span className="lang-switch label-small" role="group" aria-label={t("aria")}>
-      {(["km", "en"] as const).map((option, index) => (
-        <span key={option} className="lang-switch-option">
-          {index > 0 && (
-            <span className="lang-sep" aria-hidden="true">
-              |
-            </span>
-          )}
-          <Link
-            href={{ pathname: "/assistant", query: code ? { code } : undefined }}
-            locale={option}
-            aria-current={option === locale ? "true" : undefined}
-            lang={option}
-          >
-            {option === "km" ? t("km") : t("en")}
-          </Link>
-        </span>
-      ))}
-    </span>
   );
 }

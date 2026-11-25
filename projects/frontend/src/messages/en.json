@@ -1,163 +1,127 @@
 {
   "Metadata": {
-    "title": "MekongPulse — Cambodia River Telemetry & Flood Guard",
-    "description": "Live Mekong, Bassac, and Tonle Sap telemetry, commune flood-risk tiers, and agronomic directives for Cambodia."
-  },
-  "Brand": {
-    "subtitle": "River telemetry · Mekong"
+    "title": "MekongPulse — Cambodia Flood Safety & River Levels",
+    "description": "Plain-language Mekong, Bassac, and Tonle Sap flood safety updates, spoken Khmer warnings, and river levels for Cambodia."
   },
   "Header": {
+    "navAria": "Primary navigation",
+    "floodMap": "Flood map",
+    "assistant": "Ask assistant",
     "refresh": "Refresh",
-    "refreshAria": "Refresh telemetry and risk data",
-    "mrcAria": "MRC telemetry {state}",
-    "mrcLabel": "MRC {state}",
-    "environmentAria": "Environment {environment}",
-    "mrcStates": {
-      "CONNECTED": "connected",
-      "STALE": "stale",
-      "OFFLINE": "offline",
-      "UNKNOWN": "unknown"
-    },
-    "assistant": "Assistant",
-    "assistantNavAria": "Officer assistant"
+    "refreshAria": "Refresh live river and flood data"
   },
   "Hero": {
-    "bandAria": "Basin status",
-    "eyebrow": "MekongPulse · River telemetry · Cambodia",
-    "reading": "Reading the rivers…",
-    "danger": "<tier>{count}</tier> {count, plural, one {commune} other {communes}} in flood danger",
-    "warning": "<tier>{count}</tier> {count, plural, one {commune} other {communes}} under flood warning",
-    "advisory": "<tier>{count}</tier> {count, plural, one {commune} other {communes}} on advisory watch",
-    "allClear": "All monitored communes below alarm stage",
-    "jumpAria": "Jump to section",
-    "linkSummary": "Summary",
-    "linkAlerts": "Alert log",
-    "linkStations": "River stations",
-    "linkMap": "Basin map",
-    "linkRisk": "Risk register",
-    "riskPanelAria": "Risk distribution across monitored communes",
-    "riskPanelTitle": "Basin risk",
-    "communes": "{count, plural, one {# commune} other {# communes}}",
-    "scored": "{communes, plural, one {# commune} other {# communes}} scored from {stations, plural, one {# MRC station} other {# MRC stations}}",
-    "lastReading": "last reading {time}",
-    "awaitingSync": "awaiting first sync",
-    "riverConditions": "River conditions now · Mekong · Bassac · Tonle Sap"
-  },
-  "HighestRisk": {
-    "title": "Highest risk",
-    "tap": "tap for the full bulletin",
-    "allClear": "all clear",
-    "empty": "No elevated communes right now."
-  },
-  "Aria": {
-    "rail": "Commune lookup and highest risk",
-    "highestRiskSection": "Highest risk communes",
-    "stationDetailSection": "Station detail cards"
+    "bandAria": "Today's flood status",
+    "reading": "Checking river levels…",
+    "danger": "{count, plural, one {# commune is} other {# communes are}} in flood danger",
+    "warning": "{count, plural, one {# commune has} other {# communes have}} a flood warning",
+    "advisory": "{count, plural, one {# commune is} other {# communes are}} on flood watch",
+    "allClear": "All areas safe today",
+    "riskPanelAria": "Filter communes by flood risk level",
+    "updatedFrom": "Updated {time} from {stations, plural, one {# river station} other {# river stations}}",
+    "awaitingSync": "Waiting for the next river update"
   },
   "TelemetryErrors": {
-    "gatewayUnavailable": "Telemetry gateway: the upstream station feed is unavailable. Showing the last successful refresh.",
-    "gatewayFailed": "Telemetry gateway: connection failed. Check that the API is running, then refresh."
+    "unavailable": "Live river updates are temporarily unavailable. Try refreshing shortly."
   },
   "Stations": {
-    "title": "River stations",
-    "hint": "select a station to plot its 7-day hydrograph",
-    "empty": "No telemetry yet. The scheduler syncs MRC stations every 15 minutes; run <mono>POST /api/v1/telemetry/sync</mono> to poll immediately.",
-    "selectorAria": "Station selector",
-    "chipTitle": "{river} · alarm {alarm} m · flood {flood} m"
+    "title": "River levels",
+    "hint": "Select a river station to view its 7-day trend",
+    "empty": "River readings are updating. Check back in a few minutes.",
+    "selectorAria": "Select a river station"
   },
   "Hydrograph": {
-    "cardAria": "Hydrograph and voice bulletin",
-    "titleFallback": "Station hydrograph",
-    "subActive": "{river} · {id} · alarm {alarm} m · flood {flood} m · 7-day",
-    "subEmpty": "Select a station to plot its 7-day water level.",
-    "empty": "Telemetry temporarily unavailable — run a telemetry sync and refresh.",
-    "canvasAria": "{station} ({id}) 7-day water level hydrograph. Current {current} meters, {trend}. Alarm stage {alarm} m, flood crest {flood} m.",
+    "titleFallback": "7-day river level",
+    "subActive": "Alarm {alarm} m, flood {flood} m",
+    "aboveAlarm": "{meters} m above alarm",
+    "belowAlarm": "{meters} m below alarm",
+    "subEmpty": "Choose a river station to view its 7-day level.",
+    "empty": "River chart is temporarily unavailable. Try refreshing shortly.",
+    "canvasAria": "{station} ({id}) 7-day water level chart. Current {current} meters, {trend}. Alarm {alarm} m, flood {flood} m.",
     "alarmLabel": "Alarm {level}m",
     "floodLabel": "Flood {level}m",
-    "trendNoData": "no data",
-    "trendRising": "rising",
-    "trendFalling": "falling",
-    "trendSteady": "steady"
+    "trendNoData": "No data",
+    "trendRising": "Rising",
+    "trendFalling": "Falling",
+    "trendSteady": "Steady"
   },
   "Voice": {
-    "cardAria": "Khmer voice bulletin",
-    "title": "Khmer voice bulletin",
-    "selected": "{name} ({code})",
-    "empty": "select a commune to load its bulletin",
-    "fallbackKhmer": "ជ្រើសរើសឃុំនៅលើផែនទី ឬស្វែងរកឃុំ ដើម្បីមើលសារជូនដំណឹង និងស្តាប់សារសម្លេងខ្មែរ។",
-    "fallbackEnglish": "Select or search a commune to load its bilingual flood bulletin and spoken Khmer warning.",
     "playAria": "Play spoken Khmer flood warning",
-    "seekAria": "Seek within the spoken Khmer bulletin",
-    "showTranscript": "Show transcript",
-    "hideTranscript": "Hide transcript",
-    "attachNote": "Voice note attaches when a Sentinel alert is dispatched (Gemini TTS)."
+    "seekAria": "Seek within the spoken Khmer warning",
+    "showTranscript": "Read full message",
+    "hideTranscript": "Hide message text",
+    "attachNote": "Spoken Khmer audio is generated when you open a commune bulletin."
   },
   "Map": {
-    "sectionAria": "Basin risk map",
-    "title": "Basin risk map",
-    "hint": "{count, plural, one {# commune} other {# communes}} · tap a dot for its bulletin",
-    "aria": "Interactive basin map: {count, plural, one {# monitored commune} other {# monitored communes}} shaded by flood risk tier",
-    "basemapAria": "Basemap style",
+    "sectionAria": "Flood map and areas to watch",
+    "title": "Flood map",
+    "hint": "{count, plural, one {# monitored commune} other {# monitored communes}}. Tap any dot for details.",
+    "aria": "Interactive flood map showing {count, plural, one {# monitored commune} other {# monitored communes}}",
+    "basemapAria": "Map style",
     "basemapLight": "Light",
     "basemapStreets": "Streets",
     "basemapTerrain": "Terrain",
-    "floodArrival": " · flood arrival ~{hours} h",
-    "stationTooltip": "{name} · {level} m",
-    "stationLegend": "station",
+    "floodArrival": "water expected in ~{hours} h",
+    "stationTooltip": "{name}: {level} m",
+    "stationLegend": "River station",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out"
   },
-  "StationDetail": {
-    "label": "Station detail"
-  },
   "StationCard": {
-    "estimated": "estimated",
-    "estimatedTitle": "Estimated reading from station failover",
+    "estimated": "Estimated",
+    "estimatedTitle": "Estimated reading from nearby station",
     "alarm": "Alarm",
     "flood": "Flood",
-    "leveeMargin": "levee margin",
-    "alarmMarkerTitle": "Alarm stage {level} m"
+    "leveeMargin": "below alarm",
+    "alarmMarkerTitle": "Alarm level {level} m"
   },
   "Search": {
-    "title": "Commune lookup",
-    "placeholder": "Koh Thom, កោះធំ, 080404…",
-    "inputAria": "Search commune by Khmer or English name or 6-digit code",
-    "gps": "Send GPS location",
-    "errorLookup": "Commune Search: lookup failed. Retry or pick a commune from the map.",
-    "errorNoGeolocation": "Location Resolver: this browser cannot share a GPS pin. Select your commune from the menu.",
-    "errorOutsideBasin": "Location Resolver: coordinates are outside the Mekong river basin. Select your target commune from the menu.",
-    "errorResolve": "Location Resolver: GPS pin could not be resolved. Select your commune from the menu.",
-    "errorDenied": "Location Resolver: GPS permission was denied. Select your target commune from the menu.",
-    "noMatch": "No commune matched. Try a Khmer name (កោះធំ), an English variant (Koh Thom), or a 6-digit code."
+    "placeholder": "Search your commune (Koh Thom, កោះធំ)…",
+    "inputAria": "Search commune by Khmer or English name",
+    "gps": "Use my location",
+    "errorLookup": "Could not search right now. Try again or tap the map.",
+    "errorNoGeolocation": "This device cannot share GPS location. Search by commune name instead.",
+    "errorOutsideBasin": "Your location is outside the monitored Mekong river area.",
+    "errorResolve": "Could not match your location. Search by commune name instead.",
+    "errorDenied": "Location access was denied. Search by commune name instead.",
+    "noMatch": "No matching commune found. Try a Khmer name (កោះធំ) or English name (Koh Thom)."
   },
   "RiskList": {
-    "title": "Risk register",
+    "title": "Areas to watch",
+    "filteredBy": "Showing {tier} communes",
+    "clearFilter": "Show all",
     "filterAria": "Filter by province",
-    "allProvinces": "All provinces · {count}",
-    "export": "Export CSV",
-    "exportAria": "Download the commune risk register as a CSV file",
-    "empty": "No scored communes yet. Telemetry sync runs every 15 minutes.",
-    "estimated": "· estimated",
-    "rowAria": "Assess {name}, {tier} tier",
-    "footer": "Showing the {max} highest-risk of {total, plural, one {# scored commune} other {# scored communes}}. Pick a province to narrow the register."
+    "allProvinces": "All provinces ({count})",
+    "export": "Download CSV",
+    "exportAria": "Download the commune list as a CSV file",
+    "empty": "No river data available yet. Check back shortly.",
+    "emptyTier": "No communes are currently in {tier} status.",
+    "rowAria": "Open flood bulletin for {name}, {tier}",
+    "showAll": "Show all communes ({count})",
+    "showElevated": "Show areas to watch only",
+    "countSummary": "{count} communes shown"
   },
   "RiskTable": {
     "commune": "Commune",
     "province": "Province",
-    "tier": "Tier",
-    "lead": "Lead",
-    "level": "Level",
+    "tier": "Status",
+    "lead": "Arrival",
+    "level": "Water level",
     "score": "Score"
   },
+  "Officials": {
+    "sectionAria": "Officials and reports",
+    "title": "Officials and reports"
+  },
   "Summary": {
-    "aria": "Basin status summary",
-    "title": "Basin status summary",
+    "title": "Printable shift report",
+    "summaryHint": "For shift handover and PDF export",
     "print": "Print / PDF",
-    "printAria": "Print or save this basin status summary as a PDF",
-    "scored": "{count, plural, one {# commune} other {# communes}} scored · last telemetry sync {time}",
-    "awaitingSync": "awaiting first sync",
-    "stationSection": "Station status",
-    "stationEmpty": "No telemetry yet. Last sync runs every 15 minutes.",
+    "printAria": "Print or save this flood summary as a PDF",
+    "scored": "{count, plural, one {# commune} other {# communes}} checked, last updated {time}",
+    "awaitingSync": "waiting for update",
+    "stationSection": "River station status",
+    "stationEmpty": "No river station readings yet.",
     "stStation": "Station",
     "stRiver": "River",
     "stLevel": "Level (m)",
@@ -165,137 +129,136 @@
     "stFlood": "Flood (m)",
     "stStatus": "Status",
     "stRecorded": "Recorded",
-    "aboveFlood": "ABOVE FLOOD",
-    "aboveAlarm": "ABOVE ALARM",
-    "belowAlarm": "BELOW ALARM",
-    "topTitle": "Highest risk (top {limit})",
-    "empty": "No elevated communes right now.",
-    "generated": "Generated at {time}"
+    "aboveFlood": "Above flood",
+    "aboveAlarm": "Above alarm",
+    "belowAlarm": "Below alarm",
+    "topTitle": "Highest risk communes (top {limit})",
+    "empty": "All communes are currently safe.",
+    "generated": "Report prepared at {time}"
   },
   "AlertLog": {
-    "aria": "Alert dispatch log",
-    "title": "Alert dispatch log",
-    "hint": "latest {limit} · newest first",
-    "unavailable": "Alert log gateway: the dispatch log is unavailable (HTTP {status}).",
-    "failed": "Alert log gateway: could not load the dispatch log.",
-    "empty": "No alerts dispatched yet.",
-    "tableAria": "Alert dispatch log, newest first",
-    "colDispatched": "Dispatched",
+    "title": "Recent alerts sent",
+    "loading": "Loading…",
+    "unavailableShort": "Unavailable",
+    "count": "{count, plural, one {# alert} other {# alerts}}",
+    "failed": "Recent alerts are temporarily unavailable.",
+    "empty": "No flood alerts have been sent recently.",
+    "tableAria": "Recent flood alerts, newest first",
+    "colDispatched": "Sent at",
     "colCommune": "Commune",
     "colProvince": "Province",
-    "colTier": "Tier",
-    "colDirective": "Directive",
+    "colTier": "Status",
+    "colDirective": "Guidance",
     "colRecipients": "Recipients",
-    "colVoice": "Voice note",
-    "bulletin": "Bulletin",
+    "colVoice": "Audio",
+    "bulletin": "Read message",
     "listen": "Listen",
-    "listenAria": "Open the Khmer voice bulletin for {name} in a new tab"
+    "listenAria": "Open spoken Khmer warning for {name}"
   },
   "Dialog": {
-    "aria": "Flood assessment for commune {code}",
-    "updated": "{name} · {code} · updated {time}",
-    "loadingTitle": "Commune {code}",
-    "loadingBody": "Evaluating flood risk and recording the Khmer voice bulletin — up to a minute…",
-    "closeAria": "Close assessment",
-    "readOnly": "Read-only view — directives render the conservative ripening posture. Farmers set their own rice stage once in the Telegram bot.",
-    "estimated": "Estimated telemetry — escalated conservatively",
-    "errorNoTelemetry": "Commune {code} has no station telemetry to score yet. Pick another commune or retry after the next sync.",
-    "errorNotFound": "Commune {code} was not found in the 2025 gazetteer.",
-    "errorUnavailable": "Assessment unavailable right now. Retry in a few minutes.",
-    "evidenceFailed": "Could not load the evidence pack for this commune.",
-    "openFullPage": "Open full page"
+    "updated": "{name}, updated {time}",
+    "loadingTitle": "Loading commune {code}…",
+    "fallbackTitle": "Commune {code}",
+    "loadingBody": "Preparing the flood update and spoken Khmer message…",
+    "closeAria": "Close commune details",
+    "close": "Close",
+    "estimated": "Estimated reading",
+    "errorNoTelemetry": "No river readings are available for commune {code} yet.",
+    "errorNotFound": "Commune {code} was not found.",
+    "errorUnavailable": "Flood bulletin is temporarily unavailable. Please try again shortly.",
+    "evidenceFailed": "Could not load verification details for this commune.",
+    "openFullPage": "Open full commune page"
   },
   "Evidence": {
     "title": "How we know this",
     "confidenceLabel": "Confidence",
     "confidence": {
       "levels": {
-        "high": "High",
-        "medium": "Medium",
-        "low": "Low"
+        "high": "High confidence",
+        "medium": "Medium confidence",
+        "low": "Low confidence"
       },
       "reasons": {
-        "fresh_telemetry": "Station telemetry is fresh",
-        "qc_clean": "Data quality checks all passed",
-        "near_station": "Commune sits close to the gauge",
+        "fresh_telemetry": "River reading is recent",
+        "qc_clean": "Data quality checks passed",
+        "near_station": "Close to river gauge",
         "sources_agree": "Independent sources agree",
-        "stale_telemetry": "Stale or fallback telemetry",
-        "qc_warning": "Data quality warning",
-        "qc_fail": "A data quality check failed",
-        "far_from_station": "Commune sits far from the gauge",
-        "source_disagree": "Independent sources disagree"
+        "stale_telemetry": "Reading is older than usual",
+        "qc_warning": "Minor data quality warning",
+        "qc_fail": "Data quality check failed",
+        "far_from_station": "Far from nearest river gauge",
+        "source_disagree": "Sources show different trends"
       }
     },
-    "reasonsAria": "Confidence reasons",
-    "score": "score {score}/100",
-    "generatedAt": "generated {time}",
+    "reasonsAria": "Confidence factors",
+    "score": "Score {score}/100",
+    "generatedAt": "Updated {time}",
     "station": {
-      "title": "Reference station",
+      "title": "Nearest river station",
       "source": "Source",
       "sources": {
-        "live": "live",
-        "fallback": "failover",
-        "cache": "cached"
+        "live": "Live gauge",
+        "fallback": "Backup estimate",
+        "cache": "Saved reading"
       },
       "recordedAt": "Recorded",
       "freshness": "Freshness",
       "freshnessLevels": {
-        "fresh": "fresh",
-        "recent": "recent",
-        "stale": "stale"
+        "fresh": "Fresh",
+        "recent": "Recent",
+        "stale": "Older"
       },
-      "ageMinutes": "{count} min old",
+      "ageMinutes": "{count} min ago",
       "distance": "Distance",
-      "distanceKm": "~{km} km",
-      "distanceUnknown": "unknown",
-      "level": "Level",
+      "distanceKm": "About {km} km",
+      "distanceUnknown": "Unknown",
+      "level": "Water level",
       "stages": "Alarm / flood (m)"
     },
     "qc": {
-      "title": "Data quality (QC)",
+      "title": "Data quality checks",
       "statuses": {
-        "pass": "pass",
-        "warn": "warn",
-        "fail": "fail",
-        "unavailable": "n/a"
+        "pass": "Pass",
+        "warn": "Warning",
+        "fail": "Failed",
+        "unavailable": "N/A"
       },
       "checks": {
         "gaps": "Reading gaps",
-        "stuck": "Stuck values",
-        "spike": "Implausible spikes",
-        "range": "Plausible range"
+        "stuck": "Stuck sensor",
+        "spike": "Sudden spikes",
+        "range": "Valid range"
       }
     },
     "crossChecks": {
       "title": "Cross-checks",
       "statuses": {
-        "agree": "agree",
-        "disagree": "disagree",
-        "unavailable": "n/a"
+        "agree": "Agree",
+        "disagree": "Disagree",
+        "unavailable": "N/A"
       },
-      "rainfall_agreement": "Rainfall vs river level",
-      "upstream_coherence": "Trend vs neighbouring stations"
+      "rainfall_agreement": "Rainfall and river level",
+      "upstream_coherence": "Upstream station trend"
     },
     "chain": {
-      "title": "Evidence chain"
+      "title": "Decision steps"
     },
     "limitations": {
-      "title": "Limitations:"
+      "title": "Note:"
     }
   },
   "FieldReports": {
-    "title": "Field reports",
-    "hint": "latest {limit} · newest first",
-    "empty": "No ground-truth reports for this commune yet.",
-    "failed": "Field reports: could not load the reports.",
-    "unavailable": "Field reports: unavailable right now (HTTP {status}).",
+    "title": "Local reports from this commune",
+    "empty": "No local field reports for this commune yet.",
+    "failed": "Could not load local reports right now.",
+    "unavailable": "Local reports are temporarily unavailable ({status}).",
     "statuses": {
       "water_reached": "Water reached the fields",
-      "no_water": "No water reached the fields",
-      "other": "Other"
+      "no_water": "No water in the fields",
+      "other": "Other update"
     },
-    "reportedBy": "reported by {name}",
-    "anonymous": "anonymous",
+    "reportedBy": "Reported by {name}",
+    "anonymous": "Local reporter",
     "sources": {
       "web": "web",
       "telegram": "Telegram"
@@ -308,78 +271,81 @@
     }
   },
   "Commune": {
-    "brandSubtitle": "Flood bulletin · spoken Khmer",
-    "eyebrow": "MekongPulse · commune flood bulletin",
     "heroAria": "Flood bulletin for {name}",
     "errorAria": "Commune bulletin error",
     "updated": "updated {time}",
-    "estimated": "estimated telemetry",
-    "listen": "Listen",
-    "listenLoading": "Preparing the Khmer voice bulletin — this can take up to a minute…",
-    "voiceUnavailable": "The voice bulletin is unavailable right now (TTS quota limits). The full bulletin text is below instead.",
-    "regenerate": "Regenerate briefing",
-    "regenerating": "Regenerating…",
-    "regenerateHint": "Officer action: re-runs the Khmer polish and voice for this commune, bypassing the cache.",
-    "regenerateAuth": "Your officer session expired. Sign in on the assistant page to regenerate.",
-    "stageLabel": "Rice crop stage",
-    "stageAria": "Choose the rice crop stage for matching advice",
-    "stageDefault": "default posture",
-    "stageSelected": "advice for {stage}",
+    "estimated": "Estimated reading",
+    "statusSummary": {
+      "NORMAL": "Water levels near this commune are currently safe and below alarm stage.",
+      "ADVISORY": "River water is rising nearby. Keep watch on low-lying rice fields and drainage.",
+      "WARNING": "Flood risk is elevated for this commune. Listen to the Khmer update and prepare fields.",
+      "DANGER": "High flood danger for this commune. Listen to the Khmer warning and take protective action now."
+    },
+    "listen": "Listen in Khmer",
+    "listenLoading": "Preparing Khmer audio (up to a minute)…",
+    "voiceUnavailable": "Spoken audio is temporarily unavailable. You can read the full message above.",
+    "regenerate": "Refresh audio bulletin",
+    "regenerating": "Refreshing…",
+    "regenerateHint": "Officer option: creates a fresh Khmer audio recording.",
+    "regenerateAuth": "Your officer sign-in expired. Sign in on the assistant page to refresh audio.",
+    "stageLabel": "Rice stage (optional, for tailored advice)",
+    "stageAria": "Choose your rice crop stage",
+    "stageDefault": "general rice advice",
+    "stageSelected": "Advice for {stage}",
     "stage": {
       "TILLERING": "Tillering",
       "VEGETATIVE": "Vegetative",
       "FLOWERING": "Flowering",
       "RIPENING": "Ripening"
     },
-    "directivesAria": "Agronomic directives for this commune",
-    "directivesTitle": "Field directives",
-    "share": "Share",
-    "shareTitle": "{name} · MekongPulse",
-    "shareText": "{name} · MekongPulse flood bulletin: {url}",
-    "shareCopied": "Link copied.",
-    "shareFailed": "Could not copy the link — copy it from the address bar instead.",
-    "assessFailed": "Could not generate the bulletin right now. Please try again.",
-    "evidenceHint": "checked provenance",
-    "missingCodeTitle": "This link is missing a commune code",
-    "missingCodeBody": "Commune links look like /km/commune/?code=… Return to the dashboard to pick a commune and share the link again.",
-    "errorNotFound": "Commune {code} was not found in the 2025 gazetteer.",
-    "errorNoTelemetry": "Commune {code} has no station telemetry to build evidence from yet.",
-    "errorUnavailable": "Evidence is unavailable right now. Retry in a few minutes.",
-    "backToDashboard": "Back to the dashboard"
+    "directivesAria": "What to do now",
+    "directivesTitle": "What to do now",
+    "share": "Share link",
+    "shareTitle": "{name} — MekongPulse",
+    "shareText": "{name} flood update from MekongPulse: {url}",
+    "shareCopied": "Link copied to clipboard.",
+    "shareFailed": "Could not copy automatically. Copy the link from your browser address bar.",
+    "assessFailed": "Could not load the spoken bulletin right now. Please try again.",
+    "missingCodeTitle": "No commune selected",
+    "missingCodeBody": "Return to the flood map to choose a commune.",
+    "errorNotFound": "Commune {code} was not found.",
+    "errorNoTelemetry": "No river readings are available for commune {code} yet.",
+    "errorUnavailable": "Flood information is temporarily unavailable. Please try again shortly.",
+    "backToDashboard": "Back to flood map"
   },
   "Watch": {
-    "title": "Watch officer",
-    "intro": "The agent verifies evidence and drafts a status update. Nothing is published until you approve.",
-    "runWatch": "Run watch",
-    "running": "Working…",
-    "startTitle": "Start a watch",
-    "runOn": "Run on commune {code}",
-    "runHighest": "Run on the highest-risk commune",
-    "recent": "Recent runs",
+    "title": "Watch inbox",
+    "intro": "Review automated evidence checks and edit drafts before publishing to Telegram.",
+    "runWatch": "Run check",
+    "running": "Checking…",
+    "startTitle": "Start a watch check",
+    "runOn": "Check commune {code}",
+    "runHighest": "Check highest-risk commune",
+    "recent": "Recent checks",
     "pendingCount": "{count} awaiting approval",
-    "signIn": "Sign in to run the watch officer and approve drafts.",
-    "empty": "No watch runs yet.",
+    "signIn": "Sign in as an officer to run checks and approve alerts.",
+    "empty": "No watch checks yet.",
     "pending_approval": "Awaiting approval",
     "publishing": "Publishing…",
     "published": "Published",
     "rejected": "Rejected",
     "failed": "Failed",
-    "triggerManual": "Manual run",
-    "triggerTransition": "Risk transition",
-    "tierChange": "{previous} → {current}",
+    "triggerManual": "Manual check",
+    "triggerTransition": "Risk change",
+    "tierChange": "{previous} to {current}",
     "noPrevious": "none",
-    "rationale": "Agent rationale",
-    "tools": "Tools ({count})",
-    "noTools": "No tool calls",
-    "draft": "Publication draft",
+    "rationale": "Summary",
+    "tools": "Verification steps ({count})",
+    "noTools": "No checks recorded",
+    "draft": "Draft message",
     "draftKhmer": "Khmer draft",
     "draftEnglish": "English draft",
-    "approve": "Approve & publish",
+    "approve": "Approve and publish",
     "edit": "Edit",
     "reject": "Reject",
     "cancel": "Cancel",
-    "saveApprove": "Save & approve",
-    "approving": "Approving…",
+    "saveApprove": "Save and publish",
+    "approving": "Publishing…",
     "rejecting": "Rejecting…",
     "publishedAt": "Published {time}",
     "messageId": "message #{id}",
@@ -387,38 +353,34 @@
     "approvedBy": "by {officer}",
     "errorLabel": "Error",
     "created": "Created {time}",
-    "loadFailed": "Could not load watch runs.",
-    "actionFailed": "The action failed."
+    "loadFailed": "Could not load watch checks.",
+    "actionFailed": "Action failed."
   },
   "Officer": {
     "tabs": {
       "aria": "Assistant views",
-      "chat": "Assistant",
+      "chat": "Chat",
       "watch": "Watch inbox",
       "pending": "{count} awaiting approval"
     },
-    "title": "Officer assistant",
-    "subtitle": "Ask about risk, draft updates, publish to the channel",
-    "back": "Back to dashboard",
-    "ctaAction": "Open the assistant",
-    "context": "focused on commune {code}",
-    "empty": "Ask about current risk or request a draft update in Khmer.",
+    "welcomeTitle": "Ask about flood safety or river levels",
+    "welcomeBody": "Type a question or tap the microphone to speak in Khmer or English.",
+    "context": "Focused on commune {code}",
     "you": "You",
     "assistant": "Assistant",
-    "thinking": "Thinking…",
-    "inputPlaceholder": "Ask the officer assistant…",
-    "inputAria": "Message to the officer assistant",
+    "thinking": "Checking live river data…",
+    "inputPlaceholder": "Ask a question in Khmer or English…",
+    "inputAria": "Ask a question about flood safety",
     "sendAria": "Send message",
-    "conversationAria": "Conversation with the officer assistant",
-    "draftOnly": "Draft-only mode — sign in as an officer to publish to the channel.",
-    "signedIn": "Officer · expires {time}",
-    "signedInAs": "{officer} · expires {time}",
+    "conversationAria": "Flood assistant conversation",
+    "draftOnly": "Officials can sign in here to publish alerts to the Telegram channel.",
+    "signedIn": "Officer signed in until {time}",
+    "signedInAs": "{officer}, expires {time}",
     "signOut": "Sign out",
-    "clearConversation": "Clear conversation",
-    "clearConversationAria": "Clear the conversation and its saved history",
+    "clearConversation": "Clear chat",
     "signIn": {
       "title": "Officer sign in",
-      "methodAria": "Officer sign-in method",
+      "methodAria": "Sign-in method",
       "methodPasscode": "Passcode",
       "methodAccount": "Officer account",
       "passcode": "Officer passcode",
@@ -430,78 +392,80 @@
       "submit": "Sign in",
       "working": "Signing in…",
       "errors": {
-        "invalid": "Wrong passcode. Try again.",
-        "invalidCredentials": "Invalid email or password. Try again.",
-        "unavailable": "Officer sign-in is not configured on this server yet.",
-        "tooMany": "Too many attempts. Wait a minute, then try again."
+        "invalid": "Incorrect passcode. Please try again.",
+        "invalidCredentials": "Invalid email or password. Please try again.",
+        "unavailable": "Officer sign-in is not configured on this server.",
+        "tooMany": "Too many attempts. Wait a minute and try again."
       }
     },
-    "focusAdd": "Focus a commune",
-    "focusClear": "Clear the focused commune",
+    "focusAdd": "Focus a commune (optional)",
+    "focusClear": "Clear focused commune",
     "focusCancel": "Cancel",
     "voice": {
-      "start": "Record a voice message",
+      "start": "Speak your question",
       "stop": "Stop",
       "cancel": "Cancel",
-      "recording": "Recording…",
-      "limit": "≥ 2 s · stops at 60 s",
-      "transcribing": "Transcribing…",
+      "recording": "Listening…",
+      "limit": "Up to 60 s",
+      "transcribing": "Converting speech to text…",
       "errors": {
-        "denied": "Microphone access was denied. Allow the microphone in your browser settings, or type your message instead.",
-        "unsupported": "This browser could not start the recorder. Type your message instead.",
-        "tooShort": "That recording was too short. Speak for at least two seconds.",
-        "silent": "No speech was captured. Check your microphone or speak closer.",
+        "denied": "Microphone access was denied. Allow microphone access or type your question.",
+        "unsupported": "Voice recording is not supported in this browser. Type your question instead.",
+        "tooShort": "Recording was too short. Speak for at least two seconds.",
+        "silent": "No speech was heard. Check your microphone and try again.",
         "noSpeech": "No speech was detected. Please try again.",
-        "tooLarge": "That recording was too long to transcribe. Keep it under a minute.",
-        "unavailable": "Voice transcription is unavailable right now. Type your message instead.",
-        "network": "The recording could not be sent. Check your network and try again.",
-        "failed": "That recording could not be transcribed. Try again or type your message."
+        "tooLarge": "Recording was too long. Keep it under one minute.",
+        "unavailable": "Voice input is temporarily unavailable. Type your question instead.",
+        "network": "Could not send the recording. Check your connection and try again.",
+        "failed": "Could not understand the recording. Try again or type your question."
       }
     },
-    "toolsUsed": "Tools used · {count}",
+    "toolsUsed": "Data checked ({count})",
     "toolStatuses": {
       "ok": "ok",
       "error": "error"
     },
     "tools": {
-      "get_station_telemetry": "Station telemetry",
-      "resolve_commune_by_location": "Resolve commune by location",
-      "search_commune": "Search commune",
-      "evaluate_crop_directive": "Crop directive",
-      "synthesize_voice_bulletin": "Voice bulletin",
-      "get_commune_evidence": "Commune evidence",
-      "draft_status_update": "Draft status update",
-      "publish_to_channel": "Publish to channel"
+      "get_station_telemetry": "River station readings",
+      "resolve_commune_by_location": "Location lookup",
+      "search_commune": "Commune search",
+      "evaluate_crop_directive": "Farming advice",
+      "synthesize_voice_bulletin": "Khmer audio bulletin",
+      "get_commune_evidence": "Commune verification",
+      "draft_status_update": "Draft update",
+      "publish_to_channel": "Publish to Telegram"
     },
     "actions": {
       "telegram_post": {
-        "posted": "Posted to the Telegram channel",
-        "denied": "Denied — officer token required",
-        "unavailable": "The Telegram channel is unavailable right now",
-        "error": "Publishing to the channel failed"
+        "posted": "Published to the Telegram channel",
+        "denied": "Officer sign-in required to publish",
+        "unavailable": "Telegram channel is temporarily unavailable",
+        "error": "Could not publish to the Telegram channel"
       },
-      "unknown": "Action outcome: {status}"
+      "unknown": "Action status: {status}"
     },
     "quickPrompts": {
-      "summary": "Summarize current risk",
+      "publicRisk": "Which areas have flood risk today?",
+      "publicFarmers": "What should farmers do now?",
+      "publicRiver": "Check river levels near Koh Thom",
+      "summary": "Summarize current flood risk",
       "draft": "Draft a status update",
-      "post": "Post it to the channel"
+      "post": "Publish update to channel"
     },
     "errors": {
-      "unavailable": "The assistant is unavailable right now. Try again shortly.",
-      "server": "The assistant gateway hit an error",
-      "network": "Connection failed. Check your network and try again.",
-      "sessionExpired": "Your officer session has ended. Sign in again to publish to the channel."
+      "unavailable": "The assistant is temporarily unavailable. Please try again shortly.",
+      "server": "Something went wrong. Please try again.",
+      "network": "Connection failed. Check your internet and try again.",
+      "sessionExpired": "Your officer sign-in expired. Sign in again to publish."
     }
   },
   "Footer": {
-    "data": "Data: MRC telemetry (api.mrcmekong.org) · Open-Meteo rainfall · MEF 2025 commune gazetteer. Risk tiers refresh every 15 minutes; alerts dispatch via the MekongPulse Telegram bot. Bilingual bulletins are synthesized with Gemini Khmer TTS and attached to Sentinel alerts."
+    "data": "Sources: Mekong River Commission, Open-Meteo rainfall, and MEF 2025 commune directory. Updated every 15 minutes."
   },
   "BottomNav": {
-    "aria": "Primary",
-    "river": "River",
+    "aria": "Mobile navigation",
+    "check": "Check",
     "map": "Map",
-    "risk": "Risk",
     "assistant": "Assistant"
   },
   "LanguageSwitcher": {
@@ -510,8 +474,8 @@
     "en": "EN"
   },
   "Tier": {
-    "NORMAL": "Normal",
-    "ADVISORY": "Advisory",
+    "NORMAL": "Safe",
+    "ADVISORY": "Watch",
     "WARNING": "Warning",
     "DANGER": "Danger",
     "lead": "~{hours}h",
@@ -519,7 +483,7 @@
     "forecastDays": "{days}d forecast: {tier}"
   },
   "Offline": {
-    "offlineNotice": "Offline mode — showing saved commune bulletins and cached Khmer audio.",
-    "cachedNotice": "Showing cached offline data — reconnect to refresh live river telemetry."
+    "offlineNotice": "Offline mode — showing saved commune bulletins and Khmer audio.",
+    "cachedNotice": "Showing saved offline data — reconnect to refresh live river levels."
   }
 }

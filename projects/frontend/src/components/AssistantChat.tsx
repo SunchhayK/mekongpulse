@@ -10,7 +10,7 @@ import { MicIcon, SendIcon, StopIcon } from "./icons";
 export interface AssistantChatProps {
   /** Commune the conversation is grounded in; sent as commune_code. */
   communeCode?: string | null;
-  /** Raw officer session token; absent means draft-only (read queries still work). */
+  /** Raw officer session token; absent means public/draft-only (read queries still work). */
   session?: string | null;
   /** Called when /advisor rejects the session (401) so the page can sign out. */
   onSessionInvalid?: () => void;
@@ -26,7 +26,6 @@ export interface ChatMessage {
   actions?: AdvisorAction[];
 }
 
-/** Markdown replies never load raw HTML; links leave the app safely. */
 const MARKDOWN_COMPONENTS: Components = {
   a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
   table: ({ node: _node, ...props }) => (
@@ -37,7 +36,6 @@ const MARKDOWN_COMPONENTS: Components = {
 };
 
 const HISTORY_TURNS = 6;
-/** Hard cap: the transcribe endpoint rejects long uploads. */
 const MAX_RECORDING_SECONDS = 60;
 const PREFERRED_MIME = "audio/webm;codecs=opus";
 
@@ -63,11 +61,6 @@ function readAsDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-/**
- * Officer assistant conversation: agentic advisor turns with tool-call tracing,
- * a pinned composer row, and Khmer voice input transcribed by the server
- * (browser speech APIs do not cover Khmer).
- */
 export function AssistantChat({
   communeCode,
   session,
@@ -81,8 +74,6 @@ export function AssistantChat({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Voice input. Supported browsers only: never render the mic when the
-  // recorder APIs are missing (checked after mount so the export prerenders).
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -92,6 +83,7 @@ export function AssistantChat({
 
   const threadRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -115,7 +107,6 @@ export function AssistantChat({
   }, [messages, busy]);
 
   useEffect(() => {
-    // Unmount: drop the recording and release the microphone.
     return () => {
       discardRef.current = true;
       stopTimer();
@@ -288,7 +279,6 @@ export function AssistantChat({
         setVoiceError(t("voice.errors.noSpeech"));
         return;
       }
-      // Append and focus; the officer reviews before sending.
       setInput((current) => (current ? `${current} ${transcript}` : transcript));
       window.requestAnimationFrame(() => inputRef.current?.focus());
     } catch (err) {
@@ -332,7 +322,6 @@ export function AssistantChat({
       ]);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        // Keep the conversation; drop the dead session and go draft-only.
         onSessionInvalid?.();
         setError(t("errors.sessionExpired"));
       } else {
@@ -340,7 +329,7 @@ export function AssistantChat({
           err instanceof ApiError
             ? err.status === 503
               ? t("errors.unavailable")
-              : `${t("errors.server")} (${err.status})`
+              : t("errors.server")
             : t("errors.network"),
         );
       }
@@ -361,14 +350,33 @@ export function AssistantChat({
   }
 
   const clock = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`;
+  const starterKeys = session
+    ? (["summary", "draft", "post"] as const)
+    : (["publicRisk", "publicFarmers", "publicRiver"] as const);
 
   return (
     <div className="assistant-chat">
       <div className="assistant-thread" ref={threadRef} aria-label={t("conversationAria")}>
-        {messages.length === 0 && (
-          <p className="body-medium muted" data-empty="true">
-            {t("empty")}
-          </p>
+        {messages.length === 0 ? (
+          <div className="assistant-welcome">
+            <h1 className="headline-medium assistant-welcome-title">{t("welcomeTitle")}</h1>
+            <p className="body-medium assistant-welcome-sub">{t("welcomeBody")}</p>
+            <div className="assistant-prompts">
+              {starterKeys.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  className="chip label-medium"
+                  disabled={busy || recording}
+                  onClick={() => void send(t(`quickPrompts.${key}`))}
+                >
+                  {t(`quickPrompts.${key}`)}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <h1 className="sr-only">{t("welcomeTitle")}</h1>
         )}
         {messages.map((message, index) => (
           <div key={index} className="officer-turn" data-role={message.role}>
@@ -387,7 +395,7 @@ export function AssistantChat({
               )}
             </div>
             {message.toolCalls && message.toolCalls.length > 0 && (
-              <details className={`officer-tools assistant-tools--${message.role}`}>
+              <details className="officer-tools">
                 <summary className="label-small">{t("toolsUsed", { count: message.toolCalls.length })}</summary>
                 <ul>
                   {message.toolCalls.map((call, callIndex) => (
@@ -418,20 +426,6 @@ export function AssistantChat({
       </div>
 
       <div className="assistant-compose">
-        <div className="chip-row officer-quick">
-          {(["summary", "draft", "post"] as const).map((prompt) => (
-            <button
-              key={prompt}
-              type="button"
-              className="chip label-small"
-              disabled={busy || recording}
-              onClick={() => void send(t(`quickPrompts.${prompt}`))}
-            >
-              {t(`quickPrompts.${prompt}`)}
-            </button>
-          ))}
-        </div>
-
         {recording && (
           <div className="voice-strip" role="status">
             <span className="voice-dot" aria-hidden="true" />
@@ -446,12 +440,12 @@ export function AssistantChat({
             <span className="spacer" />
             <button
               type="button"
-              className="btn btn--filled label-small voice-stop"
+              className="btn btn--filled btn--compact label-small"
               onClick={stopRecording}
             >
               <StopIcon /> {t("voice.stop")}
             </button>
-            <button type="button" className="btn voice-cancel label-small" onClick={cancelRecording}>
+            <button type="button" className="btn btn--outline btn--compact label-small" onClick={cancelRecording}>
               {t("voice.cancel")}
             </button>
           </div>
@@ -464,6 +458,7 @@ export function AssistantChat({
         )}
 
         <form
+          ref={formRef}
           className="officer-composer"
           onSubmit={(event) => {
             event.preventDefault();
@@ -483,6 +478,9 @@ export function AssistantChat({
               <MicIcon />
             </button>
           )}
+          <label htmlFor="assistant-message" className="sr-only">
+            {t("inputAria")}
+          </label>
           <input
             ref={inputRef}
             className="text-field officer-input"
@@ -491,10 +489,17 @@ export function AssistantChat({
             name="message"
             value={input}
             placeholder={t("inputPlaceholder")}
-            aria-label={t("inputAria")}
             maxLength={2000}
             disabled={recording}
             onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                // Guard Khmer/CJK IME composition (including Safari keyCode 229).
+                if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+                formRef.current?.requestSubmit();
+              }
+            }}
           />
           <button
             type="submit"
