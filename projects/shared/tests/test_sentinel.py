@@ -213,6 +213,8 @@ async def test_patrol_presynthesizes_audio_for_warning_communes(
     p2.audio_store = audio_store
     summary = await SentinelPatrol(p2, settings=gemini_settings, dispatcher=dispatcher).run()
 
+    from mekong_shared.sentinel import MAX_PREWARM_COMMUNES
+
     assert any(a.commune_id == COMMUNE for a in summary.alerts)
-    assert synth_calls["count"] >= 1
-    assert len(list((tmp_path / "audio" / COMMUNE).glob("*.mp3"))) == 1
+    assert synth_calls["count"] == MAX_PREWARM_COMMUNES
+    assert len(list((tmp_path / "audio").rglob("*.mp3"))) == MAX_PREWARM_COMMUNES

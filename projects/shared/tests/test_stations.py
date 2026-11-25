@@ -9,7 +9,7 @@ from mekong_shared.config import DATA_DIR_DEFAULT, PROJECTS_ROOT
 from mekong_shared.stations import load_stations
 
 
-def test_stations_roster_has_nine_live_cambodian_gauges():
+def test_stations_roster_has_eight_live_cambodian_gauges():
     load_stations.cache_clear()
     stations = load_stations(str(DATA_DIR_DEFAULT))
     expected_ids = {
@@ -17,7 +17,6 @@ def test_stations_roster_has_nine_live_cambodian_gauges():
         "014901",  # Kratie
         "019802",  # Kompong Cham
         "019806",  # Neak Luong
-        "020101",  # Phnom Penh Port
         "020102",  # Prek Kdam
         "020106",  # Kampong Luong
         "033401",  # Chaktomuk

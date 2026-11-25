@@ -113,7 +113,7 @@ async def test_fetch_station_populates_rain_mm():
 
 
 async def test_fetch_station_rejects_out_of_range_reading():
-    """BUG-10 / IMP-05: implausible level outside [alarm-10, flood+3] raises QC_OUT_OF_RANGE."""
+    """BUG-10 / IMP-05: implausible level outside [-2.0, flood+3] raises QC_OUT_OF_RANGE."""
     payload = mrc_payload("020102", level=6.5)
     payload["measurements"][-1]["w"] = 18.0  # flood=10.0, high=13.0
     client = MRCTelemetryClient(
@@ -123,6 +123,55 @@ async def test_fetch_station_rejects_out_of_range_reading():
     with pytest.raises(MRCValidationError) as exc_info:
         await client.fetch_station("020102")
     assert exc_info.value.kind == "QC_OUT_OF_RANGE"
+
+    neg_payload = mrc_payload("020102", level=6.5)
+    neg_payload["measurements"][-1]["w"] = -2.5  # below physical floor -2.0m
+    neg_client = MRCTelemetryClient(
+        "https://mrc.test/api/v1",
+        http_client=httpx.AsyncClient(transport=mrc_transport({"020102": neg_payload})),
+    )
+    with pytest.raises(MRCValidationError) as neg_exc:
+        await neg_client.fetch_station("020102")
+    assert neg_exc.value.kind == "QC_OUT_OF_RANGE"
+
+
+async def test_fetch_station_accepts_dry_season_low_levels():
+    """Dry-season Mekong levels (e.g. Kratie 8.794m, Kompong Cham 3.997m) pass QC."""
+    client = MRCTelemetryClient(
+        "https://mrc.test/api/v1",
+        http_client=httpx.AsyncClient(
+            transport=mrc_transport(
+                {
+                    "014901": mrc_payload("014901", level=8.794),
+                    "019802": mrc_payload("019802", level=3.997),
+                }
+            )
+        ),
+    )
+    kratie = await client.fetch_station("014901")
+    kc = await client.fetch_station("019802")
+    assert kratie.level_m == pytest.approx(8.794, abs=1e-3)
+    assert kc.level_m == pytest.approx(3.997, abs=1e-3)
+
+
+async def test_fetch_station_uses_fallback_stages_when_live_json_omits_them():
+    """Live MRC payload omitting alarmStage/floodStage (e.g. 020106) uses config fallback."""
+    payload = mrc_payload("020106", level=5.2)
+    payload["station"]["alarmStage"] = None
+    payload["station"]["floodStage"] = None
+    client = MRCTelemetryClient(
+        "https://mrc.test/api/v1",
+        http_client=httpx.AsyncClient(transport=mrc_transport({"020106": payload})),
+    )
+    with pytest.raises(MRCTelemetryError, match="missing alarmStage"):
+        await client.fetch_station("020106")
+
+    snapshot = await client.fetch_station(
+        "020106", fallback_alarm_stage_m=8.5, fallback_flood_stage_m=9.5
+    )
+    assert snapshot.alarm_stage_m == 8.5
+    assert snapshot.flood_stage_m == 9.5
+    assert snapshot.level_m == pytest.approx(5.2, abs=1e-3)
 
 
 async def test_fetch_station_rejects_single_tick_spike():

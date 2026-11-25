@@ -31,6 +31,9 @@ from .pipeline import Pipeline, RiskTransition
 
 log = logging.getLogger("mekongpulse.sentinel")
 
+PATROL_DISPATCH_CONCURRENCY = 5
+MAX_PREWARM_COMMUNES = 3
+
 Dispatcher = Callable[[SentinelAlert, list[Subscription], bool], Awaitable[int]]
 
 
@@ -83,7 +86,7 @@ class SentinelPatrol:
 
         pending: list[tuple[SentinelAlert, AssessmentResult]] = []
         debounced: list[str] = []
-        prewarm_communes: list[str] = []
+        eligible: list[RiskTransition] = []
         now = datetime.now(timezone.utc)
         debounce = timedelta(hours=self._settings.sentinel_debounce_hours)
 
@@ -105,70 +108,97 @@ class SentinelPatrol:
                     debounced.append(commune_code)
                     continue
 
-            subscribers = await self._pipeline.repo.subscriptions_for_commune(commune_code)
-            by_stage: dict[CropStage, list[Subscription]] = {}
-            for sub in subscribers:
-                effective = sub.crop_stage or CropStage.RIPENING  # INV-03 protective default
-                by_stage.setdefault(effective, []).append(sub)
+            eligible.append(transition)
 
-            plan: list[tuple[CropStage, list[Subscription]]] = []
-            for stage in (
-                CropStage.RIPENING,
-                CropStage.TILLERING,
-                CropStage.VEGETATIVE,
-                CropStage.FLOWERING,
-            ):
-                group = by_stage.get(stage)
-                if group is not None:
-                    plan.append((stage, group))
-            if not plan or plan[0][0] is not CropStage.RIPENING:
-                # No ripening subscribers: still post the conservative version publicly.
-                plan.insert(0, (CropStage.RIPENING, []))
+        dispatch_sem = asyncio.Semaphore(PATROL_DISPATCH_CONCURRENCY)
 
-            ripening_synthesized = False
-            for index, (stage, group) in enumerate(plan):
-                want_audio = bool(group)
-                assessment = await self._pipeline.assess_commune(
-                    commune_code, stage, with_audio=want_audio
-                )
-                if stage is CropStage.RIPENING and want_audio and assessment.audio is not None:
-                    ripening_synthesized = True
-                alert = SentinelAlert(
-                    commune_id=commune_code,
-                    station_id=transition.current.station_id,
-                    risk_tier=assessment.risk_tier,
-                    lead_time_hours=assessment.lead_time_hours,
-                    directive_title=(
-                        assessment.directives[0].title_en if assessment.directives else ""
-                    ),
-                    bulletin_text=assessment.khmer_bulletin,
-                    audio_url=assessment.audio.url if assessment.audio else None,
-                    dispatched_at=datetime.now(timezone.utc),
-                    recipients_count=0,
-                )
-                delivered = await self._dispatcher(alert, group, index == 0)
-                alert = alert.model_copy(update={"recipients_count": delivered})
-                for sub in group:
-                    await self._pipeline.repo.touch_notified(
-                        sub.telegram_chat_id, commune_code, assessment.risk_tier, now
+        async def _dispatch_transition(
+            transition: RiskTransition,
+        ) -> tuple[list[tuple[SentinelAlert, AssessmentResult]], tuple[int, float, str] | None]:
+            commune_code = transition.commune.code
+            local_pending: list[tuple[SentinelAlert, AssessmentResult]] = []
+            async with dispatch_sem:
+                subscribers = await self._pipeline.repo.subscriptions_for_commune(commune_code)
+                by_stage: dict[CropStage, list[Subscription]] = {}
+                for sub in subscribers:
+                    effective = sub.crop_stage or CropStage.RIPENING  # INV-03 protective default
+                    by_stage.setdefault(effective, []).append(sub)
+
+                plan: list[tuple[CropStage, list[Subscription]]] = []
+                for stage in (
+                    CropStage.RIPENING,
+                    CropStage.TILLERING,
+                    CropStage.VEGETATIVE,
+                    CropStage.FLOWERING,
+                ):
+                    group = by_stage.get(stage)
+                    if group is not None:
+                        plan.append((stage, group))
+                if not plan or plan[0][0] is not CropStage.RIPENING:
+                    # No ripening subscribers: still post the conservative version publicly.
+                    plan.insert(0, (CropStage.RIPENING, []))
+
+                ripening_synthesized = False
+                for index, (stage, group) in enumerate(plan):
+                    want_audio = bool(group)
+                    assessment = await self._pipeline.assess_commune(
+                        commune_code, stage, with_audio=want_audio
                     )
-                pending.append((alert, assessment))
-                log_event(
-                    log,
-                    "SENTINEL_ALERT_DISPATCHED",
-                    commune_code=commune_code,
-                    risk_tier=assessment.risk_tier.value,
-                    crop_stage=stage.value,
-                    recipients=delivered,
-                    audio=bool(assessment.audio),
-                )
+                    if stage is CropStage.RIPENING and want_audio and assessment.audio is not None:
+                        ripening_synthesized = True
+                    alert = SentinelAlert(
+                        commune_id=commune_code,
+                        station_id=transition.current.station_id,
+                        risk_tier=assessment.risk_tier,
+                        lead_time_hours=assessment.lead_time_hours,
+                        directive_title=(
+                            assessment.directives[0].title_en if assessment.directives else ""
+                        ),
+                        bulletin_text=assessment.khmer_bulletin,
+                        audio_url=assessment.audio.url if assessment.audio else None,
+                        dispatched_at=datetime.now(timezone.utc),
+                        recipients_count=0,
+                    )
+                    delivered = await self._dispatcher(alert, group, index == 0)
+                    alert = alert.model_copy(update={"recipients_count": delivered})
+                    for sub in group:
+                        await self._pipeline.repo.touch_notified(
+                            sub.telegram_chat_id, commune_code, assessment.risk_tier, now
+                        )
+                    local_pending.append((alert, assessment))
+                    log_event(
+                        log,
+                        "SENTINEL_ALERT_DISPATCHED",
+                        commune_code=commune_code,
+                        risk_tier=assessment.risk_tier.value,
+                        crop_stage=stage.value,
+                        recipients=delivered,
+                        audio=bool(assessment.audio),
+                    )
 
-            if (
-                not ripening_synthesized
-                and self._pipeline.audio_store is not None
-                and self._settings.has_gemini
-            ):
-                prewarm_communes.append(commune_code)
+                prewarm_candidate: tuple[int, float, str] | None = None
+                if (
+                    not ripening_synthesized
+                    and self._pipeline.audio_store is not None
+                    and self._settings.has_gemini
+                ):
+                    prewarm_candidate = (
+                        transition.current.tier.severity,
+                        transition.current.score,
+                        commune_code,
+                    )
+                return local_pending, prewarm_candidate
+
+        prewarm_candidates: list[tuple[int, float, str]] = []
+        if eligible:
+            results = await asyncio.gather(*(_dispatch_transition(t) for t in eligible))
+            for local_pending, prewarm_candidate in results:
+                pending.extend(local_pending)
+                if prewarm_candidate is not None:
+                    prewarm_candidates.append(prewarm_candidate)
+
+        prewarm_candidates.sort(key=lambda item: (-item[0], -item[1], item[2]))
+        prewarm_communes = [code for _, _, code in prewarm_candidates[:MAX_PREWARM_COMMUNES]]
 
         if prewarm_communes:
             semaphore = asyncio.Semaphore(4)

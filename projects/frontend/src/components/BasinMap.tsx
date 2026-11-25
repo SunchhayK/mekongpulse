@@ -298,13 +298,12 @@ export function BasinMap({
   );
 }
 
-// Station geometry from projects/data/stations.json (all 9 Cambodian MRC gauges).
+// Station geometry from projects/data/stations.json (8 live Cambodian MRC gauges).
 const STATION_POSITIONS: Record<string, { lat: number; lng: number }> = {
   "014501": { lat: 13.5333, lng: 105.95 }, // Stung Treng
   "014901": { lat: 12.481, lng: 106.017 }, // Kratie
   "019802": { lat: 11.994647, lng: 105.46873 }, // Kompong Cham
   "019806": { lat: 11.2583, lng: 105.2833 }, // Neak Luong
-  "020101": { lat: 11.575, lng: 104.923 }, // Phnom Penh Port
   "020102": { lat: 11.81117, lng: 104.80678 }, // Prek Kdam
   "020106": { lat: 12.576, lng: 104.212 }, // Kampong Luong
   "033401": { lat: 11.563, lng: 104.9353 }, // Chaktomuk

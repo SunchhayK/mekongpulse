@@ -336,7 +336,14 @@ class Pipeline:
 
         if not force_fallback:
             try:
-                return await self.mrc.fetch_station(cfg.id), warnings  # type: ignore[union-attr]
+                return (
+                    await self.mrc.fetch_station(  # type: ignore[union-attr]
+                        cfg.id,
+                        fallback_alarm_stage_m=cfg.alarm_stage_m,
+                        fallback_flood_stage_m=cfg.flood_stage_m,
+                    ),
+                    warnings,
+                )
             except MRCValidationError as exc:
                 warnings.append(
                     TelemetryWarning(
@@ -355,7 +362,12 @@ class Pipeline:
         fallback_id = cfg.fallback_id
         if fallback_id and fallback_id in stations and fallback_id != cfg.id:
             try:
-                fallback_snapshot = await self.mrc.fetch_station(fallback_id)  # type: ignore[union-attr]
+                fb_cfg = stations[fallback_id]
+                fallback_snapshot = await self.mrc.fetch_station(  # type: ignore[union-attr]
+                    fallback_id,
+                    fallback_alarm_stage_m=fb_cfg.alarm_stage_m,
+                    fallback_flood_stage_m=fb_cfg.flood_stage_m,
+                )
                 offset = await self._effective_offset(cfg.id, fallback_id)
                 if offset is not None:
                     derived = fallback_snapshot.model_copy(

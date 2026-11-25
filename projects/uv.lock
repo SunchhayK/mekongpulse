@@ -1209,7 +1209,7 @@ dev = [
 
 [[package]]
 name = "mekong-shared"
-version = "0.13.0"
+version = "0.13.1"
 source = { editable = "shared" }
 dependencies = [
     { name = "asyncpg" },

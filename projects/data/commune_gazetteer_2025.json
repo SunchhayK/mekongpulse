@@ -1,6 +1,6 @@
 {
  "version": "1.0.0",
- "generated_at": "2026-11-25T14:49:51Z",
+ "generated_at": "2026-11-25T15:29:22Z",
  "sources": {
   "names": "Cambodia Commune / District / Province List 2025 - MEF DataEF public portal (data.mef.gov.kh)",
   "boundaries": "Cambodia Commune Boundaries - MLMUPC Dept. of Geography, published via MEF DataEF (OCHA lineage, validOn 2018-10-04)",
@@ -4345,8 +4345,8 @@
    "lng": 105.09671,
    "has_boundary": true,
    "ground_elevation_m": 10.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 27.27
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 27.37
   },
   {
    "code": "031403",
@@ -4362,8 +4362,8 @@
    "lng": 105.115509,
    "has_boundary": true,
    "ground_elevation_m": 12.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 31.68
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 31.85
   },
   {
    "code": "031404",
@@ -4515,8 +4515,8 @@
    "lng": 105.068893,
    "has_boundary": true,
    "ground_elevation_m": 9.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 28.42
+   "nearest_station_id": "020102",
+   "distance_to_station_km": 28.66
   },
   {
    "code": "031413",
@@ -6130,8 +6130,8 @@
    "lng": 104.493491,
    "has_boundary": true,
    "ground_elevation_m": 81.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 57.55
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 57.9
   },
   {
    "code": "050111",
@@ -6232,8 +6232,8 @@
    "lng": 104.482636,
    "has_boundary": true,
    "ground_elevation_m": 47.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 49.05
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 50.11
   },
   {
    "code": "050202",
@@ -6249,8 +6249,8 @@
    "lng": 104.483918,
    "has_boundary": true,
    "ground_elevation_m": 34.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 49.72
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 50.67
   },
   {
    "code": "050203",
@@ -6266,8 +6266,8 @@
    "lng": 104.53005,
    "has_boundary": true,
    "ground_elevation_m": 35.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 44.11
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 45.12
   },
   {
    "code": "050204",
@@ -6283,8 +6283,8 @@
    "lng": 104.554279,
    "has_boundary": true,
    "ground_elevation_m": 29.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 41.67
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 42.64
   },
   {
    "code": "050205",
@@ -6300,8 +6300,8 @@
    "lng": 104.525074,
    "has_boundary": true,
    "ground_elevation_m": 30.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 45.62
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 46.51
   },
   {
    "code": "050301",
@@ -6368,8 +6368,8 @@
    "lng": 104.617552,
    "has_boundary": true,
    "ground_elevation_m": 46.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 40.31
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 40.71
   },
   {
    "code": "050305",
@@ -6385,8 +6385,8 @@
    "lng": 104.750156,
    "has_boundary": true,
    "ground_elevation_m": 19.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 26.08
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 26.2
   },
   {
    "code": "050306",
@@ -6402,8 +6402,8 @@
    "lng": 104.656892,
    "has_boundary": true,
    "ground_elevation_m": 42.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 39.31
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 39.45
   },
   {
    "code": "050307",
@@ -6436,8 +6436,8 @@
    "lng": 104.67828,
    "has_boundary": true,
    "ground_elevation_m": 26.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 32.48
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 32.87
   },
   {
    "code": "050309",
@@ -6487,8 +6487,8 @@
    "lng": 104.582366,
    "has_boundary": true,
    "ground_elevation_m": 132.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 47.88
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 48.11
   },
   {
    "code": "050312",
@@ -6504,8 +6504,8 @@
    "lng": 104.615167,
    "has_boundary": true,
    "ground_elevation_m": 52.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 42.69
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 42.96
   },
   {
    "code": "050313",
@@ -6521,8 +6521,8 @@
    "lng": 104.69371,
    "has_boundary": true,
    "ground_elevation_m": 31.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 34.07
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 34.2
   },
   {
    "code": "050401",
@@ -6640,8 +6640,8 @@
    "lng": 104.373485,
    "has_boundary": true,
    "ground_elevation_m": 79.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 71.35
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 71.77
   },
   {
    "code": "050603",
@@ -6657,8 +6657,8 @@
    "lng": 104.29734,
    "has_boundary": true,
    "ground_elevation_m": 97.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 79.72
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 80.2
   },
   {
    "code": "050604",
@@ -6674,8 +6674,8 @@
    "lng": 104.38308,
    "has_boundary": true,
    "ground_elevation_m": 69.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 63.29
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 64.07
   },
   {
    "code": "050605",
@@ -6708,8 +6708,8 @@
    "lng": 104.414334,
    "has_boundary": true,
    "ground_elevation_m": 47.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 58.94
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 59.77
   },
   {
    "code": "050607",
@@ -6725,8 +6725,8 @@
    "lng": 104.345258,
    "has_boundary": true,
    "ground_elevation_m": 79.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 68.32
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 69.06
   },
   {
    "code": "050608",
@@ -6742,8 +6742,8 @@
    "lng": 104.320379,
    "has_boundary": true,
    "ground_elevation_m": 66.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 68.9
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 69.79
   },
   {
    "code": "050609",
@@ -6759,8 +6759,8 @@
    "lng": 104.420807,
    "has_boundary": true,
    "ground_elevation_m": 90.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 62.84
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 63.38
   },
   {
    "code": "050610",
@@ -6776,8 +6776,8 @@
    "lng": 104.253859,
    "has_boundary": true,
    "ground_elevation_m": 56.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 75.36
+   "nearest_station_id": "020102",
+   "distance_to_station_km": 75.37
   },
   {
    "code": "050611",
@@ -6793,8 +6793,8 @@
    "lng": 104.356706,
    "has_boundary": true,
    "ground_elevation_m": 52.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 64.25
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 65.19
   },
   {
    "code": "050613",
@@ -6810,8 +6810,8 @@
    "lng": 104.145197,
    "has_boundary": true,
    "ground_elevation_m": 123.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 92.67
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 93.37
   },
   {
    "code": "050614",
@@ -6844,8 +6844,8 @@
    "lng": 104.564878,
    "has_boundary": true,
    "ground_elevation_m": 28.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 41.6
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 42.43
   },
   {
    "code": "050702",
@@ -6861,8 +6861,8 @@
    "lng": 104.466411,
    "has_boundary": true,
    "ground_elevation_m": 35.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 52.25
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 53.15
   },
   {
    "code": "050703",
@@ -6895,8 +6895,8 @@
    "lng": 104.522656,
    "has_boundary": true,
    "ground_elevation_m": 65.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 50.78
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 51.28
   },
   {
    "code": "050705",
@@ -6912,8 +6912,8 @@
    "lng": 104.551061,
    "has_boundary": true,
    "ground_elevation_m": 34.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 40.72
+   "nearest_station_id": "020102",
+   "distance_to_station_km": 41.17
   },
   {
    "code": "050706",
@@ -6929,8 +6929,8 @@
    "lng": 104.617548,
    "has_boundary": true,
    "ground_elevation_m": 25.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 36.57
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 37.28
   },
   {
    "code": "050707",
@@ -6946,8 +6946,8 @@
    "lng": 104.594621,
    "has_boundary": true,
    "ground_elevation_m": 41.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 36.16
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 37.32
   },
   {
    "code": "050708",
@@ -6963,8 +6963,8 @@
    "lng": 104.647022,
    "has_boundary": true,
    "ground_elevation_m": 26.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 30.45
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 31.6
   },
   {
    "code": "050709",
@@ -6980,8 +6980,8 @@
    "lng": 104.608328,
    "has_boundary": true,
    "ground_elevation_m": 39.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 39.52
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 40.06
   },
   {
    "code": "050710",
@@ -6997,8 +6997,8 @@
    "lng": 104.530104,
    "has_boundary": true,
    "ground_elevation_m": 44.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 46.84
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 47.56
   },
   {
    "code": "050711",
@@ -7014,8 +7014,8 @@
    "lng": 104.434386,
    "has_boundary": true,
    "ground_elevation_m": 42.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 54.22
+   "nearest_station_id": "020102",
+   "distance_to_station_km": 54.61
   },
   {
    "code": "050712",
@@ -7031,8 +7031,8 @@
    "lng": 104.467112,
    "has_boundary": true,
    "ground_elevation_m": 56.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 54.81
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 55.49
   },
   {
    "code": "050713",
@@ -7048,8 +7048,8 @@
    "lng": 104.630813,
    "has_boundary": true,
    "ground_elevation_m": 27.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 33.52
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 34.41
   },
   {
    "code": "050714",
@@ -7082,8 +7082,8 @@
    "lng": 104.577221,
    "has_boundary": true,
    "ground_elevation_m": 27.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 38.81
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 39.82
   },
   {
    "code": "050801",
@@ -10516,8 +10516,8 @@
    "lng": 104.762735,
    "has_boundary": true,
    "ground_elevation_m": 15.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 23.05
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 23.27
   },
   {
    "code": "080107",
@@ -10635,8 +10635,8 @@
    "lng": 104.713243,
    "has_boundary": true,
    "ground_elevation_m": 18.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 27.15
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 27.62
   },
   {
    "code": "080118",
@@ -10652,8 +10652,8 @@
    "lng": 104.678448,
    "has_boundary": true,
    "ground_elevation_m": 20.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 30.65
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 31.21
   },
   {
    "code": "080122",
@@ -10924,8 +10924,8 @@
    "lng": 105.031991,
    "has_boundary": true,
    "ground_elevation_m": 11.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 24.67
+   "nearest_station_id": "020102",
+   "distance_to_station_km": 24.95
   },
   {
    "code": "080310",
@@ -10941,8 +10941,8 @@
    "lng": 105.0174,
    "has_boundary": true,
    "ground_elevation_m": 12.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 20.82
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 21.39
   },
   {
    "code": "080311",
@@ -10958,8 +10958,8 @@
    "lng": 104.987613,
    "has_boundary": true,
    "ground_elevation_m": 6.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 15.83
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 16.52
   },
   {
    "code": "080312",
@@ -10975,8 +10975,8 @@
    "lng": 105.06843,
    "has_boundary": true,
    "ground_elevation_m": 12.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 23.65
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 23.82
   },
   {
    "code": "080313",
@@ -11604,8 +11604,8 @@
    "lng": 104.752625,
    "has_boundary": true,
    "ground_elevation_m": 19.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 19.78
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 20.65
   },
   {
    "code": "080803",
@@ -11621,8 +11621,8 @@
    "lng": 104.728421,
    "has_boundary": true,
    "ground_elevation_m": 17.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 21.87
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 22.9
   },
   {
    "code": "080804",
@@ -11638,8 +11638,8 @@
    "lng": 104.676193,
    "has_boundary": true,
    "ground_elevation_m": 24.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 27.57
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 28.63
   },
   {
    "code": "080807",
@@ -11655,8 +11655,8 @@
    "lng": 104.735035,
    "has_boundary": true,
    "ground_elevation_m": 19.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 23.21
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 23.84
   },
   {
    "code": "080808",
@@ -11672,8 +11672,8 @@
    "lng": 104.679402,
    "has_boundary": true,
    "ground_elevation_m": 22.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 28.88
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 29.63
   },
   {
    "code": "080809",
@@ -11706,8 +11706,8 @@
    "lng": 104.706619,
    "has_boundary": true,
    "ground_elevation_m": 19.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 24.53
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 25.5
   },
   {
    "code": "080813",
@@ -11723,8 +11723,8 @@
    "lng": 104.710612,
    "has_boundary": true,
    "ground_elevation_m": 21.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 25.7
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 26.38
   },
   {
    "code": "080814",
@@ -11740,8 +11740,8 @@
    "lng": 104.700895,
    "has_boundary": true,
    "ground_elevation_m": 23.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 24.26
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 25.54
   },
   {
    "code": "080816",
@@ -11757,8 +11757,8 @@
    "lng": 104.708771,
    "has_boundary": true,
    "ground_elevation_m": 20.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 23.71
+   "nearest_station_id": "020102",
+   "distance_to_station_km": 24.49
   },
   {
    "code": "080901",
@@ -12896,8 +12896,8 @@
    "lng": 103.776124,
    "has_boundary": true,
    "ground_elevation_m": 122.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 138.87
+   "nearest_station_id": "033402",
+   "distance_to_station_km": 139.44
   },
   {
    "code": "090602",
@@ -12981,8 +12981,8 @@
    "lng": 103.719537,
    "has_boundary": true,
    "ground_elevation_m": 7.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 141.62
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 142.37
   },
   {
    "code": "090701",
@@ -14375,8 +14375,8 @@
    "lng": 104.921976,
    "has_boundary": true,
    "ground_elevation_m": 14.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 0.61
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 1.63
   },
   {
    "code": "120202",
@@ -14392,8 +14392,8 @@
    "lng": 104.919457,
    "has_boundary": true,
    "ground_elevation_m": 16.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 0.65
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 1.91
   },
   {
    "code": "120203",
@@ -14409,8 +14409,8 @@
    "lng": 104.923937,
    "has_boundary": true,
    "ground_elevation_m": 15.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 0.95
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 1.3
   },
   {
    "code": "120204",
@@ -14426,8 +14426,8 @@
    "lng": 104.920428,
    "has_boundary": true,
    "ground_elevation_m": 17.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 1.33
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 1.62
   },
   {
    "code": "120205",
@@ -14460,8 +14460,8 @@
    "lng": 104.926769,
    "has_boundary": true,
    "ground_elevation_m": 18.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 0.88
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 1.08
   },
   {
    "code": "120207",
@@ -14511,8 +14511,8 @@
    "lng": 104.926944,
    "has_boundary": true,
    "ground_elevation_m": 23.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 0.61
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 1.28
   },
   {
    "code": "120210",
@@ -14528,8 +14528,8 @@
    "lng": 104.915905,
    "has_boundary": true,
    "ground_elevation_m": 17.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 0.88
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 2.75
   },
   {
    "code": "120211",
@@ -14545,8 +14545,8 @@
    "lng": 104.92429,
    "has_boundary": true,
    "ground_elevation_m": 17.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 0.14
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 1.81
   },
   {
    "code": "120301",
@@ -14562,8 +14562,8 @@
    "lng": 104.917193,
    "has_boundary": true,
    "ground_elevation_m": 19.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 1.37
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 1.98
   },
   {
    "code": "120302",
@@ -14579,8 +14579,8 @@
    "lng": 104.914187,
    "has_boundary": true,
    "ground_elevation_m": 22.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 1.57
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 2.3
   },
   {
    "code": "120303",
@@ -14596,8 +14596,8 @@
    "lng": 104.916207,
    "has_boundary": true,
    "ground_elevation_m": 20.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 1.27
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 2.1
   },
   {
    "code": "120304",
@@ -14613,8 +14613,8 @@
    "lng": 104.917573,
    "has_boundary": true,
    "ground_elevation_m": 23.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 1.14
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 1.97
   },
   {
    "code": "120305",
@@ -14630,8 +14630,8 @@
    "lng": 104.917455,
    "has_boundary": true,
    "ground_elevation_m": 15.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 0.87
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 2.07
   },
   {
    "code": "120306",
@@ -14647,8 +14647,8 @@
    "lng": 104.911395,
    "has_boundary": true,
    "ground_elevation_m": 17.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 1.42
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 2.69
   },
   {
    "code": "120307",
@@ -14664,8 +14664,8 @@
    "lng": 104.911016,
    "has_boundary": true,
    "ground_elevation_m": 10.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 2.2
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 2.68
   },
   {
    "code": "120308",
@@ -14681,8 +14681,8 @@
    "lng": 104.917511,
    "has_boundary": true,
    "ground_elevation_m": 15.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 1.7
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 1.95
   },
   {
    "code": "120401",
@@ -14698,8 +14698,8 @@
    "lng": 104.903295,
    "has_boundary": true,
    "ground_elevation_m": 15.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 2.24
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 3.55
   },
   {
    "code": "120402",
@@ -14715,8 +14715,8 @@
    "lng": 104.903812,
    "has_boundary": true,
    "ground_elevation_m": 16.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 2.27
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 3.46
   },
   {
    "code": "120403",
@@ -14732,8 +14732,8 @@
    "lng": 104.903655,
    "has_boundary": true,
    "ground_elevation_m": 15.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 2.47
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 3.45
   },
   {
    "code": "120404",
@@ -14749,8 +14749,8 @@
    "lng": 104.894531,
    "has_boundary": true,
    "ground_elevation_m": 13.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 3.19
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 4.48
   },
   {
    "code": "120405",
@@ -14766,8 +14766,8 @@
    "lng": 104.895731,
    "has_boundary": true,
    "ground_elevation_m": 14.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 3.22
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 4.31
   },
   {
    "code": "120406",
@@ -14783,8 +14783,8 @@
    "lng": 104.891543,
    "has_boundary": true,
    "ground_elevation_m": 12.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 4.01
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 4.83
   },
   {
    "code": "120407",
@@ -14800,8 +14800,8 @@
    "lng": 104.897997,
    "has_boundary": true,
    "ground_elevation_m": 13.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 2.92
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 4.71
   },
   {
    "code": "120408",
@@ -14817,8 +14817,8 @@
    "lng": 104.892527,
    "has_boundary": true,
    "ground_elevation_m": 13.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 3.34
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 4.95
   },
   {
    "code": "120409",
@@ -14834,8 +14834,8 @@
    "lng": 104.904149,
    "has_boundary": true,
    "ground_elevation_m": 17.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 2.92
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 3.47
   },
   {
    "code": "120410",
@@ -14851,8 +14851,8 @@
    "lng": 104.897568,
    "has_boundary": true,
    "ground_elevation_m": 13.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 3.64
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 4.24
   },
   {
    "code": "120501",
@@ -14885,8 +14885,8 @@
    "lng": 104.823502,
    "has_boundary": true,
    "ground_elevation_m": 12.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 15.44
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 15.55
   },
   {
    "code": "120508",
@@ -15191,8 +15191,8 @@
    "lng": 104.877879,
    "has_boundary": true,
    "ground_elevation_m": 12.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 8.91
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 10.77
   },
   {
    "code": "120704",
@@ -15208,8 +15208,8 @@
    "lng": 104.9006,
    "has_boundary": true,
    "ground_elevation_m": 9.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 5.14
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 6.97
   },
   {
    "code": "120706",
@@ -15225,8 +15225,8 @@
    "lng": 104.909742,
    "has_boundary": true,
    "ground_elevation_m": 11.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 3.68
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 5.48
   },
   {
    "code": "120711",
@@ -15242,8 +15242,8 @@
    "lng": 104.882532,
    "has_boundary": true,
    "ground_elevation_m": 11.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 7.64
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 9.51
   },
   {
    "code": "120712",
@@ -15259,8 +15259,8 @@
    "lng": 104.890577,
    "has_boundary": true,
    "ground_elevation_m": 8.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 6.52
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 8.38
   },
   {
    "code": "120713",
@@ -15310,8 +15310,8 @@
    "lng": 104.867467,
    "has_boundary": true,
    "ground_elevation_m": 11.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 6.2
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 7.86
   },
   {
    "code": "120802",
@@ -15327,8 +15327,8 @@
    "lng": 104.875317,
    "has_boundary": true,
    "ground_elevation_m": 12.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 5.56
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 6.57
   },
   {
    "code": "120803",
@@ -15344,8 +15344,8 @@
    "lng": 104.858114,
    "has_boundary": true,
    "ground_elevation_m": 9.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 8.8
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 10.67
   },
   {
    "code": "120807",
@@ -15361,8 +15361,8 @@
    "lng": 104.837366,
    "has_boundary": true,
    "ground_elevation_m": 11.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 9.56
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 11.21
   },
   {
    "code": "120808",
@@ -15412,8 +15412,8 @@
    "lng": 104.738933,
    "has_boundary": true,
    "ground_elevation_m": 15.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 20.08
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 21.39
   },
   {
    "code": "120912",
@@ -15531,8 +15531,8 @@
    "lng": 104.93295,
    "has_boundary": true,
    "ground_elevation_m": 11.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 1.75
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 2.72
   },
   {
    "code": "121002",
@@ -15548,8 +15548,8 @@
    "lng": 104.913968,
    "has_boundary": true,
    "ground_elevation_m": 7.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 7.93
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 9.49
   },
   {
    "code": "121003",
@@ -15565,8 +15565,8 @@
    "lng": 104.898577,
    "has_boundary": true,
    "ground_elevation_m": 9.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 7.71
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 9.46
   },
   {
    "code": "121004",
@@ -15582,8 +15582,8 @@
    "lng": 104.936914,
    "has_boundary": true,
    "ground_elevation_m": 9.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 10.54
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 11.77
   },
   {
    "code": "121005",
@@ -15599,8 +15599,8 @@
    "lng": 104.929575,
    "has_boundary": true,
    "ground_elevation_m": 9.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 14.31
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 15.63
   },
   {
    "code": "121006",
@@ -15667,8 +15667,8 @@
    "lng": 104.855372,
    "has_boundary": true,
    "ground_elevation_m": 11.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 12.61
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 14.48
   },
   {
    "code": "121102",
@@ -15718,8 +15718,8 @@
    "lng": 104.813769,
    "has_boundary": true,
    "ground_elevation_m": 9.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 12.87
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 14.64
   },
   {
    "code": "121105",
@@ -15735,8 +15735,8 @@
    "lng": 104.765563,
    "has_boundary": true,
    "ground_elevation_m": 13.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 17.86
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 19.54
   },
   {
    "code": "121201",
@@ -22603,8 +22603,8 @@
    "lng": 103.851845,
    "has_boundary": true,
    "ground_elevation_m": 27.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 130.38
+   "nearest_station_id": "033402",
+   "distance_to_station_km": 130.89
   },
   {
    "code": "180402",
@@ -22620,8 +22620,8 @@
    "lng": 103.908711,
    "has_boundary": true,
    "ground_elevation_m": 23.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 120.79
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 121.49
   },
   {
    "code": "180403",
@@ -22637,8 +22637,8 @@
    "lng": 103.992617,
    "has_boundary": true,
    "ground_elevation_m": 441.0,
-   "nearest_station_id": "020101",
-   "distance_to_station_km": 108.69
+   "nearest_station_id": "033401",
+   "distance_to_station_km": 109.48
   },
   {
    "code": "180404",

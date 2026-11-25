@@ -2,6 +2,19 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.18.1] — 2026-11-25
+
+Live MRC telemetry calibration, gauge roster cleanup, and patrol concurrency hardening. Per SemVer 0.x (rule 4), pre-1.0.0 releases may introduce breaking changes.
+
+Package versions: `shared` — 0.13.1, `backend` — 0.8.0, `bot` — 0.7.0, `frontend` — 0.12.1.
+
+### Fixed
+
+- `shared` — 0.13.1 (`mrc.py`): replaced `alarm_stage_m - 10.0` QC floor with physical lower bound `QC_RANGE_MIN_M = -2.0` so legitimate dry-season Mekong levels (e.g. Kratie `8.794 m`, Kompong Cham `3.997 m`) are not rejected as `QC_OUT_OF_RANGE`.
+- `shared` — 0.13.1 (`mrc.py`, `pipeline.py`): added optional `fallback_alarm_stage_m` / `fallback_flood_stage_m` fallback in `MRCTelemetryClient.fetch_station()` when live MRC JSON omits `alarmStage`/`floodStage` (e.g. Kampong Luong `020106`).
+- `data` & `frontend` — 0.12.1 (`stations.json`, `commune_gazetteer_2025.json`, `BasinMap.tsx`): removed dead MRC gauge `020101` (Phnom Penh Port, `NODATA`, 1.8 km from live Chaktomuk `033401`), keeping the 8 live Cambodian MRC gauges and regenerating commune station assignments.
+- `shared` — 0.13.1 (`sentinel.py`): bounded parallel dispatch (`asyncio.Semaphore(5)`) and capped audio pre-warming to the top 3 highest-severity communes (`MAX_PREWARM_COMMUNES = 3`) so `/api/v1/patrol/run` completes well under the 180s cron timeout.
+
 ## [0.18.0] — 2026-11-25
 
 Production hardening across persistence, durable queues, officer identity, multi-day forecasting, pre-classification sensor QC, PWA offline resilience, observability, and calibration analytics. Per SemVer 0.x (rule 4), pre-1.0.0 releases may introduce breaking changes.

@@ -17,8 +17,8 @@ from pydantic import BaseModel
 
 from .models import StationSnapshot
 
-# Lightweight pre-classification QC bounds (aligned with evidence.py)
-QC_RANGE_LOW_MARGIN_M = 10.0
+# Lightweight pre-classification QC bounds (physical dry-season floor + flood ceiling)
+QC_RANGE_MIN_M = -2.0
 QC_RANGE_HIGH_MARGIN_M = 3.0
 QC_SPIKE_REJECT_M = 1.0
 QC_SHORT_SPIKE_REJECT_M = 0.5
@@ -70,7 +70,7 @@ def validate_latest_reading(
         raise MRCTelemetryError("no measurements to validate")
 
     latest = measurements[-1]
-    low = alarm_stage_m - QC_RANGE_LOW_MARGIN_M
+    low = QC_RANGE_MIN_M
     high = flood_stage_m + QC_RANGE_HIGH_MARGIN_M
     if latest.level_m < low or latest.level_m > high:
         raise MRCValidationError(
@@ -144,17 +144,30 @@ class MRCTelemetryClient:
         payload = await self._get(f"time-series/telemetry/recent/measurement/{station_id}")
         return self._measurements(payload)
 
-    async def fetch_station(self, station_id: str) -> StationSnapshot:
+    async def fetch_station(
+        self,
+        station_id: str,
+        *,
+        fallback_alarm_stage_m: float | None = None,
+        fallback_flood_stage_m: float | None = None,
+    ) -> StationSnapshot:
         """Latest reading parsed from the same live payload (INV-01)."""
         payload = await self._get(f"time-series/telemetry/recent/measurement/{station_id}")
         station = payload.get("station") or {}
         if station.get("stationId") != station_id:
             raise MRCTelemetryError(f"station payload mismatch: {station.get('stationId')!r}")
-        for field in ("alarmStage", "floodStage"):
-            if station.get(field) is None:
-                raise MRCTelemetryError(f"station {station_id} missing {field}")
-        alarm_stage = float(station["alarmStage"])
-        flood_stage = float(station["floodStage"])
+        raw_alarm = station.get("alarmStage")
+        if raw_alarm is None:
+            raw_alarm = fallback_alarm_stage_m
+        if raw_alarm is None:
+            raise MRCTelemetryError(f"station {station_id} missing alarmStage")
+        raw_flood = station.get("floodStage")
+        if raw_flood is None:
+            raw_flood = fallback_flood_stage_m
+        if raw_flood is None:
+            raise MRCTelemetryError(f"station {station_id} missing floodStage")
+        alarm_stage = float(raw_alarm)
+        flood_stage = float(raw_flood)
         measurements = self._measurements(payload)
         validate_latest_reading(measurements, alarm_stage, flood_stage)
         latest = measurements[-1]

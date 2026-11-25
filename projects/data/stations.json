@@ -5,7 +5,7 @@
     "levels_and_stages": "MRC telemetry API (api.mrcmekong.org) & MRC Regional Flood Management and Mitigation Centre bulletin (ffw.mrcmekong.org)",
     "zero_gauge": "MRC Regional Flood Management and Mitigation Centre bulletin (ffw.mrcmekong.org)"
   },
-  "notes": "Expanded from 4 to 9 live Cambodian MRC gauges (IMP-04): Stung Treng (014501), Kratie (014901), Kompong Cham (019802), Neak Luong (019806), Phnom Penh Port (020101), Prek Kdam (020102), Kampong Luong (020106), Chaktomuk (033401), Koh Khel (033402). fallback_id names the adjacent station used by the failover model; hydraulic offsets are computed empirically from paired 30-day series at sync time, never hardcoded.",
+  "notes": "8 live Cambodian MRC gauges (IMP-04): Stung Treng (014501), Kratie (014901), Kompong Cham (019802), Neak Luong (019806), Prek Kdam (020102), Kampong Luong (020106), Chaktomuk (033401), Koh Khel (033402). Phnom Penh Port (020101) excluded because MRC reports NODATA (1.8 km from live Chaktomuk 033401). fallback_id names the adjacent station used by the failover model; hydraulic offsets are computed empirically from paired 30-day series at sync time, never hardcoded.",
   "stations": [
     {
       "id": "014501",
@@ -53,18 +53,6 @@
       "alarm_stage_m": 7.5,
       "flood_stage_m": 8.0,
       "zero_gauge_elevation_m": -0.33,
-      "fallback_id": "033401"
-    },
-    {
-      "id": "020101",
-      "name_en": "Phnom Penh Port",
-      "name_kh": "កំពង់ផែភ្នំពេញ",
-      "river": "Tonlesap",
-      "lat": 11.575,
-      "lng": 104.923,
-      "alarm_stage_m": 9.5,
-      "flood_stage_m": 11.0,
-      "zero_gauge_elevation_m": -1.02,
       "fallback_id": "033401"
     },
     {
