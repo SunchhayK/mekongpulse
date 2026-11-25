@@ -12,30 +12,30 @@ const base = {
   "aria-hidden": true,
 };
 
-/** Roundel brand mark: stacked river waves on deep Mekong teal. */
-export function BrandMark({ size = 34 }: { size?: number }) {
+/** Roundel brand mark: stacked river waves on navy, with a sky accent. */
+export function BrandMark({ size = 38 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
-      <rect width="40" height="40" rx="10" fill="var(--brand-deep)" />
+      <rect width="40" height="40" rx="11" fill="var(--navy)" />
       <path
         d="M8 15.5c3 0 3-2.6 6-2.6s3 2.6 6 2.6 3-2.6 6-2.6 3 2.6 6 2.6"
         fill="none"
         stroke="#ffffff"
-        strokeWidth="2.5"
+        strokeWidth="2.6"
         strokeLinecap="round"
       />
       <path
         d="M8 23.5c3 0 3-2.6 6-2.6s3 2.6 6 2.6 3-2.6 6-2.6 3 2.6 6 2.6"
         fill="none"
-        stroke="#5eead4"
-        strokeWidth="2.5"
+        stroke="#7cc7f2"
+        strokeWidth="2.6"
         strokeLinecap="round"
       />
       <path
         d="M8 31.5c3 0 3-2.6 6-2.6s3 2.6 6 2.6 3-2.6 6-2.6 3 2.6 6 2.6"
         fill="none"
-        stroke="#2c6e70"
-        strokeWidth="2.5"
+        stroke="#3f5f94"
+        strokeWidth="2.6"
         strokeLinecap="round"
       />
     </svg>

@@ -2,6 +2,16 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.19.1] — 2026-11-26
+
+Restored the Byte Lab ("river lab") navy/sky/mist color theme, `IBM Plex Sans` typography, and wave `BrandMark` while keeping the simplified 3-zone layout, Khmer typography fixes, native `<dialog>` and `<details>` disclosures, and plain-language copy. Per SemVer 0.x (rule 4), pre-1.0.0 releases may introduce breaking changes.
+
+Package versions: `shared` — 0.13.1, `backend` — 0.8.0, `bot` — 0.7.0, `frontend` — 0.13.1.
+
+### Changed
+
+- `frontend` — 0.13.1 (`layout.tsx`, `icons.tsx`, `globals.css`, `basin-map.css`): restored `IBM_Plex_Sans` (`--font-plex`), `#eef2f7` theme color, the navy wave `BrandMark` (`size={38}`, `rx="11"`), Byte Lab `:root` palette (`--navy: #213a63`, `--sky: #0ea5e9`, `--mist: #eef2f7`, `--ink: #0f172a`, `--slate: #526079`), `.hero-band` blueprint grid, and deep-navy `.voice-card` gradient while preserving `html[lang="km"]` `Kantumruy_Pro` legibility rules and all revamped layout/accessibility improvements.
+
 ## [0.19.0] — 2026-11-25
 
 Mekong River Almanac UI revamp: decluttered dashboard, plain-language Khmer & English copy, unified navigation, native `<dialog>` and `<details>` disclosures, and Khmer typography fixes. Per SemVer 0.x (rule 4), pre-1.0.0 releases may introduce breaking changes.

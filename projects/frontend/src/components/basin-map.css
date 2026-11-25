@@ -1,9 +1,11 @@
-/* Interactive basin map — Leaflet tuned to the Mekong River Almanac system.
+/* Interactive basin map — Leaflet tuned to the light "river lab" system.
    Every selector is scoped to .basin-map-frame so the map never restyles
    the rest of the dashboard. */
 
 .basin-map-frame {
   position: relative;
+  z-index: 1;
+  isolation: isolate;
   background: var(--map-bg);
 }
 
@@ -35,9 +37,9 @@
   align-items: center;
   gap: 2px;
   padding: 3px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-full);
-  background: rgb(255 255 255 / 0.96);
+  background: rgb(255 255 255 / 0.95);
   box-shadow: var(--shadow-1);
   backdrop-filter: blur(6px);
 }
@@ -51,19 +53,19 @@
   border: none;
   border-radius: var(--radius-full);
   background: transparent;
-  color: var(--ink-muted);
+  color: var(--slate);
   font-family: var(--font-ui);
   cursor: pointer;
   transition: background 130ms ease, color 130ms ease;
 }
 
 .basemap-option:hover {
-  background: var(--bg-subtle);
-  color: var(--ink);
+  background: var(--mist);
+  color: var(--navy-deep);
 }
 
 .basemap-option[aria-pressed="true"] {
-  background: var(--brand-deep);
+  background: var(--navy);
   color: #ffffff;
 }
 
@@ -72,13 +74,13 @@
 }
 
 .basemap-option:focus-visible {
-  outline: 2px solid var(--brand-accent);
+  outline: 2px solid var(--sky);
   outline-offset: 1px;
 }
 
 /* Leaflet chrome */
 .basin-map-frame .leaflet-control-zoom {
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-1);
   overflow: hidden;
@@ -88,9 +90,9 @@
   width: 36px;
   height: 36px;
   line-height: 34px;
-  background: var(--bg-surface);
-  color: var(--brand-deep);
-  border-bottom: 1px solid var(--border);
+  background: var(--paper);
+  color: var(--navy);
+  border-bottom: 1px solid var(--line);
   font-family: var(--font-ui);
   font-size: 1.125rem;
   font-weight: 500;
@@ -102,12 +104,12 @@
 }
 
 .basin-map-frame .leaflet-control-zoom a:hover {
-  background: var(--bg-subtle);
-  color: var(--ink);
+  background: var(--mist);
+  color: var(--navy-deep);
 }
 
 .basin-map-frame .leaflet-control-zoom a:focus-visible {
-  outline: 2px solid var(--brand-accent);
+  outline: 2px solid var(--sky);
   outline-offset: -2px;
 }
 
@@ -115,22 +117,27 @@
   padding: 2px 8px;
   border-top-left-radius: var(--radius-sm);
   background: rgb(255 255 255 / 0.9);
-  color: var(--ink-muted);
+  color: var(--slate);
   font-size: 0.6875rem;
   line-height: 1.5;
 }
 
 .basin-map-frame .leaflet-container .leaflet-control-attribution a {
-  color: var(--brand-accent);
+  color: var(--sky-deep);
+}
+
+.basin-map-frame .leaflet-container .leaflet-control-attribution a:hover,
+.basin-map-frame .leaflet-container .leaflet-control-attribution a:focus {
+  color: var(--navy);
 }
 
 /* Data marks */
 .basin-map-frame .leaflet-tooltip.basin-tooltip {
   max-width: 260px;
   padding: 6px 10px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  background: var(--bg-surface);
+  background: var(--paper);
   color: var(--ink);
   box-shadow: var(--shadow-1);
   font-family: var(--font-ui);
@@ -149,18 +156,18 @@
   width: 14px;
   height: 14px;
   margin: 2px;
-  border: 1.5px solid var(--bg-surface);
+  border: 1.5px solid var(--paper);
   border-radius: 2px;
-  background: var(--brand-deep);
+  background: var(--navy);
   transform: rotate(45deg);
 }
 
 .basin-station-icon.is-selected .basin-station-diamond {
-  background: var(--brand-accent);
+  background: var(--sky);
 }
 
 .basin-station-icon:focus-visible {
   border-radius: 2px;
-  outline: 2px solid var(--brand-accent);
+  outline: 2px solid var(--sky);
   outline-offset: 1px;
 }

@@ -1,81 +1,85 @@
-/* MekongPulse — "Mekong River Almanac" civic river utility design system.
-   Calm river-mist canvas, crisp white interactive surfaces, deep river-teal brand. */
+/* MekongPulse dashboard — light "river lab" system.
+   Palette derived from the bytelabkh.com brand tokens:
+   navy #213a63 · sky #0ea5e9 · mist #eef2f7 · ink #0f172a · slate #526079 */
 
 :root {
-  /* --- Core Palette (6 named tokens) --- */
-  --bg-canvas: #F6F8F7;
-  --bg-surface: #FFFFFF;
-  --bg-subtle: #EBF0EE;
-  --brand-deep: #0F3D3E;
-  --brand-deep-hover: #0A2A2B;
-  --brand-accent: #0E7490;
-  --brand-accent-soft: #E0F2F7;
-  --ink: #132020;
-  --ink-muted: #4A5D5E;
-  --border: #D7E1DF;
-  --border-strong: #B8C8C5;
+  /* --- Brand --- */
+  --navy: #213a63;
+  --navy-deep: #17293f;
+  --sky: #0ea5e9;
+  --sky-deep: #0369a1;
+  --sky-soft: #e0f2fe;
+  --ink: #0f172a;
+  --slate: #526079;
 
-  /* --- Semantic Risk Tiers (always paired with dot/icon + label) --- */
-  --tier-normal: #15803D;
-  --tier-normal-ink: #166534;
-  --tier-normal-wash: #ECFDF5;
-  --tier-normal-border: #BBF7D0;
+  /* --- Surfaces --- */
+  --paper: #ffffff;
+  --mist: #eef2f7;
+  --mist-deep: #e2eaf4;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --map-bg: #f7fafd;
 
-  --tier-advisory: #D97706;
-  --tier-advisory-ink: #92400E;
-  --tier-advisory-wash: #FFFBEB;
-  --tier-advisory-border: #FDE68A;
+  /* --- Risk tiers (light-safe, always paired with dot/icon + label) --- */
+  --tier-normal: #10b981;
+  --tier-normal-ink: #047857;
+  --tier-normal-wash: #ecfdf5;
+  --tier-normal-border: #a7f3d0;
 
-  --tier-warning: #EA580C;
-  --tier-warning-ink: #9A3412;
-  --tier-warning-wash: #FFF7ED;
-  --tier-warning-border: #FED7AA;
+  --tier-advisory: #f59e0b;
+  --tier-advisory-ink: #b45309;
+  --tier-advisory-wash: #fffbeb;
+  --tier-advisory-border: #fde68a;
 
-  --tier-danger: #DC2626;
-  --tier-danger-ink: #991B1B;
-  --tier-danger-wash: #FEF2F2;
-  --tier-danger-border: #FECACA;
+  --tier-warning: #f97316;
+  --tier-warning-ink: #c2410c;
+  --tier-warning-wash: #fff7ed;
+  --tier-warning-border: #fed7aa;
+
+  --tier-danger: #dc2626;
+  --tier-danger-ink: #b91c1c;
+  --tier-danger-wash: #fef2f2;
+  --tier-danger-border: #fecaca;
 
   /* --- Error --- */
-  --error: #DC2626;
-  --error-ink: #991B1B;
-  --error-soft: #FEF2F2;
-  --error-line: #FECACA;
+  --error: #dc2626;
+  --error-ink: #b91c1c;
+  --error-soft: #fef2f2;
+  --error-line: #fecaca;
 
-  /* --- Canvas/JS Token Aliases (keeps BasinMap & HydrographChart in sync) --- */
-  --navy: var(--brand-deep);
-  --navy-deep: var(--brand-deep-hover);
-  --sky: var(--brand-accent);
-  --sky-deep: var(--brand-accent);
-  --sky-soft: var(--brand-accent-soft);
-  --paper: var(--bg-surface);
-  --mist: var(--bg-subtle);
-  --mist-deep: #DFE8E5;
-  --line: var(--border);
-  --line-strong: var(--border-strong);
-  --slate: var(--ink-muted);
-  --map-bg: #F3F7F6;
+  /* --- Semantic aliases (Byte Lab palette) --- */
+  --bg-canvas: var(--paper);
+  --bg-surface: var(--paper);
+  --bg-subtle: var(--mist);
+  --bg-inset: var(--map-bg);
+  --brand-deep: var(--navy);
+  --brand-deep-hover: var(--navy-deep);
+  --brand-accent: var(--sky-deep);
+  --brand-accent-soft: var(--sky-soft);
+  --ink-muted: var(--slate);
+  --border: var(--line);
+  --border-strong: var(--line-strong);
 
   /* --- Shape --- */
   --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
   --radius-full: 9999px;
 
-  /* --- Elevation --- */
-  --shadow-1: 0 1px 2px rgb(19 32 32 / 0.05), 0 4px 12px rgb(19 32 32 / 0.04);
-  --shadow-2: 0 4px 16px rgb(19 32 32 / 0.12), 0 20px 44px rgb(19 32 32 / 0.16);
+  /* --- Elevation (soft, daylight) --- */
+  --shadow-1: 0 1px 2px rgb(15 23 42 / 0.06), 0 4px 12px rgb(15 23 42 / 0.05);
+  --shadow-2: 0 2px 6px rgb(15 23 42 / 0.08), 0 18px 40px rgb(15 23 42 / 0.14);
 
   /* --- Typography --- */
-  --font-ui: var(--font-jakarta), var(--font-kantumruy), "Kantumruy Pro", -apple-system,
+  --font-ui: var(--font-plex), var(--font-kantumruy), "Kantumruy Pro", -apple-system,
     "Segoe UI", sans-serif;
   --font-mono: var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
 }
 
 /* Khmer typography: Kantumruy Pro first, zero letter-spacing, generous line-height. */
 html[lang="km"] {
-  --font-ui: var(--font-kantumruy), "Kantumruy Pro", var(--font-jakarta), -apple-system,
+  --font-ui: var(--font-kantumruy), "Kantumruy Pro", var(--font-plex), -apple-system,
     "Segoe UI", sans-serif;
 }
 
@@ -141,7 +145,7 @@ a { color: var(--brand-accent); }
 }
 
 :focus-visible {
-  outline: 2px solid var(--brand-accent);
+  outline: 2px solid var(--sky);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
@@ -209,7 +213,7 @@ a { color: var(--brand-accent); }
 .top-app-bar {
   position: sticky;
   top: 0;
-  z-index: 25;
+  z-index: 40;
   background: rgb(255 255 255 / 0.94);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
@@ -242,7 +246,7 @@ a { color: var(--brand-accent); }
   font-size: 1.0625rem;
   font-weight: 700;
   letter-spacing: -0.015em;
-  color: var(--brand-deep);
+  color: var(--navy-deep);
   white-space: nowrap;
 }
 
@@ -304,21 +308,31 @@ a { color: var(--brand-accent); }
 .lang-switch .lang-sep { color: var(--border-strong); }
 
 /* ------------------------------------------------------------------ */
-/* Hero Band (Layer 1 — calm semantic wash, open layout)               */
+/* Hero Band (Byte Lab mist surface + subtle blueprint grid)           */
 /* ------------------------------------------------------------------ */
 
 .hero-band {
-  background: var(--bg-subtle);
-  border-bottom: 1px solid var(--border);
-  transition: background 200ms ease;
+  position: relative;
+  background: var(--mist);
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
 }
 
-.hero-band[data-tier="DANGER"] { background: var(--tier-danger-wash); border-bottom-color: var(--tier-danger-border); }
-.hero-band[data-tier="WARNING"] { background: var(--tier-warning-wash); border-bottom-color: var(--tier-warning-border); }
-.hero-band[data-tier="ADVISORY"] { background: var(--tier-advisory-wash); border-bottom-color: var(--tier-advisory-border); }
-.hero-band[data-tier="NORMAL"] { background: var(--tier-normal-wash); border-bottom-color: var(--tier-normal-border); }
+.hero-band::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgb(33 58 99 / 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(33 58 99 / 0.055) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9), transparent 92%);
+  -webkit-mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9), transparent 92%);
+  pointer-events: none;
+}
 
 .hero-inner {
+  position: relative;
   max-width: 1280px;
   margin: 0 auto;
   padding: 28px 16px 24px;
@@ -349,7 +363,7 @@ a { color: var(--brand-accent); }
   height: 12px;
   margin-top: 0.55em;
   border-radius: var(--radius-full);
-  background: var(--brand-deep);
+  background: var(--navy);
   flex: 0 0 auto;
 }
 
@@ -364,7 +378,7 @@ a { color: var(--brand-accent); }
   line-height: 1.22;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--ink);
+  color: var(--navy-deep);
   text-wrap: balance;
 }
 
@@ -454,9 +468,9 @@ a { color: var(--brand-accent); }
 }
 
 .text-field:focus {
-  border-color: var(--brand-accent);
+  border-color: var(--sky);
   outline: none;
-  box-shadow: 0 0 0 3px rgb(14 116 144 / 0.16);
+  box-shadow: 0 0 0 3px rgb(14 165 233 / 0.15);
 }
 
 .text-field[aria-invalid="true"] { border-color: var(--error); }
@@ -876,7 +890,7 @@ a { color: var(--brand-accent); }
   line-height: 1.1;
   font-weight: 700;
   font-family: var(--font-mono);
-  color: var(--brand-deep);
+  color: var(--navy-deep);
 }
 
 .station-live .rate {
@@ -1191,7 +1205,7 @@ dialog.assessment-dialog:modal {
 }
 
 dialog.assessment-dialog::backdrop {
-  background: rgb(19 32 32 / 0.48);
+  background: rgb(15 23 42 / 0.45);
   backdrop-filter: blur(3px);
   overflow: hidden;
   overscroll-behavior: contain;
@@ -1258,14 +1272,14 @@ dialog.assessment-dialog::backdrop {
 }
 
 /* ------------------------------------------------------------------ */
-/* Voice Player (Deep River Teal signature panel)                      */
+/* Voice Player (Deep Navy signature panel)                            */
 /* ------------------------------------------------------------------ */
 
 .voice-card {
-  background: var(--brand-deep);
+  background: linear-gradient(140deg, #17293f 0%, #213a63 70%);
   border-radius: var(--radius-lg);
   padding: 16px 18px;
-  color: #edf5f5;
+  color: #e8eefb;
 }
 
 .voice-player {
@@ -1280,17 +1294,19 @@ dialog.assessment-dialog::backdrop {
   height: 52px;
   border-radius: var(--radius-full);
   border: none;
-  background: #14b8a6;
-  color: #062526;
+  background: var(--sky);
+  color: #ffffff;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 6px 16px rgb(14 165 233 / 0.35);
   transition: background 130ms ease, transform 130ms ease;
 }
 
-.voice-player .play-btn:hover { background: #2dd4bf; transform: translateY(-1px); }
-.voice-player .play-btn:disabled { opacity: 0.4; pointer-events: none; }
+.voice-player .play-btn:hover { background: #38bdf8; transform: translateY(-1px); }
+.voice-player .play-btn:active { transform: scale(0.97); }
+.voice-player .play-btn:disabled { opacity: 0.4; pointer-events: none; box-shadow: none; }
 
 .voice-player .scrub {
   flex: 1;
@@ -1301,29 +1317,63 @@ dialog.assessment-dialog::backdrop {
 }
 
 .voice-player .scrub input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   min-block-size: 28px;
-  accent-color: #2dd4bf;
+  background: transparent;
+  accent-color: var(--sky);
   cursor: pointer;
+}
+
+.voice-player .scrub input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: rgb(255 255 255 / 0.22);
+}
+
+.voice-player .scrub input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -5px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background: var(--sky);
+  border: none;
+}
+
+.voice-player .scrub input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: rgb(255 255 255 / 0.22);
+}
+
+.voice-player .scrub input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background: var(--sky);
+  border: none;
 }
 
 .voice-player .time {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  color: #b7d3d4;
+  color: #a9bcd9;
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
 .voice-player .transcript { margin: 6px 0 0; white-space: pre-wrap; line-height: 1.75; }
-.voice-player .transcript-km { color: #ffffff; }
-.voice-player .transcript-en { color: #b7d3d4; }
+.voice-player .transcript-km { color: #e8eefb; }
+.voice-player .transcript-en { color: #a9bcd9; }
 
 .voice-player .toggle-transcript {
   background: none;
   border: none;
-  color: #5eead4;
+  color: #7cc7f2;
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -1333,7 +1383,8 @@ dialog.assessment-dialog::backdrop {
   align-self: flex-start;
 }
 
-.voice-player .voice-note { margin: 0; color: #b7d3d4; }
+.voice-player .toggle-transcript:hover { color: #b7e2fb; }
+.voice-player .voice-note { margin: 0; color: #a9bcd9; }
 
 /* ------------------------------------------------------------------ */
 /* Action Steps (Directives)                                           */
@@ -1358,7 +1409,7 @@ dialog.assessment-dialog::backdrop {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 14px 16px;
-  background: var(--bg-canvas);
+  background: var(--bg-inset);
 }
 
 .directive-list li::before {
@@ -1411,7 +1462,7 @@ dialog.assessment-dialog::backdrop {
   color: var(--ink-muted);
   font-weight: 600;
   white-space: nowrap;
-  background: var(--bg-canvas);
+  background: var(--bg-inset);
 }
 
 .tier-cell {
@@ -1553,7 +1604,7 @@ dialog.assessment-dialog::backdrop {
   gap: 4px 8px;
   padding: 8px 10px;
   border-radius: var(--radius-sm);
-  background: var(--bg-canvas);
+  background: var(--bg-inset);
 }
 
 .evidence-checks .status-dot {
@@ -1612,7 +1663,7 @@ dialog.assessment-dialog::backdrop {
   padding: 12px 14px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  background: var(--bg-canvas);
+  background: var(--bg-inset);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1955,7 +2006,7 @@ dialog.assessment-dialog::backdrop {
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--bg-canvas);
+  background: var(--bg-inset);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -2054,7 +2105,7 @@ dialog.assessment-dialog::backdrop {
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--bg-canvas);
+  background: var(--bg-inset);
   flex-wrap: wrap;
 }
 .watch-action-copy { max-width: 52ch; }
@@ -2093,7 +2144,7 @@ dialog.assessment-dialog::backdrop {
 
 .shimmer {
   border-radius: var(--radius-md);
-  background: linear-gradient(90deg, var(--bg-subtle) 25%, #e2eae7 50%, var(--bg-subtle) 75%);
+  background: linear-gradient(90deg, var(--mist) 25%, var(--mist-deep) 50%, var(--mist) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s ease infinite;
 }
@@ -2119,7 +2170,7 @@ dialog.assessment-dialog::backdrop {
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 25;
+  z-index: 40;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   background: rgb(255 255 255 / 0.96);
