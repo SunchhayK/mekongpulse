@@ -177,7 +177,9 @@ def register_handlers(application: Application, service: BotService) -> None:
     async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         await query.answer()
-        if query.data and query.data.startswith("watch:pick:"):
+        if query.data and (
+            query.data.startswith("watch:pick:") or query.data.startswith("watch_pick:")
+        ):
             try:
                 await query.edit_message_text(
                     "⏳ កំពុងដំណើរការការឃ្លាំមើល…\nRunning the watch officer…"

@@ -1,20 +1,24 @@
-"""Khmer spoken voice notes via Gemini TTS (FR-05 / ADR-0005, amended).
+"""Khmer spoken voice notes via Gemini TTS (FR-05 / ADR-0005 / IMP-06).
 
-The technical report's original model line (Gemini 2.0 Flash) cannot emit
-audio and 2.5-era Gemini TTS lacked Khmer support; the verified Khmer-capable
-path is `gemini-3.8-flash-tts` (unary request returning 24 kHz WAV PCM), which
-we transcode to MP3 with the `lameenc` bindings (no system ffmpeg dependency in
-the container).
+Routes TTS synthesis through `ModelRotator` (`settings.gemini_tts_model_chain`)
+and supports native Vertex AI Workload Identity / ADC IAM when
+`use_vertex_ai=True`. Transcodes 24 kHz WAV PCM output to MP3 via `lameenc`.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import io
+import logging
 import wave
 from dataclasses import dataclass
 
+from .cache import StateStore
 from .config import Settings
+from .model_rotation import create_genai_client, rotator_for
+
+log = logging.getLogger("mekongpulse.tts")
 
 
 class TTSUnavailable(Exception):
@@ -60,82 +64,96 @@ def wav_to_mp3(wav_bytes: bytes, bit_rate: int = 64) -> tuple[bytes, float]:
 
 
 def synth_tts_prompt(bulletin_text: str) -> str:
-    """Spoken payload for the TTS model: one short style line + the bulletin.
-
-    The TTS model has no developer-instruction channel (a live call returns
-    `400 Developer instruction is not enabled for this model`), so the style
-    cue has to live inline. Keep it to a single colon-terminated sentence,
-    the documented style-prompt shape: a long multi-sentence preamble is what
-    a live smoke test heard read aloud before the bulletin.
-    """
+    """Spoken payload for the TTS model: one short style line + the bulletin."""
     return (
         "Read this aloud in Khmer with a calm, reassuring tone, slowly and clearly:"
         f"\n\n{bulletin_text}"
     )
 
 
+def _extract_audio_bytes(response) -> bytes:
+    candidates = getattr(response, "candidates", None) or []
+    if not candidates:
+        raise TTSUnavailable("Gemini returned no candidates")
+    for part in candidates[0].content.parts or []:
+        inline = getattr(part, "inline_data", None)
+        if inline is not None and inline.data:
+            data = inline.data
+            if isinstance(data, str):  # some SDK versions hand back base64
+                data = base64.b64decode(data)
+            return bytes(data)
+    raise TTSUnavailable("Gemini response contained no audio part")
+
+
 class GeminiTTS:
-    def __init__(self, settings: Settings, *, voice: str = "Kore") -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        voice: str = "Kore",
+        state_store: StateStore | None = None,
+    ) -> None:
         self._settings = settings
         self._voice = voice
+        self._state_store = state_store
         self._client = None
 
     def _get_client(self):
         if not self._settings.has_gemini:
             raise TTSUnavailable("GEMINI_API_KEY / Vertex configuration is missing")
         if self._client is None:
-            from google import genai
-
-            if self._settings.use_vertex_ai:
-                self._client = genai.Client(
-                    vertexai=True,
-                    project=self._settings.vertex_project,
-                    location=self._settings.vertex_location,
-                )
-            else:
-                self._client = genai.Client(api_key=self._settings.gemini_api_key)
+            self._client = create_genai_client(self._settings)
         return self._client
 
     async def synthesize(self, bulletin_text: str) -> AudioArtifact:
         """Bulletin text -> MP3 artifact. Raises TTSUnavailable / AudioEncodeError."""
         client = self._get_client()
+        rotator = rotator_for(
+            self._settings.gemini_tts_model_chain,
+            state_store=self._state_store,
+        )
+        config = {
+            "response_modalities": ["audio"],
+            "speech_config": {
+                "voice_config": {"prebuilt_voice_config": {"voice_name": self._voice}}
+            },
+        }
+        contents = [{"role": "user", "parts": [{"text": synth_tts_prompt(bulletin_text)}]}]
 
-        def _generate() -> bytes:
-            config = {
-                "response_modalities": ["audio"],
-                "speech_config": {
-                    "voice_config": {"prebuilt_voice_config": {"voice_name": self._voice}}
-                },
-            }
-            response = client.models.generate_content(
-                model=self._settings.gemini_tts_model,
-                contents=[
-                    {"role": "user", "parts": [{"text": synth_tts_prompt(bulletin_text)}]}
-                ],
-                config=config,
-            )
-            candidates = getattr(response, "candidates", None) or []
-            if not candidates:
-                raise TTSUnavailable("Gemini returned no candidates")
-            for part in candidates[0].content.parts or []:
-                inline = getattr(part, "inline_data", None)
-                if inline is not None and inline.data:
-                    data = inline.data
-                    if isinstance(data, str):  # some SDK versions hand back base64
-                        import base64
-
-                        data = base64.b64decode(data)
-                    return bytes(data)
-            raise TTSUnavailable("Gemini response contained no audio part")
-
+        wav_bytes: bytes | None = None
+        last_error: BaseException | None = None
         try:
-            wav_bytes = await asyncio.to_thread(_generate)
+            for model in await rotator.ordered_async():
+                try:
+                    response = await asyncio.to_thread(
+                        client.models.generate_content,
+                        model=model,
+                        contents=contents,
+                        config=config,
+                    )
+                except Exception as exc:  # noqa: BLE001 - provider failure, rotate
+                    if not rotator.should_rotate(exc):
+                        raise
+                    log.warning(
+                        "TTS model %s failed (%s); trying next fallback",
+                        model,
+                        type(exc).__name__,
+                    )
+                    await rotator.mark_failed_async(model, exc)
+                    last_error = exc
+                    continue
+                await rotator.mark_ok_async(model)
+                wav_bytes = _extract_audio_bytes(response)
+                break
         except TTSUnavailable:
             raise
         except Exception as exc:  # noqa: BLE001 - audio is best-effort
-            # Quota (429), safety blocks, and transient API failures degrade
-            # to a text-only bulletin via the pipeline's existing handling;
-            # surfacing them as 500s on /assess would break that contract.
             raise TTSUnavailable(f"TTS request failed: {exc}") from exc
+
+        if wav_bytes is None:
+            if last_error is not None:
+                raise TTSUnavailable(f"TTS request failed: {last_error}") from last_error
+            raise TTSUnavailable("No Gemini TTS model configured")
+
         mp3, duration = await asyncio.to_thread(wav_to_mp3, wav_bytes)
         return AudioArtifact(data=mp3, mime_type="audio/mpeg", duration_seconds=round(duration, 1))

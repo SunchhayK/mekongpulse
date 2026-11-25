@@ -17,6 +17,8 @@ export interface StationTelemetry {
   station_id: string;
   name: string;
   river: string;
+  lat?: number | null;
+  lng?: number | null;
   level_m: number;
   alarm_stage_m: number;
   flood_stage_m: number;
@@ -42,6 +44,8 @@ export interface CommuneRiskRow {
   station_id: string | null;
   station_level_m: number | null;
   estimated: boolean;
+  forecast_tier?: FloodRiskTier | null;
+  forecast_lead_days?: number | null;
   updated_at: string;
 }
 
@@ -82,6 +86,8 @@ export interface Assessment {
   english_bulletin: string;
   audio: AudioRef | null;
   estimated: boolean;
+  forecast_tier?: FloodRiskTier | null;
+  forecast_lead_days?: number | null;
   generated_at: string;
 }
 
@@ -109,7 +115,7 @@ export interface ResolvedCommune {
 }
 
 export interface AlertLogEntry {
-  id: number | null;
+  id: number | string | null;
   commune_code: string;
   commune_name_kh: string;
   commune_name_en: string;
@@ -184,6 +190,8 @@ export interface EvidencePayload {
   cross_checks: EvidenceCrossCheck[];
   evidence_chain: EvidenceChainStep[];
   limitations: { text_en: string; text_kh: string };
+  forecast_tier?: FloodRiskTier | null;
+  forecast_lead_days?: number | null;
 }
 
 /* --- Field reports (GET /api/v1/communes/{code}/reports) ------------------- */
@@ -211,10 +219,19 @@ export interface AdvisorHistoryTurn {
   content: string;
 }
 
-/** Signed-in officer session (POST /api/v1/officer/login). */
+/** Signed-in officer session (passcode session or Firebase ID token). */
 export interface OfficerSession {
   session: string;
   expires_at: string;
+  email?: string | null;
+  auth_mode?: "passcode" | "firebase";
+}
+
+export function isFirebaseAuthConfigured(): boolean {
+  return Boolean(
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  );
 }
 
 export interface TranscribeRequest {
@@ -248,7 +265,12 @@ export interface AdvisorRequest {
   commune_code?: string;
 }
 
-export type AgentRunStatus = "pending_approval" | "published" | "rejected" | "failed";
+export type AgentRunStatus =
+  | "pending_approval"
+  | "publishing"
+  | "published"
+  | "rejected"
+  | "failed";
 
 export interface AgentRunToolCall {
   name: string;
@@ -313,6 +335,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(response.status, title, detail, problemType);
   }
+  if (
+    typeof window !== "undefined" &&
+    response.headers.get("X-MekongPulse-Offline-Cache") === "1"
+  ) {
+    window.dispatchEvent(new Event("mekongpulse:offline-cache"));
+  }
   return (await response.json()) as T;
 }
 
@@ -368,6 +396,37 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ passcode }),
     }),
+  firebaseOfficerLogin: async (email: string, password: string): Promise<OfficerSession> => {
+    const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+    if (!apiKey) {
+      throw new ApiError(503, "Firebase auth not configured");
+    }
+    const response = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password, returnSecureToken: true }),
+      },
+    );
+    const data = (await response.json().catch(() => ({}))) as {
+      idToken?: string;
+      expiresIn?: string;
+      email?: string;
+      error?: { message?: string };
+    };
+    if (!response.ok || !data.idToken) {
+      const code = data.error?.message ?? "INVALID_LOGIN_CREDENTIALS";
+      throw new ApiError(401, code, code);
+    }
+    const expiresInSec = Number(data.expiresIn) || 3600;
+    return {
+      session: data.idToken,
+      expires_at: new Date(Date.now() + expiresInSec * 1000).toISOString(),
+      email: data.email ?? email,
+      auth_mode: "firebase",
+    };
+  },
   // Server-side Khmer ASR: browser speech APIs do not cover Khmer.
   transcribe: (body: TranscribeRequest) =>
     request<{ text: string }>("/api/v1/advisor/transcribe", {

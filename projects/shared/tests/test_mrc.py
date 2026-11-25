@@ -10,6 +10,8 @@ import pytest
 from mekong_shared.mrc import (
     MRCTelemetryClient,
     MRCTelemetryError,
+    MRCValidationError,
+    Measurement,
     compute_hydraulic_offset,
     rate_of_rise_m_per_hr,
 )
@@ -96,3 +98,58 @@ def test_hydraulic_offset_requires_overlap():
     primary = [Measurement(at=BASE_TIME - timedelta(hours=i), level_m=5.0) for i in range(10)]
     fallback = [Measurement(at=BASE_TIME - timedelta(days=1, hours=i), level_m=4.0) for i in range(10)]
     assert compute_hydraulic_offset(primary, fallback) is None
+
+
+async def test_fetch_station_populates_rain_mm():
+    """BUG-12: StationSnapshot.rain_mm is populated from latest measurement."""
+    client = MRCTelemetryClient(
+        "https://mrc.test/api/v1",
+        http_client=httpx.AsyncClient(
+            transport=mrc_transport({"020102": mrc_payload("020102", level=6.33, rain=4.25)})
+        ),
+    )
+    snapshot = await client.fetch_station("020102")
+    assert snapshot.rain_mm == pytest.approx(4.25)
+
+
+async def test_fetch_station_rejects_out_of_range_reading():
+    """BUG-10 / IMP-05: implausible level outside [alarm-10, flood+3] raises QC_OUT_OF_RANGE."""
+    payload = mrc_payload("020102", level=6.5)
+    payload["measurements"][-1]["w"] = 18.0  # flood=10.0, high=13.0
+    client = MRCTelemetryClient(
+        "https://mrc.test/api/v1",
+        http_client=httpx.AsyncClient(transport=mrc_transport({"020102": payload})),
+    )
+    with pytest.raises(MRCValidationError) as exc_info:
+        await client.fetch_station("020102")
+    assert exc_info.value.kind == "QC_OUT_OF_RANGE"
+
+
+async def test_fetch_station_rejects_single_tick_spike():
+    """BUG-10 / IMP-05: implausible 15-min jump raises QC_SPIKE_REJECTED."""
+    payload = mrc_payload("020102", level=6.5)
+    payload["measurements"][-1]["w"] = 7.6  # +1.1m in 15 min
+    client = MRCTelemetryClient(
+        "https://mrc.test/api/v1",
+        http_client=httpx.AsyncClient(transport=mrc_transport({"020102": payload})),
+    )
+    with pytest.raises(MRCValidationError) as exc_info:
+        await client.fetch_station("020102")
+    assert exc_info.value.kind == "QC_SPIKE_REJECTED"
+
+
+def test_rate_of_rise_filters_single_noisy_tick_but_triggers_on_sustained_rise():
+    """BUG-10: single +0.30m glitch must not cross 0.08 m/hr; >=2 consecutive ticks do."""
+    base = BASE_TIME - timedelta(hours=3)
+    flat_with_glitch = [
+        Measurement(at=base + timedelta(minutes=15 * i), level_m=5.0) for i in range(12)
+    ] + [Measurement(at=BASE_TIME, level_m=5.30)]
+    assert rate_of_rise_m_per_hr(flat_with_glitch) == pytest.approx(0.0, abs=1e-4)
+
+    sustained = [
+        Measurement(at=base + timedelta(minutes=15 * i), level_m=5.0) for i in range(11)
+    ] + [
+        Measurement(at=BASE_TIME - timedelta(minutes=15), level_m=5.30),
+        Measurement(at=BASE_TIME, level_m=5.30),
+    ]
+    assert rate_of_rise_m_per_hr(sustained) >= 0.08

@@ -1,16 +1,26 @@
-"""Spatial inundation risk classification (FR-03, INV-03).
+"""Spatial inundation risk classification (FR-03, INV-03, IMP-04, IMP-07).
 
 Deterministic, documented rules combining live station state (INV-01) with the
-province rain forecast and the commune's DEM ground elevation. Under
-conflicting or uncertain signals the classifier takes the conservative posture
-(INV-03): escalate the tier, never downgrade.
+province rain forecast, optional Google Flood Hub multi-day forecast, per-commune
+calibrated thresholds, and the commune's DEM ground elevation. Under conflicting
+or uncertain signals the classifier takes the conservative posture (INV-03):
+escalate the tier, never downgrade.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from .models import Commune, CommuneRisk, FloodReason, RiskTier, StationSnapshot, WeatherSnapshot
+from .models import (
+    Commune,
+    CommuneCalibration,
+    CommuneRisk,
+    FloodForecast,
+    FloodReason,
+    RiskTier,
+    StationSnapshot,
+    WeatherSnapshot,
+)
 
 # Thresholds (documented in README; AC-01 requires rate > 0.08 m/hr to reach WARNING+)
 RATE_PULSE_M_PER_HR = 0.08
@@ -42,9 +52,13 @@ class SpatialRiskClassifier:
         weather: WeatherSnapshot | None,
         *,
         ground_elevation_m: float | None = None,
+        levee_margin_m: float | None = None,
+        lead_time_multiplier: float = 1.0,
+        flood_forecast: FloodForecast | None = None,
     ) -> CommuneRisk:
         if ground_elevation_m is None:
             ground_elevation_m = commune.ground_elevation_m
+        effective_margin = LEVEE_MARGIN_M if levee_margin_m is None else levee_margin_m
 
         level = station.level_m
         alarm = station.alarm_stage_m
@@ -92,7 +106,7 @@ class SpatialRiskClassifier:
                 drivers.append(
                     f"water surface {water_surface:.2f}m above commune ground {ground_elevation_m:.1f}m"
                 )
-            elif head <= LEVEE_MARGIN_M:
+            elif head <= effective_margin:
                 if tier.severity < RiskTier.WARNING.severity:
                     tier, reason = RiskTier.WARNING, FloodReason.RIVER_OVERFLOW
                 drivers.append(
@@ -112,6 +126,28 @@ class SpatialRiskClassifier:
                 tier = RiskTier.ADVISORY
                 drivers.append(f"level {level:.2f}m approaching alarm stage {alarm:.2f}m")
 
+        # --- Google Flood Hub multi-day forecast (IMP-04) ----------------------
+        forecast_tier: RiskTier | None = None
+        forecast_lead_days: int | None = None
+        forecast_lead_hours: int | None = None
+        if flood_forecast is not None:
+            forecast_tier = flood_forecast.peak_severity
+            forecast_lead_days = flood_forecast.forecast_days
+            if flood_forecast.peak_severity.severity >= RiskTier.ADVISORY.severity:
+                if flood_forecast.peak_severity.severity > tier.severity:
+                    tier = flood_forecast.peak_severity
+                    if reason is FloodReason.NONE:
+                        reason = FloodReason.RIVER_OVERFLOW
+                drivers.append(
+                    f"Flood Hub {flood_forecast.forecast_days}-day forecast: "
+                    f"{flood_forecast.peak_severity.value}"
+                )
+                if flood_forecast.peak_time is not None:
+                    delta_h = (flood_forecast.peak_time - flood_forecast.issued_at).total_seconds() / 3600.0
+                    forecast_lead_hours = max(1, int(round(delta_h)))
+                else:
+                    forecast_lead_hours = max(24, flood_forecast.forecast_days * 24)
+
         # --- telemetry uncertainty: conservative escalation (INV-03) -----------
         if station.is_stale_fallback or station.source == "cache":
             if tier.severity >= RiskTier.ADVISORY.severity:
@@ -121,6 +157,11 @@ class SpatialRiskClassifier:
         lead_time = self._lead_time_hours(
             level, flood, rate, ground_elevation_m, station, commune.distance_to_station_km
         )
+        if lead_time is not None and lead_time > 0 and lead_time_multiplier != 1.0:
+            lead_time = max(1, min(168, int(round(lead_time * lead_time_multiplier))))
+        if lead_time is None and forecast_lead_hours is not None:
+            lead_time = forecast_lead_hours
+
         score = _TIER_SCORE[tier]
         if rain48 is not None and rain48 >= RAIN_HEAVY_48H_MM:
             score = min(100, score + 5)
@@ -140,6 +181,8 @@ class SpatialRiskClassifier:
             station_id=station.station_id,
             station_level_m=level,
             estimated=station.is_stale_fallback or station.source == "cache",
+            forecast_tier=forecast_tier,
+            forecast_lead_days=forecast_lead_days,
             updated_at=datetime.now(timezone.utc),
         )
 
@@ -191,15 +234,53 @@ def _near_station(distance_km: float | None) -> bool:
     return distance_km is None or distance_km <= WATER_SURFACE_PROXY_MAX_KM
 
 
+def classify_commune(
+    commune: Commune,
+    station: StationSnapshot,
+    weather: WeatherSnapshot | None,
+    *,
+    ground_elevation_m: float | None = None,
+    levee_margin_m: float | None = None,
+    lead_time_multiplier: float = 1.0,
+    flood_forecast: FloodForecast | None = None,
+    classifier: SpatialRiskClassifier | None = None,
+) -> CommuneRisk:
+    """Convenience wrapper around SpatialRiskClassifier.classify()."""
+    engine = classifier or SpatialRiskClassifier()
+    return engine.classify(
+        commune,
+        station,
+        weather,
+        ground_elevation_m=ground_elevation_m,
+        levee_margin_m=levee_margin_m,
+        lead_time_multiplier=lead_time_multiplier,
+        flood_forecast=flood_forecast,
+    )
+
+
 def classify_batch(
     communes: list[Commune],
     station: StationSnapshot,
     weather_by_province: dict[str, WeatherSnapshot],
     classifier: SpatialRiskClassifier | None = None,
+    *,
+    calibrations: dict[str, CommuneCalibration] | None = None,
+    flood_forecast: FloodForecast | None = None,
 ) -> list[CommuneRisk]:
     engine = classifier or SpatialRiskClassifier()
+    cal_map = calibrations or {}
     out: list[CommuneRisk] = []
     for c in communes:
         weather = weather_by_province.get(c.province_code or "")
-        out.append(engine.classify(c, station, weather))
+        cal = cal_map.get(c.code)
+        out.append(
+            engine.classify(
+                c,
+                station,
+                weather,
+                levee_margin_m=cal.levee_margin_m if cal is not None else None,
+                lead_time_multiplier=cal.lead_time_multiplier if cal is not None else 1.0,
+                flood_forecast=flood_forecast,
+            )
+        )
     return out

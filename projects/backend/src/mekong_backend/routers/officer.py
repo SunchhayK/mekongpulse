@@ -29,12 +29,12 @@ from mekong_shared.logging_utils import log_event
 from mekong_shared.models import ConversationTurn
 from mekong_shared.stt import TranscriptionUnavailable, transcribe_audio
 
-from ..deps import require_admin
+from ..deps import client_ip_for, get_endpoint_limiter, get_state_store, require_admin
 from ..officer_auth import (
     PasscodeRateLimiter,
-    authorized_for,
     issue_session,
     passcode_matches,
+    resolve_officer_identity,
     sign_in_configured,
 )
 from ..problems import problem
@@ -64,6 +64,8 @@ class AdvisorRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     passcode: str = Field(min_length=1, max_length=256)
+    officer_id: str | None = Field(default=None, max_length=128)
+    email: str | None = Field(default=None, max_length=128)
 
 
 class TranscribeRequest(BaseModel):
@@ -73,10 +75,10 @@ class TranscribeRequest(BaseModel):
 
 
 def _login_limiter(request: Request) -> PasscodeRateLimiter:
-    """Per-app limiter (lazily created; in-process state, single staging worker)."""
+    """Per-app limiter backed by StateStore when configured."""
     limiter = getattr(request.app.state, "officer_login_limiter", None)
     if limiter is None:
-        limiter = PasscodeRateLimiter()
+        limiter = PasscodeRateLimiter(state_store=get_state_store(request))
         request.app.state.officer_login_limiter = limiter
     return limiter
 
@@ -192,8 +194,8 @@ async def officer_login(request: Request, body: LoginRequest) -> dict:
         )
 
     limiter = _login_limiter(request)
-    client_ip = request.client.host if request.client else "unknown"
-    if limiter.blocked(client_ip):
+    client_ip = client_ip_for(request)
+    if await limiter.ablocked(client_ip):
         log_event(log, "OFFICER_LOGIN_RATE_LIMITED", trace_id=trace_id, client=client_ip)
         return problem(
             429,
@@ -204,7 +206,7 @@ async def officer_login(request: Request, body: LoginRequest) -> dict:
         )
 
     if not passcode_matches(settings, body.passcode):
-        limiter.record_failure(client_ip)
+        await limiter.arecord_failure(client_ip)
         log_event(log, "OFFICER_LOGIN_FAILED", trace_id=trace_id, client=client_ip)
         return problem(
             401,
@@ -214,9 +216,16 @@ async def officer_login(request: Request, body: LoginRequest) -> dict:
             trace_id=trace_id,
         )
 
-    limiter.reset(client_ip)
-    token, expires_at = issue_session(settings)
-    log_event(log, "OFFICER_LOGIN", trace_id=trace_id, client=client_ip)
+    await limiter.areset(client_ip)
+    officer_label = (body.email or body.officer_id or "").strip() or None
+    token, expires_at = issue_session(settings, officer_id=officer_label)
+    log_event(
+        log,
+        "OFFICER_LOGIN",
+        trace_id=trace_id,
+        client=client_ip,
+        officer=officer_label or "officer",
+    )
     return {"session": token, "expires_at": expires_at.isoformat()}
 
 
@@ -225,7 +234,25 @@ async def advisor(request: Request, body: AdvisorRequest) -> dict:
     """One traced advisor turn; publishing requires a session or officer token."""
     settings = request.app.state.settings
     pipeline = request.app.state.pipeline
-    authorized = authorized_for(settings, request.headers)
+    trace_id = getattr(request.state, "trace_id", None)
+    identity = await resolve_officer_identity(
+        settings,
+        request.headers,
+        firebase_verifier=getattr(request.app.state, "firebase_verifier", None),
+    )
+    authorized = identity is not None
+    limiter = get_endpoint_limiter(request)
+    client_ip = client_ip_for(request)
+    limit = getattr(settings, "advisor_rate_limit_per_min", 20)
+    if not await limiter.allow("advisor", client_ip, limit=limit, window_seconds=60):
+        log_event(log, "ADVISOR_RATE_LIMITED", trace_id=trace_id, client=client_ip)
+        return problem(
+            429,
+            "Too many advisor requests",
+            "Rate limit exceeded for advisor requests; please try again shortly.",
+            type_suffix="rate-limited",
+            trace_id=trace_id,
+        )
 
     context = AdvisorToolContext(
         pipeline,
@@ -271,6 +298,18 @@ async def transcribe(request: Request, body: TranscribeRequest) -> dict:
     """Voice clip -> transcript for the assistant composer (chat itself is open)."""
     settings = request.app.state.settings
     trace_id = getattr(request.state, "trace_id", None)
+    limiter = get_endpoint_limiter(request)
+    client_ip = client_ip_for(request)
+    limit = getattr(settings, "advisor_rate_limit_per_min", 20)
+    if not await limiter.allow("advisor_transcribe", client_ip, limit=limit, window_seconds=60):
+        log_event(log, "TRANSCRIBE_RATE_LIMITED", trace_id=trace_id, client=client_ip)
+        return problem(
+            429,
+            "Too many transcription requests",
+            "Rate limit exceeded for voice transcription; please try again shortly.",
+            type_suffix="rate-limited",
+            trace_id=trace_id,
+        )
     try:
         audio = base64.b64decode(body.audio_base64, validate=True)
     except ValueError:

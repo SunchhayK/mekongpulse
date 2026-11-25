@@ -1,0 +1,19 @@
+{
+  "name": "MekongPulse — Cambodia Flood Guard",
+  "short_name": "MekongPulse",
+  "description": "Live Mekong, Bassac, and Tonle Sap river telemetry, commune flood-risk tiers, and spoken Khmer bulletins.",
+  "start_url": "/km/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#eef2f7",
+  "theme_color": "#213a63",
+  "lang": "km",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

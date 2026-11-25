@@ -154,16 +154,18 @@ def main() -> int:
 
     print(f"communes: {len(merged)}, boundary-matched: {matched}, unmatched: {len(merged) - matched}")
 
-    # Elevation top-up: only for entries without a value
+    # Preserve previously fetched elevations even when --no-elev is passed
+    prev = {}
+    if OUT.exists():
+        for pc in load_json(OUT).get("communes", []):
+            if pc.get("ground_elevation_m") is not None:
+                prev[pc["code"]] = pc["ground_elevation_m"]
+    for m in merged:
+        if m["code"] in prev:
+            m["ground_elevation_m"] = prev[m["code"]]
+
+    # Elevation top-up: only for entries still without a value
     if not skip_elevation:
-        prev = {}
-        if OUT.exists():
-            for pc in load_json(OUT).get("communes", []):
-                if pc.get("ground_elevation_m") is not None:
-                    prev[pc["code"]] = pc["ground_elevation_m"]
-        for m in merged:
-            if m["code"] in prev:
-                m["ground_elevation_m"] = prev[m["code"]]
         todo = [m for m in merged if m["ground_elevation_m"] is None and m["lat"] is not None]
         if todo:
             print(f"fetching elevation for {len(todo)} communes...")

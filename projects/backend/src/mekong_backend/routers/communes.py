@@ -21,7 +21,8 @@ from mekong_shared.models import (
 )
 from mekong_shared.pipeline import CommuneNotFound
 
-from ..officer_auth import authorized_for
+from ..deps import client_ip_for, get_endpoint_limiter
+from ..officer_auth import resolve_officer_identity
 from ..problems import problem
 
 log = logging.getLogger("mekongpulse.backend")
@@ -103,14 +104,20 @@ async def search(request: Request, q: str, limit: int = 10) -> list[CommuneSumma
 @router.post("/{commune_code}/assess")
 async def assess(commune_code: str, body: AssessRequest, request: Request) -> AssessmentResult:
     settings = request.app.state.settings
-    if body.force and not authorized_for(settings, request.headers):
-        return problem(
-            403,
-            "Officer authorization required",
-            "Sign in on the assistant page to regenerate the cached briefing.",
-            type_suffix="officer-auth-required",
-            trace_id=getattr(request.state, "trace_id", None),
+    if body.force:
+        identity = await resolve_officer_identity(
+            settings,
+            request.headers,
+            firebase_verifier=getattr(request.app.state, "firebase_verifier", None),
         )
+        if identity is None:
+            return problem(
+                403,
+                "Officer authorization required",
+                "Sign in on the assistant page to regenerate the cached briefing.",
+                type_suffix="officer-auth-required",
+                trace_id=getattr(request.state, "trace_id", None),
+            )
     pipeline = request.app.state.pipeline
     result = await pipeline.assess_commune(
         commune_code,
@@ -152,6 +159,53 @@ async def create_field_report(
     commune_code: str, body: FieldReportCreate, request: Request
 ) -> FieldReport:
     """Ground truth from officials: did water reach the fields in this commune?"""
+    settings = request.app.state.settings
+    trace_id = getattr(request.state, "trace_id", None)
+    identity = await resolve_officer_identity(
+        settings,
+        request.headers,
+        firebase_verifier=getattr(request.app.state, "firebase_verifier", None),
+    )
+    if identity is None:
+        limiter = get_endpoint_limiter(request)
+        client_ip = client_ip_for(request)
+        limit = getattr(settings, "field_report_rate_limit_per_min", 5)
+        if not await limiter.allow("field_report", client_ip, limit=limit, window_seconds=60):
+            log_event(
+                log,
+                "FIELD_REPORT_RATE_LIMITED",
+                trace_id=trace_id,
+                commune=commune_code,
+                client=client_ip,
+            )
+            return problem(
+                429,
+                "Too many field reports",
+                "Rate limit exceeded for field report submissions; please wait before submitting again.",
+                type_suffix="rate-limited",
+                trace_id=trace_id,
+            )
+        if await limiter.check_and_mark_duplicate(
+            commune_code=commune_code,
+            client_ip=client_ip,
+            status=body.status.value,
+            note=body.note,
+        ):
+            log_event(
+                log,
+                "FIELD_REPORT_DUPLICATE",
+                trace_id=trace_id,
+                commune=commune_code,
+                client=client_ip,
+            )
+            return problem(
+                429,
+                "Duplicate field report",
+                "An identical field report was recently submitted for this commune.",
+                type_suffix="duplicate-report",
+                trace_id=trace_id,
+            )
+
     repo = request.app.state.repo
     commune = await repo.get_commune(commune_code)
     if commune is None:
@@ -161,7 +215,7 @@ async def create_field_report(
         commune_code=commune_code,
         status=body.status,
         note=body.note,
-        reporter_label=body.reporter_label,
+        reporter_label=body.reporter_label or (identity.label if identity else None),
         source="web",
         reported_at=datetime.now(timezone.utc),
     )
@@ -169,7 +223,7 @@ async def create_field_report(
     log_event(
         log,
         "FIELD_REPORT_ADDED",
-        trace_id=getattr(request.state, "trace_id", None),
+        trace_id=trace_id,
         commune=commune_code,
         status=body.status.value,
     )

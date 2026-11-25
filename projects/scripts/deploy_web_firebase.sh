@@ -9,13 +9,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 DRY_RUN="${DRY_RUN:-1}"
+ENV_FILE="${ENV_FILE:-.env.production}"
 
-if [[ ! -f .env.production ]]; then
-  echo "missing projects/.env.production preset" >&2
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "missing ${ENV_FILE} preset" >&2
   exit 1
 fi
-# shellcheck disable=SC1091
-set -a && source .env.production && set +a
+# shellcheck disable=SC1090
+set -a && source "$ENV_FILE" && set +a
 
 FIREBASE_PROJECT="${FIREBASE_PROJECT:-ai-builder-cup-9f8cd}"
 BACKEND_URL="${1:-${PUBLIC_BASE_URL:-}}"

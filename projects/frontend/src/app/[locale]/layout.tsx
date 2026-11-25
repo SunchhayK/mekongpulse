@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getMessages, getTranslations, setRequestLocale } from "next-intl/server";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Kantumruy_Pro } from "next/font/google";
 import { routing, type Locale } from "@/i18n/routing";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import "../globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -46,6 +47,7 @@ export async function generateMetadata({
   return {
     title: t("title"),
     description: t("description"),
+    manifest: "/manifest.webmanifest",
   };
 }
 
@@ -84,6 +86,7 @@ export default async function LocaleLayout({
           timeZone="Asia/Phnom_Penh"
           now={new Date()}
         >
+          <OfflineBanner />
           {children}
         </NextIntlClientProvider>
       </body>

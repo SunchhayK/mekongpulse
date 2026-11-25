@@ -6,7 +6,7 @@ gateway, the bot, and the sentinel patrol.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -48,6 +48,26 @@ class FloodReason(StrEnum):
     RIVER_PULSE = "RIVER_PULSE"
     RIVER_OVERFLOW = "RIVER_OVERFLOW"
     LOCAL_FLASH_FLOOD = "LOCAL_FLASH_FLOOD"
+
+
+class CropType(StrEnum):
+    """Supported agronomic profiles (IMP-10)."""
+
+    RICE = "RICE"
+    VEGETABLES = "VEGETABLES"
+    LIVESTOCK = "LIVESTOCK"
+
+    @property
+    def label_kh(self) -> str:
+        return {
+            "RICE": "ស្រូវ",
+            "VEGETABLES": "បន្លែ",
+            "LIVESTOCK": "សត្វពាហនៈ",
+        }[self.value]
+
+    @property
+    def label_en(self) -> str:
+        return self.value.title()
 
 
 class CropStage(StrEnum):
@@ -103,6 +123,7 @@ class StationSnapshot(BaseModel):
     flood_stage_m: float
     rate_of_rise_m_per_hr: float
     recorded_at: datetime
+    rain_mm: float | None = None
     is_stale_fallback: bool = False
     source: str = "live"  # live | fallback | cache
     fallback_offset_m: float | None = None
@@ -166,8 +187,24 @@ class CommuneRisk(BaseModel):
     drivers: list[str] = Field(default_factory=list)
     station_id: str | None = None
     station_level_m: float | None = None
+    forecast_tier: RiskTier | None = None
+    forecast_lead_days: int | None = None
     estimated: bool = False  # true when telemetry came from fallback/cache
     updated_at: datetime
+
+
+class FloodForecast(BaseModel):
+    """Multi-day flood forecast (IMP-04, Google Flood Hub)."""
+
+    station_id: str | None = None
+    commune_code: str | None = None
+    issued_at: datetime
+    forecast_days: int = Field(ge=1)
+    peak_severity: RiskTier
+    peak_time: datetime | None = None
+    forecast_discharge_m3s: float | None = None
+    confidence: float | None = None
+    source: str = "google_flood_hub"
 
 
 class AudioRef(BaseModel):
@@ -196,10 +233,12 @@ class AssessmentResult(BaseModel):
 
 
 class Subscription(BaseModel):
-    id: int | None = None
+    id: int | str | None = None
     telegram_chat_id: str
     commune_id: str
+    crop_type: CropType = CropType.RICE
     crop_stage: CropStage | None = None
+    planting_date: date | None = None
     subscribed_at: datetime | None = None
     last_notified_at: datetime | None = None
     last_notified_risk_tier: RiskTier | None = None
@@ -213,7 +252,7 @@ class TelemetryWarning(BaseModel):
 
 
 class PatrolRun(BaseModel):
-    id: int | None = None
+    id: int | str | None = None
     run_at: datetime
     stations_polled: int
     communes_evaluated: int
@@ -222,8 +261,8 @@ class PatrolRun(BaseModel):
 
 
 class SentinelAlert(BaseModel):
-    id: int | None = None
-    patrol_run_id: int | None = None
+    id: int | str | None = None
+    patrol_run_id: int | str | None = None
     commune_id: str
     station_id: str | None = None
     risk_tier: RiskTier
@@ -259,6 +298,7 @@ class AgentRunStatus(StrEnum):
     """Watch-officer approval lifecycle."""
 
     PENDING_APPROVAL = "pending_approval"
+    PUBLISHING = "publishing"
     PUBLISHED = "published"
     REJECTED = "rejected"
     FAILED = "failed"
@@ -294,3 +334,27 @@ class ConversationTurn(BaseModel):
     role: str  # user | assistant
     content: str
     created_at: datetime | None = None
+
+
+class CommuneCalibration(BaseModel):
+    """Per-commune risk calibration parameters (IMP-07)."""
+
+    commune_code: str
+    levee_margin_m: float
+    lead_time_multiplier: float = 1.0
+    sample_size: int = 0
+    updated_at: datetime
+
+
+class VerificationSummary(BaseModel):
+    """Alert verification accuracy summary against field reports (IMP-07)."""
+
+    total_alerts: int = 0
+    matched_reports: int = 0
+    true_positives: int = 0
+    false_positives: int = 0
+    false_negatives: int = 0
+    precision: float | None = None
+    recall: float | None = None
+    mean_lead_time_error_hours: float | None = None
+    by_commune: dict[str, dict[str, float | int | None]] = Field(default_factory=dict)

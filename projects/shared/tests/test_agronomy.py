@@ -92,3 +92,85 @@ def test_all_khmer_strings_present():
         for d in engine.evaluate(tier, stage, rain_48h_mm=70.0):
             assert d.title_kh and d.instruction_kh
             assert d.title_en and d.instruction_en
+
+
+def test_stage_for_planting_date_boundaries():
+    """IMP-10: 90-120 day rice cycle stage boundaries."""
+    from datetime import date
+    from mekong_shared.agronomy import stage_for_planting_date
+
+    today = date(2026, 10, 16)
+    assert stage_for_planting_date(date(2026, 10, 1), today) is CropStage.TILLERING  # 15d
+    assert stage_for_planting_date(date(2026, 9, 16), today) is CropStage.TILLERING  # 30d
+    assert stage_for_planting_date(date(2026, 9, 15), today) is CropStage.VEGETATIVE  # 31d
+    assert stage_for_planting_date(date(2026, 8, 17), today) is CropStage.VEGETATIVE  # 60d
+    assert stage_for_planting_date(date(2026, 8, 16), today) is CropStage.FLOWERING  # 61d
+    assert stage_for_planting_date(date(2026, 7, 18), today) is CropStage.FLOWERING  # 90d
+    assert stage_for_planting_date(date(2026, 7, 17), today) is CropStage.RIPENING  # 91d
+
+
+def test_vegetables_and_livestock_directives_bilingual():
+    """IMP-10: VEGETABLES and LIVESTOCK profiles emit bilingual Khmer + English directives."""
+    from mekong_shared.models import CropType
+
+    veg_warn = engine.evaluate(
+        RiskTier.WARNING,
+        CropStage.VEGETATIVE,
+        rain_48h_mm=60.0,
+        lead_time_hours=24,
+        crop_type=CropType.VEGETABLES,
+    )
+    veg_codes = [d.action_code for d in veg_warn]
+    assert "VEGETABLE_EARLY_HARVEST" in veg_codes
+    assert "VEGETABLE_RAISED_BED_DRAINAGE" in veg_codes
+    assert "VEGETABLE_HOLD_SPRAY_AND_MULCH" in veg_codes
+    assert all(d.title_kh and d.instruction_kh and d.title_en and d.instruction_en for d in veg_warn)
+
+    live_danger = engine.evaluate(
+        RiskTier.DANGER,
+        CropStage.RIPENING,
+        lead_time_hours=12,
+        crop_type=CropType.LIVESTOCK,
+    )
+    live_codes = [d.action_code for d in live_danger]
+    assert "LIVESTOCK_EVACUATE_HIGH_GROUND" in live_codes
+    assert "LIVESTOCK_SECURE_SHELTER_AND_WATER" in live_codes
+    assert all(d.title_kh and d.instruction_kh and d.title_en and d.instruction_en for d in live_danger)
+
+
+def test_find_stage_advances_identifies_advanced_rice_subscriptions():
+    """IMP-10: digest.find_stage_advances detects rice subscriptions due for stage confirmation."""
+    from datetime import date
+    from mekong_shared.digest import find_stage_advances
+    from mekong_shared.models import CropType, Subscription
+
+    today = date(2026, 10, 16)
+    subs = [
+        Subscription(
+            telegram_chat_id="1",
+            commune_id="080404",
+            crop_stage=CropStage.TILLERING,
+            crop_type=CropType.RICE,
+            planting_date=date(2026, 9, 1),  # 45d -> VEGETATIVE
+        ),
+        Subscription(
+            telegram_chat_id="2",
+            commune_id="080404",
+            crop_stage=CropStage.VEGETATIVE,
+            crop_type=CropType.RICE,
+            planting_date=date(2026, 9, 1),  # already VEGETATIVE -> skip
+        ),
+        Subscription(
+            telegram_chat_id="3",
+            commune_id="080404",
+            crop_stage=CropStage.TILLERING,
+            crop_type=CropType.VEGETABLES,
+            planting_date=date(2026, 9, 1),  # non-rice -> skip
+        ),
+    ]
+    advances = find_stage_advances(subs, today)
+    assert len(advances) == 1
+    assert advances[0].subscription.telegram_chat_id == "1"
+    assert advances[0].previous_stage is CropStage.TILLERING
+    assert advances[0].suggested_stage is CropStage.VEGETATIVE
+    assert advances[0].days_since_planting == 45

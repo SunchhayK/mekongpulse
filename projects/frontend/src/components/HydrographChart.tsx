@@ -138,6 +138,35 @@ export function HydrographChart({
       ctx.fillText(label, x, PADDING.top + plotH + 8);
     }
 
+    // observed rainfall bars (secondary axis on right, bottom 35% of plot)
+    const rainValues = sorted.map((p) => (p.rainfallMm != null && p.rainfallMm > 0 ? p.rainfallMm : 0));
+    const maxRain = Math.max(...rainValues, 0);
+    if (maxRain > 0) {
+      const rainScaleMax = Math.max(10, Math.ceil(maxRain / 5) * 5);
+      const rainBandH = plotH * 0.35;
+      const barWidth = Math.max(3, Math.min(12, plotW / Math.max(sorted.length, 1) * 0.65));
+      const rainColor = cssVar("--sky", "#0ea5e9");
+      ctx.fillStyle = rainColor;
+      ctx.globalAlpha = 0.28;
+      sorted.forEach((point, index) => {
+        const mm = point.rainfallMm ?? 0;
+        if (mm <= 0) return;
+        const barH = Math.max(2, (mm / rainScaleMax) * rainBandH);
+        const cx = xOf(times[index]);
+        ctx.fillRect(cx - barWidth / 2, PADDING.top + plotH - barH, barWidth, barH);
+      });
+      ctx.globalAlpha = 1;
+
+      // right-hand rainfall axis ticks
+      ctx.fillStyle = rainColor;
+      ctx.font = "11px 'IBM Plex Mono', ui-monospace, monospace";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${rainScaleMax}mm`, PADDING.left + plotW + 6, PADDING.top + plotH - rainBandH);
+      ctx.fillText("0mm", PADDING.left + plotW + 6, PADDING.top + plotH);
+      ctx.font = "12px 'IBM Plex Mono', ui-monospace, monospace";
+    }
+
     // threshold dashed lines
     const dashLine = (level: number, color: string, label: string) => {
       const y = yOf(Math.min(level, yMax));
@@ -282,7 +311,12 @@ export function HydrographChart({
       />
       {hoverPoint && hover && (
         <div className="hydrograph-tooltip label-small" style={{ left: hover.x, top: hover.y }}>
-          {hoverPoint.waterLevelMeters.toFixed(2)} m · {new Date(hoverPoint.timestamp).toLocaleString(intlLocale(locale), {
+          {hoverPoint.waterLevelMeters.toFixed(2)} m
+          {hoverPoint.rainfallMm != null && hoverPoint.rainfallMm > 0
+            ? ` · ${hoverPoint.rainfallMm.toFixed(1)} mm`
+            : ""}
+          {" · "}
+          {new Date(hoverPoint.timestamp).toLocaleString(intlLocale(locale), {
             timeZone: "Asia/Phnom_Penh",
             day: "2-digit",
             month: "short",

@@ -1,0 +1,115 @@
+# Cloud Armor WAF & Edge Rate-Limiting Policy for MekongPulse API
+#
+# Deployment instructions (Serverless NEG + External Application Load Balancer):
+#   1. Import this security policy:
+#        gcloud compute security-policies import mekongpulse-edge-waf \
+#          --source=projects/infra/cloud_armor_policy.yaml --global
+#   2. Create a Serverless NEG targeting the Cloud Run service:
+#        gcloud compute network-endpoint-groups create mekongpulse-backend-neg \
+#          --region=asia-southeast1 \
+#          --network-endpoint-type=serverless \
+#          --cloud-run-service=mekongpulse-backend
+#   3. Create a Backend Service, attach the NEG and this Cloud Armor policy:
+#        gcloud compute backend-services create mekongpulse-api-backend --global
+#        gcloud compute backend-services add-backend mekongpulse-api-backend \
+#          --global \
+#          --network-endpoint-group=mekongpulse-backend-neg \
+#          --network-endpoint-group-region=asia-southeast1
+#        gcloud compute backend-services update mekongpulse-api-backend \
+#          --global --security-policy=mekongpulse-edge-waf
+#   4. Route HTTPS traffic via URL map, managed SSL cert, and global forwarding rule.
+
+name: mekongpulse-edge-waf
+description: "MekongPulse WAF and per-IP rate limiting for public write, advisor, and login endpoints"
+type: CLOUD_ARMOR
+rules:
+  - priority: 100
+    description: "Rate-limit public field report submissions (5 req/min per IP)"
+    match:
+      expr:
+        expression: >-
+          request.method == 'POST' &&
+          request.path.matches('^/api/v1/communes/[^/]+/reports$')
+    action: rate_based_ban
+    rateLimitOptions:
+      conformAction: allow
+      exceedAction: deny(429)
+      enforceOnKey: IP
+      rateLimitThreshold:
+        count: 5
+        intervalSec: 60
+      banDurationSec: 600
+
+  - priority: 110
+    description: "Rate-limit officer assistant chat turns (20 req/min per IP)"
+    match:
+      expr:
+        expression: >-
+          request.method == 'POST' &&
+          request.path == '/api/v1/advisor'
+    action: rate_based_ban
+    rateLimitOptions:
+      conformAction: allow
+      exceedAction: deny(429)
+      enforceOnKey: IP
+      rateLimitThreshold:
+        count: 20
+        intervalSec: 60
+      banDurationSec: 300
+
+  - priority: 120
+    description: "Rate-limit Khmer audio transcription uploads (10 req/min per IP)"
+    match:
+      expr:
+        expression: >-
+          request.method == 'POST' &&
+          request.path == '/api/v1/advisor/transcribe'
+    action: rate_based_ban
+    rateLimitOptions:
+      conformAction: allow
+      exceedAction: deny(429)
+      enforceOnKey: IP
+      rateLimitThreshold:
+        count: 10
+        intervalSec: 60
+      banDurationSec: 300
+
+  - priority: 130
+    description: "Rate-limit officer passcode login attempts (5 req/min per IP)"
+    match:
+      expr:
+        expression: >-
+          request.method == 'POST' &&
+          request.path == '/api/v1/officer/login'
+    action: rate_based_ban
+    rateLimitOptions:
+      conformAction: allow
+      exceedAction: deny(429)
+      enforceOnKey: IP
+      rateLimitThreshold:
+        count: 5
+        intervalSec: 60
+      banDurationSec: 900
+
+  - priority: 500
+    description: "Block SQL injection patterns (OWASP ModSecurity CRS)"
+    match:
+      expr:
+        expression: "evaluatePreconfiguredWaf('sqli-v33-stable')"
+    action: deny(403)
+
+  - priority: 510
+    description: "Block XSS patterns (OWASP ModSecurity CRS)"
+    match:
+      expr:
+        expression: "evaluatePreconfiguredWaf('xss-v33-stable')"
+    action: deny(403)
+
+  - priority: 2147483647
+    description: "Default allow rule"
+    match:
+      versionedExpr: SRC_IPS_V1
+      config:
+        srcIpRanges:
+          - "*"
+    action: allow

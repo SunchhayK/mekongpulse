@@ -1,16 +1,16 @@
-"""MekongSentinel autonomous patrol (FR-07, AC-03).
+"""MekongSentinel autonomous patrol (FR-07, AC-03, BUG-03, IMP-06).
 
 Runs on the 15-minute scheduler: syncs state, detects upward tier transitions,
-enforces the 6-hour per-commune debounce, synthesizes the spoken Khmer voice
-alert, and dispatches to subscribers and the public channel (via the injected
-dispatcher). Subscribers are grouped by their stored crop stage so each group
-receives its stage's directive set; the public channel gets a single post,
-carried on the ripening group (conservative posture, INV-03). Every dispatch
+enforces the 6-hour per-commune debounce (while always allowing strictly higher
+severity escalations such as WARNING -> DANGER to bypass debounce), pre-warms
+Khmer voice audio for communes entering WARNING/DANGER, and dispatches to
+subscribers and the public channel (via the injected dispatcher). Every dispatch
 is logged to `sentinel_patrol_runs`/`sentinel_alerts`.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
@@ -27,7 +27,7 @@ from .models import (
     SentinelAlert,
     Subscription,
 )
-from .pipeline import Pipeline
+from .pipeline import Pipeline, RiskTransition
 
 log = logging.getLogger("mekongpulse.sentinel")
 
@@ -63,12 +63,27 @@ class SentinelPatrol:
         self._dispatcher = dispatcher or _noop_dispatcher
         self._escalate_from = escalate_from
 
+    async def _presynthesize_commune_audio(self, commune_code: str) -> None:
+        """Pre-warm default RIPENING Khmer MP3 audio for instant /commune playback (IMP-06)."""
+        try:
+            await self._pipeline.assess_commune(
+                commune_code, CropStage.RIPENING, with_audio=True
+            )
+        except Exception as exc:  # noqa: BLE001 - pre-warming must never break patrol
+            log_event(
+                log,
+                "SENTINEL_AUDIO_PREWARM_FAILED",
+                commune_code=commune_code,
+                error=str(exc),
+            )
+
     async def run(self) -> PatrolSummary:
         started = time.monotonic()
         summary, transitions = await self._pipeline.sync()
 
         pending: list[tuple[SentinelAlert, AssessmentResult]] = []
         debounced: list[str] = []
+        prewarm_communes: list[str] = []
         now = datetime.now(timezone.utc)
         debounce = timedelta(hours=self._settings.sentinel_debounce_hours)
 
@@ -84,7 +99,9 @@ class SentinelPatrol:
             last = await self._pipeline.repo.last_sentinel_alert(commune_code)
             if last is not None:
                 elapsed = now - last.dispatched_at.astimezone(timezone.utc)
-                if elapsed < debounce:
+                # BUG-03: only suppress alerts at the same or lower severity;
+                # escalations to a strictly higher tier (WARNING -> DANGER) bypass debounce.
+                if elapsed < debounce and current.severity <= last.risk_tier.severity:
                     debounced.append(commune_code)
                     continue
 
@@ -108,10 +125,14 @@ class SentinelPatrol:
                 # No ripening subscribers: still post the conservative version publicly.
                 plan.insert(0, (CropStage.RIPENING, []))
 
+            ripening_synthesized = False
             for index, (stage, group) in enumerate(plan):
+                want_audio = bool(group)
                 assessment = await self._pipeline.assess_commune(
-                    commune_code, stage, with_audio=bool(group)
+                    commune_code, stage, with_audio=want_audio
                 )
+                if stage is CropStage.RIPENING and want_audio and assessment.audio is not None:
+                    ripening_synthesized = True
                 alert = SentinelAlert(
                     commune_id=commune_code,
                     station_id=transition.current.station_id,
@@ -141,6 +162,25 @@ class SentinelPatrol:
                     recipients=delivered,
                     audio=bool(assessment.audio),
                 )
+
+            if (
+                not ripening_synthesized
+                and self._pipeline.audio_store is not None
+                and self._settings.has_gemini
+            ):
+                prewarm_communes.append(commune_code)
+
+        if prewarm_communes:
+            semaphore = asyncio.Semaphore(4)
+
+            async def _bounded_prewarm(code: str) -> None:
+                async with semaphore:
+                    await self._presynthesize_commune_audio(code)
+
+            await asyncio.gather(
+                *(_bounded_prewarm(code) for code in prewarm_communes),
+                return_exceptions=True,
+            )
 
         run = await self._pipeline.repo.save_patrol_run(
             PatrolRun(
@@ -175,6 +215,7 @@ class SentinelPatrol:
             communes_evaluated=run.communes_evaluated,
             alerts=run.alerts_dispatched_count,
             debounced=len(debounced),
+            prewarmed_audio=len(prewarm_communes),
             duration_ms=run.execution_duration_ms,
         )
         return PatrolSummary(

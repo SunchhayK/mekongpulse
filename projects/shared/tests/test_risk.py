@@ -205,3 +205,51 @@ def test_score_reflects_tier(classifier):
         scores[tier_level] = classifier.classify(make_commune(), make_station(tier_level), make_weather()).score
     assert scores[8.0] < scores[9.0] < scores[10.6] < scores[12.1]
     assert all(0 <= s <= 100 for s in scores.values())
+
+
+def test_flood_hub_multiday_forecast_elevates_tier_and_lead_time():
+    """IMP-04: multi-day Flood Hub forecast elevates risk and sets multi-day lead_time_hours."""
+    from datetime import timedelta
+    from mekong_shared.models import FloodForecast
+    from mekong_shared.risk import classify_commune
+
+    issued = datetime(2026, 10, 16, 12, 0, tzinfo=timezone.utc)
+    forecast = FloodForecast(
+        station_id="033401",
+        issued_at=issued,
+        forecast_days=4,
+        peak_severity=RiskTier.WARNING,
+        peak_time=issued + timedelta(days=4),
+    )
+    risk = classify_commune(
+        make_commune(), make_station(8.0, rate=0.0), make_weather(), flood_forecast=forecast
+    )
+    assert risk.tier is RiskTier.WARNING
+    assert risk.forecast_tier is RiskTier.WARNING
+    assert risk.forecast_lead_days == 4
+    assert risk.lead_time_hours == 96
+    assert any("Flood Hub" in d for d in risk.drivers)
+
+
+def test_calibrated_levee_margin_and_lead_time_multiplier(classifier):
+    """IMP-07: per-commune levee_margin_m and lead_time_multiplier override defaults."""
+    # water surface = 8.0 - 1.02 = 6.98; ground = 7.40 => head = 0.42m
+    # default margin 0.30m -> NORMAL; calibrated margin 0.50m -> WARNING
+    default_risk = classifier.classify(make_commune(elevation=7.4), make_station(8.0), make_weather())
+    assert default_risk.tier is RiskTier.NORMAL
+
+    calibrated = classifier.classify(
+        make_commune(elevation=7.4),
+        make_station(8.0),
+        make_weather(),
+        levee_margin_m=0.50,
+    )
+    assert calibrated.tier is RiskTier.WARNING
+
+    lead_scaled = classifier.classify(
+        make_commune(),
+        make_station(10.0, rate=0.02),
+        make_weather(),
+        lead_time_multiplier=0.5,
+    )
+    assert lead_scaled.lead_time_hours == 50  # 100 * 0.5

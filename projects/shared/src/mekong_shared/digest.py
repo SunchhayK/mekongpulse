@@ -1,4 +1,4 @@
-"""Deterministic bilingual daily digest (no LLM, stored data only).
+"""Deterministic bilingual daily digest and weekly stage-advance reminders (IMP-10).
 
 Renders today's persisted risk rows (the same `repo.risk_map()` source the
 risk-map endpoint serves): tier counts, the top elevated communes with lead
@@ -9,14 +9,59 @@ second, so the caller can post both to the public channel.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import date, datetime, timezone
 
+from .agronomy import stage_for_planting_date
 from .config import Settings
-from .models import CommuneRisk, RiskTier
+from .models import CommuneRisk, CropStage, CropType, RiskTier, Subscription
 from .repository import Repository
 from .stations import load_stations
 
 TOP_ELEVATED = 10
+
+_STAGE_ORDER = (
+    CropStage.TILLERING,
+    CropStage.VEGETATIVE,
+    CropStage.FLOWERING,
+    CropStage.RIPENING,
+)
+
+
+@dataclass(frozen=True)
+class StageAdvance:
+    """A rice subscription whose growth stage has advanced since its stored value."""
+
+    subscription: Subscription
+    previous_stage: CropStage | None
+    suggested_stage: CropStage
+    days_since_planting: int
+
+
+def find_stage_advances(
+    subscriptions: list[Subscription],
+    today: date | None = None,
+) -> list[StageAdvance]:
+    """Return rice subscriptions whose stage advanced from their stored `crop_stage`."""
+    ref = today or date.today()
+    advances: list[StageAdvance] = []
+    for sub in subscriptions:
+        if sub.crop_type is not CropType.RICE or sub.planting_date is None:
+            continue
+        suggested = stage_for_planting_date(sub.planting_date, ref)
+        if sub.crop_stage is not None and _STAGE_ORDER.index(suggested) <= _STAGE_ORDER.index(
+            sub.crop_stage
+        ):
+            continue
+        advances.append(
+            StageAdvance(
+                subscription=sub,
+                previous_stage=sub.crop_stage,
+                suggested_stage=suggested,
+                days_since_planting=(ref - sub.planting_date).days,
+            )
+        )
+    return advances
 
 
 async def build_digest(repo: Repository, settings: Settings) -> tuple[str, str]:

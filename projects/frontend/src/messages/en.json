@@ -360,6 +360,7 @@
     "signIn": "Sign in to run the watch officer and approve drafts.",
     "empty": "No watch runs yet.",
     "pending_approval": "Awaiting approval",
+    "publishing": "Publishing…",
     "published": "Published",
     "rejected": "Rejected",
     "failed": "Failed",
@@ -383,6 +384,7 @@
     "publishedAt": "Published {time}",
     "messageId": "message #{id}",
     "rejectedAt": "Rejected {time}",
+    "approvedBy": "by {officer}",
     "errorLabel": "Error",
     "created": "Created {time}",
     "loadFailed": "Could not load watch runs.",
@@ -410,17 +412,26 @@
     "conversationAria": "Conversation with the officer assistant",
     "draftOnly": "Draft-only mode — sign in as an officer to publish to the channel.",
     "signedIn": "Officer · expires {time}",
+    "signedInAs": "{officer} · expires {time}",
     "signOut": "Sign out",
     "clearConversation": "Clear conversation",
     "clearConversationAria": "Clear the conversation and its saved history",
     "signIn": {
       "title": "Officer sign in",
+      "methodAria": "Officer sign-in method",
+      "methodPasscode": "Passcode",
+      "methodAccount": "Officer account",
       "passcode": "Officer passcode",
       "placeholder": "Enter passcode…",
+      "email": "Officer email",
+      "emailPlaceholder": "officer@agency.gov.kh",
+      "password": "Password",
+      "passwordPlaceholder": "Password…",
       "submit": "Sign in",
       "working": "Signing in…",
       "errors": {
         "invalid": "Wrong passcode. Try again.",
+        "invalidCredentials": "Invalid email or password. Try again.",
         "unavailable": "Officer sign-in is not configured on this server yet.",
         "tooMany": "Too many attempts. Wait a minute, then try again."
       }
@@ -503,6 +514,12 @@
     "ADVISORY": "Advisory",
     "WARNING": "Warning",
     "DANGER": "Danger",
-    "lead": "~{hours}h"
+    "lead": "~{hours}h",
+    "forecast": "Forecast: {tier}",
+    "forecastDays": "{days}d forecast: {tier}"
+  },
+  "Offline": {
+    "offlineNotice": "Offline mode — showing saved commune bulletins and cached Khmer audio.",
+    "cachedNotice": "Showing cached offline data — reconnect to refresh live river telemetry."
   }
 }

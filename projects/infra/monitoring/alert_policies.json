@@ -1,0 +1,207 @@
+{
+  "logBasedMetrics": [
+    {
+      "name": "mekongpulse_mrc_station_timeout",
+      "description": "Counts MRC_STATION_TIMEOUT structured log events when upstream MRC polling times out",
+      "filter": "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"mekongpulse-backend\" AND (jsonPayload.event=\"MRC_STATION_TIMEOUT\" OR textPayload:\"MRC_STATION_TIMEOUT\")",
+      "metricDescriptor": {
+        "metricKind": "DELTA",
+        "valueType": "INT64"
+      }
+    },
+    {
+      "name": "mekongpulse_watch_publish_failed",
+      "description": "Counts WATCH_PUBLISH_FAILED events when an approved watch bulletin fails to post to Telegram",
+      "filter": "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"mekongpulse-backend\" AND (jsonPayload.event=\"WATCH_PUBLISH_FAILED\" OR textPayload:\"WATCH_PUBLISH_FAILED\")",
+      "metricDescriptor": {
+        "metricKind": "DELTA",
+        "valueType": "INT64"
+      }
+    },
+    {
+      "name": "mekongpulse_tts_unavailable",
+      "description": "Counts TTS_UNAVAILABLE events when Gemini/Vertex Khmer TTS fails across all models",
+      "filter": "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"mekongpulse-backend\" AND (jsonPayload.event=\"TTS_UNAVAILABLE\" OR textPayload:\"TTS_UNAVAILABLE\")",
+      "metricDescriptor": {
+        "metricKind": "DELTA",
+        "valueType": "INT64"
+      }
+    },
+    {
+      "name": "mekongpulse_telemetry_warning",
+      "description": "Counts TELEMETRY_WARNING events emitted by pre-classification sensor QC (spikes, out-of-range, stuck gauges)",
+      "filter": "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"mekongpulse-backend\" AND (jsonPayload.event=\"TELEMETRY_WARNING\" OR textPayload:\"TELEMETRY_WARNING\")",
+      "metricDescriptor": {
+        "metricKind": "DELTA",
+        "valueType": "INT64"
+      }
+    },
+    {
+      "name": "mekongpulse_gauge_failover",
+      "description": "Counts station failover activations when a primary MRC gauge is unavailable or rejected by QC",
+      "filter": "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"mekongpulse-backend\" AND (jsonPayload.event=\"GAUGE_FAILOVER\" OR jsonPayload.is_stale_fallback=true OR textPayload:\"failover\")",
+      "metricDescriptor": {
+        "metricKind": "DELTA",
+        "valueType": "INT64"
+      }
+    }
+  ],
+  "alertPolicies": [
+    {
+      "displayName": "MekongPulse — MRC Station Polling Timeouts",
+      "combiner": "OR",
+      "documentation": {
+        "content": "Upstream MRC telemetry polling (api.mrcmekong.org) timed out >= 3 times in 15 minutes. Check MRC API availability and verify gauge failover offsets.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [
+        {
+          "displayName": "MRC_STATION_TIMEOUT >= 3 in 15m",
+          "conditionThreshold": {
+            "filter": "metric.type=\"logging.googleapis.com/user/mekongpulse_mrc_station_timeout\" AND resource.type=\"cloud_run_revision\"",
+            "comparison": "COMPARISON_GT",
+            "thresholdValue": 2,
+            "duration": "0s",
+            "aggregations": [
+              {
+                "alignmentPeriod": "900s",
+                "perSeriesAligner": "ALIGN_SUM"
+              }
+            ]
+          }
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "displayName": "MekongPulse — Watch Bulletin Publish Failure",
+      "combiner": "OR",
+      "documentation": {
+        "content": "An approved watch-officer bulletin failed to publish to the Telegram broadcast channel (WATCH_PUBLISH_FAILED). Inspect Telegram bot token, channel permissions, and retry via the watch inbox.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [
+        {
+          "displayName": "WATCH_PUBLISH_FAILED >= 1 in 5m",
+          "conditionThreshold": {
+            "filter": "metric.type=\"logging.googleapis.com/user/mekongpulse_watch_publish_failed\" AND resource.type=\"cloud_run_revision\"",
+            "comparison": "COMPARISON_GT",
+            "thresholdValue": 0,
+            "duration": "0s",
+            "aggregations": [
+              {
+                "alignmentPeriod": "300s",
+                "perSeriesAligner": "ALIGN_SUM"
+              }
+            ]
+          }
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "displayName": "MekongPulse — Khmer TTS Unavailable",
+      "combiner": "OR",
+      "documentation": {
+        "content": "Gemini/Vertex Khmer TTS failed across the model fallback chain (TTS_UNAVAILABLE). Farmers receive text-only bulletins until quota or Vertex AI availability recovers.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [
+        {
+          "displayName": "TTS_UNAVAILABLE >= 3 in 15m",
+          "conditionThreshold": {
+            "filter": "metric.type=\"logging.googleapis.com/user/mekongpulse_tts_unavailable\" AND resource.type=\"cloud_run_revision\"",
+            "comparison": "COMPARISON_GT",
+            "thresholdValue": 2,
+            "duration": "0s",
+            "aggregations": [
+              {
+                "alignmentPeriod": "900s",
+                "perSeriesAligner": "ALIGN_SUM"
+              }
+            ]
+          }
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "displayName": "MekongPulse — Sensor QC TELEMETRY_WARNING Spike",
+      "combiner": "OR",
+      "documentation": {
+        "content": "Elevated rate of pre-classification sensor QC warnings (spikes, out-of-range, or stuck gauge ticks). Verify upstream MRC station sensors.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [
+        {
+          "displayName": "TELEMETRY_WARNING >= 5 in 30m",
+          "conditionThreshold": {
+            "filter": "metric.type=\"logging.googleapis.com/user/mekongpulse_telemetry_warning\" AND resource.type=\"cloud_run_revision\"",
+            "comparison": "COMPARISON_GT",
+            "thresholdValue": 4,
+            "duration": "0s",
+            "aggregations": [
+              {
+                "alignmentPeriod": "1800s",
+                "perSeriesAligner": "ALIGN_SUM"
+              }
+            ]
+          }
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "displayName": "MekongPulse — Sustained Gauge Failover",
+      "combiner": "OR",
+      "documentation": {
+        "content": "One or more stations are relying on adjacent-gauge failover repeatedly over the last hour. Check primary gauge telemetry feed.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [
+        {
+          "displayName": "Gauge failover >= 4 in 1h",
+          "conditionThreshold": {
+            "filter": "metric.type=\"logging.googleapis.com/user/mekongpulse_gauge_failover\" AND resource.type=\"cloud_run_revision\"",
+            "comparison": "COMPARISON_GT",
+            "thresholdValue": 3,
+            "duration": "0s",
+            "aggregations": [
+              {
+                "alignmentPeriod": "3600s",
+                "perSeriesAligner": "ALIGN_SUM"
+              }
+            ]
+          }
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "displayName": "MekongPulse — Cloud Run p95 HTTP Latency SLO Breach",
+      "combiner": "OR",
+      "documentation": {
+        "content": "Cloud Run backend p95 request latency exceeded 2500 ms for 10 consecutive minutes. Inspect Cloud Trace spans for slow MRC, Vertex AI, or database queries.",
+        "mimeType": "text/markdown"
+      },
+      "conditions": [
+        {
+          "displayName": "p95 request latency > 2500ms for 10m",
+          "conditionThreshold": {
+            "filter": "metric.type=\"run.googleapis.com/request_latencies\" AND resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"mekongpulse-backend\"",
+            "comparison": "COMPARISON_GT",
+            "thresholdValue": 2500,
+            "duration": "600s",
+            "aggregations": [
+              {
+                "alignmentPeriod": "300s",
+                "perSeriesAligner": "ALIGN_PERCENTILE_95"
+              }
+            ]
+          }
+        }
+      ],
+      "enabled": true
+    }
+  ]
+}

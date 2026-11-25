@@ -139,3 +139,69 @@ async def test_tts_without_key_raises_unavailable(tmp_path):
     tts = GeminiTTS(settings)
     with pytest.raises(TTSUnavailable):
         await tts.synthesize("សូមសុវត្ថិភាព")
+
+
+async def test_tts_rotates_to_fallback_model_on_quota(tmp_path):
+    """IMP-06: GeminiTTS routes through ModelRotator (gemini_tts_model_chain)."""
+    wav = sine_wav(0.3)
+
+    class _RotatingTTSModels:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def generate_content(self, *, model, contents, config):
+            self.calls.append(model)
+            if model == "unit-tts-primary":
+                raise RuntimeError("429 RESOURCE_EXHAUSTED")
+            part = SimpleNamespace(inline_data=SimpleNamespace(data=wav))
+            return SimpleNamespace(
+                candidates=[SimpleNamespace(content=SimpleNamespace(parts=[part]))]
+            )
+
+    settings = Settings(
+        _env_file=None,
+        environment="development",
+        data_dir=tmp_path,
+        audio_dir=tmp_path / "audio",
+        gemini_api_key="test-key",
+        use_vertex_ai=False,
+        gemini_tts_model="unit-tts-primary",
+        gemini_tts_fallback_models="unit-tts-fallback",
+    )
+    tts = GeminiTTS(settings)
+    models = _RotatingTTSModels()
+    tts._client = SimpleNamespace(models=models)  # type: ignore[assignment]
+
+    artifact = await tts.synthesize("សារព្រមានទឹកជំនន់")
+    assert artifact.mime_type == "audio/mpeg"
+    assert models.calls == ["unit-tts-primary", "unit-tts-fallback"]
+
+
+def test_tts_vertex_ai_uses_adc_without_api_key(tmp_path, monkeypatch):
+    """IMP-06: Vertex AI uses native ADC / Workload Identity with zero static key."""
+    import google.genai as genai
+
+    captured: dict = {}
+
+    def fake_client(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(models=None)
+
+    monkeypatch.setattr(genai, "Client", fake_client)
+    settings = Settings(
+        _env_file=None,
+        environment="production",
+        data_dir=tmp_path,
+        audio_dir=tmp_path / "audio",
+        gemini_api_key=None,
+        use_vertex_ai=True,
+        vertex_project="ai-builder-cup-9f8cd",
+        vertex_location="asia-southeast1",
+    )
+    tts = GeminiTTS(settings)
+    tts._get_client()
+    assert captured == {
+        "vertexai": True,
+        "project": "ai-builder-cup-9f8cd",
+        "location": "asia-southeast1",
+    }

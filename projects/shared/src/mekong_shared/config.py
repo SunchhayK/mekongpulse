@@ -29,12 +29,28 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:postgres@localhost:5432/mekongpulse"
     repository_backend: str | None = None  # postgres | firestore | memory (None = auto)
     firestore_project: str | None = None
+    redis_url: str | None = None
     gcs_bucket: str | None = None
     gcs_public_base: str | None = None  # e.g. https://storage.googleapis.com/<bucket>
+    audio_cdn_base_url: str | None = None
+    audio_cache_control: str = "public, max-age=31536000, immutable"
+
+    # --- queues & analytics & tracing ------------------------------------
+    cloud_tasks_queue: str | None = None
+    cloud_tasks_dispatch_queue: str | None = None
+    cloud_tasks_location: str | None = None
+    cloud_tasks_project: str | None = None
+    cloud_tasks_service_account: str | None = None
+    bigquery_project: str | None = None
+    bigquery_dataset: str | None = None
+    otel_exporter_otlp_endpoint: str | None = None
+    enable_cloud_trace: bool = False
 
     # --- external telemetry ----------------------------------------------
     mrc_base_url: str = "https://api.mrcmekong.org/api/v1"
     open_meteo_base_url: str = "https://api.open-meteo.com/v1"
+    flood_hub_api_key: str | None = None
+    flood_hub_base_url: str = "https://floodforecasting.googleapis.com/v1"
     http_timeout_seconds: float = 10.0
     weather_refresh_minutes: int = 60  # forecasts update hourly; syncs run every 15 min
 
@@ -49,6 +65,7 @@ class Settings(BaseSettings):
     # Comma-separated ordered fallbacks; quotas are per model per day.
     gemini_fallback_models: str = "gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash-lite"
     gemini_tts_model: str = "gemini-3.8-flash-lite-tts"
+    gemini_tts_fallback_models: str = "gemini-3.7-flash-tts"
     use_vertex_ai: bool = False
     vertex_project: str | None = None
     vertex_location: str = "asia-southeast1"
@@ -62,6 +79,11 @@ class Settings(BaseSettings):
     admin_token: str | None = None  # Bearer token for scheduler/admin endpoints
     officer_passcode: str | None = None  # browser sign-in passcode (env OFFICER_PASSCODE)
     officer_session_ttl_hours: int = 12  # signed officer session lifetime
+    firebase_project_id: str | None = None
+    oidc_audience: str | None = None
+    scheduler_service_account_email: str | None = None
+    field_report_rate_limit_per_min: int = 5
+    advisor_rate_limit_per_min: int = 20
     cors_origins: str = "*"  # comma-separated; restricted in production
     log_salt: str = "mekongpulse-dev-salt"  # SHA-256 salt for GPS / id anonymization
     public_base_url: str = "http://localhost:8080"  # audio URLs etc.
@@ -79,6 +101,8 @@ class Settings(BaseSettings):
 
     @property
     def use_firestore(self) -> bool:
+        if self.repository_backend:
+            return self.repository_backend == "firestore"
         return self.is_production
 
     @property
@@ -93,6 +117,12 @@ class Settings(BaseSettings):
     def gemini_model_chain(self) -> list[str]:
         """Primary text model followed by configured fallbacks, deduplicated."""
         names = [self.gemini_text_model, *self.gemini_fallback_models.split(",")]
+        return list(dict.fromkeys(name.strip() for name in names if name and name.strip()))
+
+    @property
+    def gemini_tts_model_chain(self) -> list[str]:
+        """Primary TTS model followed by configured fallbacks, deduplicated."""
+        names = [self.gemini_tts_model, *self.gemini_tts_fallback_models.split(",")]
         return list(dict.fromkeys(name.strip() for name in names if name and name.strip()))
 
     @property

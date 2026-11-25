@@ -21,7 +21,7 @@ from support import healthy_handlers
 COMMUNE = "030502"  # Kampong Cham town, station 019802, 0.47 km
 STATION = "019802"
 FAR_COMMUNE = "030208"  # Ta Prok, 50.2 km from station 019802
-CHAKTOMUK_COMMUNE = "031402"  # Chi Bal, station 033401, 27.4 km
+CHAKTOMUK_COMMUNE = "031407"  # Pram Yam, station 033401, 36.32 km
 
 STATION_META = {
     "019802": {"name": "Kompong Cham", "river": "Mekong", "alarm": 15.2, "flood": 16.2},

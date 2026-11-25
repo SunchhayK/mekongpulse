@@ -1,12 +1,36 @@
 {
-  "version": "1.0.0",
-  "verified_at": "2026-10-17",
+  "version": "1.1.0",
+  "verified_at": "2026-11-25",
   "sources": {
-    "levels_and_stages": "MRC telemetry API (api.mrcmekong.org) live station metadata, verified 2026-10-17",
+    "levels_and_stages": "MRC telemetry API (api.mrcmekong.org) & MRC Regional Flood Management and Mitigation Centre bulletin (ffw.mrcmekong.org)",
     "zero_gauge": "MRC Regional Flood Management and Mitigation Centre bulletin (ffw.mrcmekong.org)"
   },
-  "notes": "Station IDs corrected from the technical report v1.1.0: 019803 is Tan Chau (VN) and 019806 is Neak Luong in the live MRC API. Koh Khel is 033402 and Kompong Cham is 019802. fallback_id names the adjacent station used by the failover model; hydraulic offsets are computed empirically from paired 30-day series at sync time, never hardcoded.",
+  "notes": "Expanded from 4 to 9 live Cambodian MRC gauges (IMP-04): Stung Treng (014501), Kratie (014901), Kompong Cham (019802), Neak Luong (019806), Phnom Penh Port (020101), Prek Kdam (020102), Kampong Luong (020106), Chaktomuk (033401), Koh Khel (033402). fallback_id names the adjacent station used by the failover model; hydraulic offsets are computed empirically from paired 30-day series at sync time, never hardcoded.",
   "stations": [
+    {
+      "id": "014501",
+      "name_en": "Stung Treng",
+      "name_kh": "ស្ទឹងត្រែង",
+      "river": "Mekong",
+      "lat": 13.5333,
+      "lng": 105.95,
+      "alarm_stage_m": 10.7,
+      "flood_stage_m": 12.0,
+      "zero_gauge_elevation_m": 36.79,
+      "fallback_id": "014901"
+    },
+    {
+      "id": "014901",
+      "name_en": "Kratie",
+      "name_kh": "ក្រចេះ",
+      "river": "Mekong",
+      "lat": 12.481,
+      "lng": 106.017,
+      "alarm_stage_m": 22.0,
+      "flood_stage_m": 23.0,
+      "zero_gauge_elevation_m": -1.08,
+      "fallback_id": "019802"
+    },
     {
       "id": "019802",
       "name_en": "Kompong Cham",
@@ -20,9 +44,33 @@
       "fallback_id": "033401"
     },
     {
+      "id": "019806",
+      "name_en": "Neak Luong",
+      "name_kh": "អ្នកលឿង",
+      "river": "Mekong",
+      "lat": 11.2583,
+      "lng": 105.2833,
+      "alarm_stage_m": 7.5,
+      "flood_stage_m": 8.0,
+      "zero_gauge_elevation_m": -0.33,
+      "fallback_id": "033401"
+    },
+    {
+      "id": "020101",
+      "name_en": "Phnom Penh Port",
+      "name_kh": "កំពង់ផែភ្នំពេញ",
+      "river": "Tonlesap",
+      "lat": 11.575,
+      "lng": 104.923,
+      "alarm_stage_m": 9.5,
+      "flood_stage_m": 11.0,
+      "zero_gauge_elevation_m": -1.02,
+      "fallback_id": "033401"
+    },
+    {
       "id": "020102",
       "name_en": "Prek Kdam",
-      "name_kh": null,
+      "name_kh": "ព្រែកក្ដាម",
       "river": "Tonlesap",
       "lat": 11.81117,
       "lng": 104.80678,
@@ -30,6 +78,18 @@
       "flood_stage_m": 10.0,
       "zero_gauge_elevation_m": 0.08,
       "fallback_id": "033401"
+    },
+    {
+      "id": "020106",
+      "name_en": "Kampong Luong",
+      "name_kh": "កំពង់លួង",
+      "river": "Tonlesap",
+      "lat": 12.576,
+      "lng": 104.212,
+      "alarm_stage_m": 8.5,
+      "flood_stage_m": 9.5,
+      "zero_gauge_elevation_m": null,
+      "fallback_id": "020102"
     },
     {
       "id": "033401",
@@ -46,7 +106,7 @@
     {
       "id": "033402",
       "name_en": "Koh Khel",
-      "name_kh": null,
+      "name_kh": "កោះខែល",
       "river": "Bassac",
       "lat": 11.242035,
       "lng": 105.036156,

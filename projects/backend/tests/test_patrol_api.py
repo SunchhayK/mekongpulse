@@ -14,7 +14,7 @@ async def test_patrol_run_baseline(client, repo):
     response = await client.post("/api/v1/patrol/run")
     assert response.status_code == 200
     body = response.json()
-    assert body["run"]["stations_polled"] == 4
+    assert body["run"]["stations_polled"] == 9
     assert body["run"]["communes_evaluated"] > 1000
     assert body["run"]["alerts_dispatched_count"] == len(body["alerts"])
     assert body["run"]["id"] == 1

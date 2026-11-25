@@ -87,6 +87,7 @@ function CommuneSkeleton() {
 function CommuneView() {
   const t = useTranslations("Commune");
   const evidenceT = useTranslations("Evidence");
+  const tierT = useTranslations("Tier");
   const locale = useLocale();
   const searchParams = useSearchParams();
   const code = searchParams.get("code")?.trim() ?? "";
@@ -197,6 +198,8 @@ function CommuneView() {
   const nameKh = assessment?.commune_name_kh ?? evidence?.commune_name_kh ?? "";
   const nameEn = assessment?.commune_name_en ?? evidence?.commune_name_en ?? code;
   const tier = assessment?.risk_tier ?? evidence?.risk_tier ?? null;
+  const forecastTier = assessment?.forecast_tier ?? evidence?.forecast_tier ?? null;
+  const forecastLeadDays = assessment?.forecast_lead_days ?? evidence?.forecast_lead_days ?? null;
 
   async function share() {
     const url = window.location.href;
@@ -294,6 +297,13 @@ function CommuneView() {
 
               <div className="commune-facts">
                 {tier && <RiskBadge tier={tier} leadTimeHours={assessment?.lead_time_hours ?? undefined} size="large" />}
+                {forecastTier && (
+                  <span className="forecast-badge label-medium" data-tier={forecastTier}>
+                    {forecastLeadDays != null
+                      ? tierT("forecastDays", { days: forecastLeadDays, tier: tierT(forecastTier) })
+                      : tierT("forecast", { tier: tierT(forecastTier) })}
+                  </span>
+                )}
                 {assessment?.estimated && <span className="status-pill label-medium">{t("estimated")}</span>}
               </div>
 

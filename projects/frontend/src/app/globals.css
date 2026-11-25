@@ -1835,3 +1835,71 @@ button.station-card[aria-pressed="true"] {
   .watch-action { flex-direction: column; align-items: stretch; }
   .watch-run-btn { width: 100%; align-self: stretch; }
 }
+
+/* --- Offline banner, forecast badges & officer auth tabs ------------------ */
+.offline-banner {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--tier-advisory) 14%, var(--paper));
+  border-bottom: 1px solid color-mix(in srgb, var(--tier-advisory) 36%, var(--paper));
+  color: var(--tier-advisory-ink);
+  text-align: center;
+}
+.offline-banner-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--tier-advisory);
+  flex: 0 0 auto;
+}
+
+.forecast-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--line-strong);
+  background: var(--mist);
+  color: var(--navy-deep);
+  white-space: nowrap;
+}
+.forecast-badge[data-tier="DANGER"] {
+  border-color: color-mix(in srgb, var(--tier-danger) 36%, var(--paper));
+  background: color-mix(in srgb, var(--tier-danger) 10%, var(--paper));
+  color: var(--tier-danger-ink);
+}
+.forecast-badge[data-tier="WARNING"] {
+  border-color: color-mix(in srgb, var(--tier-warning) 36%, var(--paper));
+  background: color-mix(in srgb, var(--tier-warning) 10%, var(--paper));
+  color: var(--tier-warning-ink);
+}
+.forecast-badge[data-tier="ADVISORY"] {
+  border-color: color-mix(in srgb, var(--tier-advisory) 36%, var(--paper));
+  background: color-mix(in srgb, var(--tier-advisory) 10%, var(--paper));
+  color: var(--tier-advisory-ink);
+}
+
+.assistant-signin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.assistant-signin-tabs {
+  display: inline-flex;
+  gap: 6px;
+}
+.assistant-signin-tabs .chip[aria-selected="true"] {
+  border-color: var(--navy);
+  background: var(--navy);
+  color: #ffffff;
+}

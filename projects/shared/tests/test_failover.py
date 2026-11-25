@@ -13,7 +13,7 @@ import pytest
 from mekong_shared.models import StationSnapshot
 from mekong_shared.stations import load_stations
 
-from support import mrc_payload
+from support import healthy_handlers, mrc_payload
 
 
 async def test_failover_to_adjacent_station_with_empirical_offset(repo, stations, make_pipeline):
@@ -89,14 +89,29 @@ async def test_sync_runs_with_one_station_down(repo, make_pipeline, settings):
     """A full sync with one dead station still evaluates the other corridors."""
     stations = load_stations(str(settings.data_dir))
     await repo.seed_stations(list(stations.values()))
-    handlers = {
-        "019802": 500,
-        "020102": mrc_payload("020102", level=6.5),
-        "033401": mrc_payload("033401", level=7.8),
-        "033402": mrc_payload("033402", level=5.2),
-    }
+    handlers: dict[str, dict | int] = {**healthy_handlers(), "019802": 500}
     pipeline = make_pipeline(repo, handlers)
     summary, _ = await pipeline.sync()
-    assert summary.stations_polled == 3
+    assert summary.stations_polled == len(stations) - 1
     assert "019802" in summary.stations_failed
     assert summary.communes_evaluated > 1000
+
+
+async def test_qc_spike_triggers_failover_to_adjacent_station(repo, stations, make_pipeline):
+    """BUG-10 / IMP-05: a rejected spike falls back to the adjacent station with offset."""
+    await repo.save_failover_offset("020102", "033401", -0.25)
+    bad = mrc_payload("020102", level=6.5)
+    bad["measurements"][-1]["w"] = 7.8  # +1.3m 15-min spike -> QC_SPIKE_REJECTED
+    handlers = {
+        "020102": bad,
+        "033401": mrc_payload("033401", level=9.25),
+    }
+    pipeline = make_pipeline(repo, handlers)
+    snapshot, warnings = await pipeline.poll_station(stations["020102"], stations)
+
+    assert snapshot is not None
+    assert snapshot.source == "fallback"
+    assert snapshot.level_m == pytest.approx(9.0, abs=1e-6)
+    kinds = [w.kind for w in warnings]
+    assert "QC_SPIKE_REJECTED" in kinds
+    assert "FALLBACK_USED" in kinds

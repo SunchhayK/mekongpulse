@@ -22,8 +22,9 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from .adk_tools import FUNCTION_DECLARATIONS, AdvisorTools
+from .cache import StateStore
 from .config import Settings
-from .model_rotation import rotator_for
+from .model_rotation import create_genai_client, rotator_for
 from .models import ConversationTurn
 
 log = logging.getLogger("mekongpulse.advisor")
@@ -132,57 +133,56 @@ class ScriptedLLM:
 class GeminiFunctionCaller:
     """google-genai function-calling step (sync SDK wrapped in a thread)."""
 
-    def __init__(self, settings: Settings, client=None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        client=None,
+        *,
+        state_store: StateStore | None = None,
+    ) -> None:
         self._settings = settings
         self._client = client
+        self._state_store = state_store
 
     async def step(self, contents: list[dict]) -> StepResult:
         if not self._settings.has_gemini:
             raise AdvisorUnavailable("GEMINI_API_KEY / Vertex configuration is missing")
 
-        rotator = rotator_for(self._settings.gemini_model_chain)
+        rotator = rotator_for(
+            self._settings.gemini_model_chain,
+            state_store=self._state_store,
+        )
+        if self._client is None:
+            self._client = create_genai_client(self._settings)
 
-        def _run() -> StepResult:
-            from google import genai
-
-            if self._client is None:
-                if self._settings.use_vertex_ai:
-                    self._client = genai.Client(
-                        vertexai=True,
-                        project=self._settings.vertex_project,
-                        location=self._settings.vertex_location,
-                    )
-                else:
-                    self._client = genai.Client(api_key=self._settings.gemini_api_key)
-            config = {
-                "temperature": 0.3,
-                "system_instruction": ADVISOR_INSTRUCTION,
-                "tools": [{"function_declarations": FUNCTION_DECLARATIONS}],
-            }
-            last_error: BaseException | None = None
-            for model in rotator.ordered():
-                try:
-                    response = self._client.models.generate_content(
-                        model=model,
-                        contents=contents,
-                        config=config,
-                    )
-                except Exception as exc:  # noqa: BLE001 - provider failure, rotate
-                    if not rotator.should_rotate(exc):
-                        raise
-                    log.warning(
-                        "Model %s failed (%s); trying the next fallback",
-                        model,
-                        type(exc).__name__,
-                    )
-                    rotator.mark_failed(model, exc)
-                    last_error = exc
-                    continue
-                rotator.mark_ok(model)
-                return _step_from_response(response)
-            raise last_error or AdvisorUnavailable("No Gemini model configured")
-
-        return await asyncio.to_thread(_run)
+        config = {
+            "temperature": 0.3,
+            "system_instruction": ADVISOR_INSTRUCTION,
+            "tools": [{"function_declarations": FUNCTION_DECLARATIONS}],
+        }
+        last_error: BaseException | None = None
+        for model in await rotator.ordered_async():
+            try:
+                response = await asyncio.to_thread(
+                    self._client.models.generate_content,
+                    model=model,
+                    contents=contents,
+                    config=config,
+                )
+            except Exception as exc:  # noqa: BLE001 - provider failure, rotate
+                if not rotator.should_rotate(exc):
+                    raise
+                log.warning(
+                    "Model %s failed (%s); trying the next fallback",
+                    model,
+                    type(exc).__name__,
+                )
+                await rotator.mark_failed_async(model, exc)
+                last_error = exc
+                continue
+            await rotator.mark_ok_async(model)
+            return _step_from_response(response)
+        raise last_error or AdvisorUnavailable("No Gemini model configured")
 
 
 def _step_from_response(response) -> StepResult:
@@ -370,7 +370,7 @@ def _rotating_llm_class():
         async def generate_content_async(self, llm_request, stream: bool = False):
             rotator = rotator_for(self.models)
             last_error: BaseException | None = None
-            for model in rotator.ordered():
+            for model in await rotator.ordered_async():
                 produced = False
                 try:
                     llm = _adk_llm(model)
@@ -388,10 +388,10 @@ def _rotating_llm_class():
                         model,
                         type(exc).__name__,
                     )
-                    rotator.mark_failed(model, exc)
+                    await rotator.mark_failed_async(model, exc)
                     last_error = exc
                     continue
-                rotator.mark_ok(model)
+                await rotator.mark_ok_async(model)
                 return
             if last_error is not None:
                 raise last_error

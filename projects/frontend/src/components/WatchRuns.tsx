@@ -24,6 +24,7 @@ interface WatchRunsProps {
 
 const STATUS_CLASS: Record<AgentRunStatus, string> = {
   pending_approval: "watch-status--pending",
+  publishing: "watch-status--pending",
   published: "watch-status--published",
   rejected: "watch-status--rejected",
   failed: "watch-status--failed",
@@ -380,6 +381,9 @@ export function WatchRuns({
                         : null}
                       {run.status === "rejected" && run.rejected_at
                         ? t("rejectedAt", { time: formatTime(run.rejected_at) })
+                        : null}
+                      {run.approved_by
+                        ? ` · ${t("approvedBy", { officer: run.approved_by })}`
                         : null}
                     </p>
                   )}

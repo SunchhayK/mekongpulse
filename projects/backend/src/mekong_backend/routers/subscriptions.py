@@ -2,19 +2,29 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from datetime import date
+
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
-from mekong_shared.models import CropStage, Subscription
+from mekong_shared.models import CropStage, CropType, Subscription
 from mekong_shared.pipeline import CommuneNotFound
 
-router = APIRouter(prefix="/api/v1/subscriptions", tags=["subscriptions"])
+from ..deps import require_admin
+
+router = APIRouter(
+    prefix="/api/v1/subscriptions",
+    tags=["subscriptions"],
+    dependencies=[Depends(require_admin)],
+)
 
 
 class SubscriptionRequest(BaseModel):
     chat_id: str
     commune_code: str
     crop_stage: CropStage | None = None
+    crop_type: CropType = CropType.RICE
+    planting_date: date | None = None
 
 
 @router.get("")
@@ -30,7 +40,11 @@ async def create_subscription(body: SubscriptionRequest, request: Request) -> Su
     if commune is None:
         raise CommuneNotFound(body.commune_code)
     return await repo.upsert_subscription(
-        body.chat_id, body.commune_code, body.crop_stage.value if body.crop_stage else None
+        body.chat_id,
+        body.commune_code,
+        body.crop_stage.value if body.crop_stage else None,
+        crop_type=body.crop_type.value,
+        planting_date=body.planting_date,
     )
 
 

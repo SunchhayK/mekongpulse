@@ -7,7 +7,7 @@ ENVIRONMENT in the factory below, so no application code branches on it.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Protocol
 
 from .config import Settings
@@ -15,6 +15,7 @@ from .models import (
     AgentRun,
     AudioRef,
     Commune,
+    CommuneCalibration,
     CommuneRisk,
     ConversationTurn,
     FieldReport,
@@ -61,11 +62,17 @@ class Repository(Protocol):
 
     # --- subscriptions -------------------------------------------------------
     async def upsert_subscription(
-        self, chat_id: str, commune_id: str, crop_stage: str | None
+        self,
+        chat_id: str,
+        commune_id: str,
+        crop_stage: str | None,
+        crop_type: str = "RICE",
+        planting_date: date | None = None,
     ) -> Subscription: ...
     async def remove_subscription(self, chat_id: str, commune_id: str) -> bool: ...
     async def subscriptions_for_commune(self, commune_id: str) -> list[Subscription]: ...
     async def subscriptions_for_chat(self, chat_id: str) -> list[Subscription]: ...
+    async def list_all_subscriptions(self) -> list[Subscription]: ...
     async def touch_notified(
         self, chat_id: str, commune_id: str, tier: RiskTier, at: datetime
     ) -> None: ...
@@ -100,10 +107,15 @@ class Repository(Protocol):
     # --- watch runs ------------------------------------------------------------
     async def add_agent_run(self, run: AgentRun) -> AgentRun: ...
     async def update_agent_run(self, run: AgentRun) -> None: ...
+    async def claim_agent_run_for_publish(self, run_id: str) -> AgentRun | None: ...
     async def get_agent_run(self, run_id: str) -> AgentRun | None: ...
     async def list_agent_runs(
         self, *, status: str | None = None, limit: int = 20
     ) -> list[AgentRun]: ...
+
+    # --- calibration -----------------------------------------------------------
+    async def save_commune_calibration(self, cal: CommuneCalibration) -> None: ...
+    async def list_commune_calibrations(self) -> dict[str, CommuneCalibration]: ...
 
 
 class AudioStoreProtocol(Protocol):
@@ -121,7 +133,10 @@ def create_repository(settings: Settings) -> Repository:
     if backend == "firestore":
         from .firestore_repo import FirestoreRepository
 
-        return FirestoreRepository(project=settings.firestore_project or settings.vertex_project)
+        return FirestoreRepository(
+            project=settings.firestore_project or settings.vertex_project,
+            data_dir=settings.data_dir,
+        )
     from .postgres_repo import PostgresRepository
 
     return PostgresRepository(settings.database_url)
@@ -131,7 +146,12 @@ def create_audio_store(settings: Settings) -> AudioStoreProtocol:
     if settings.is_production:
         from .audio_store import GCSAudioStore
 
-        return GCSAudioStore(settings.gcs_bucket, settings.gcs_public_base)
+        return GCSAudioStore(
+            settings.gcs_bucket,
+            settings.gcs_public_base,
+            cdn_base_url=settings.audio_cdn_base_url,
+            cache_control=settings.audio_cache_control,
+        )
     from .audio_store import LocalAudioStore
 
     return LocalAudioStore(settings.audio_dir, settings.public_base_url)

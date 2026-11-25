@@ -10,8 +10,13 @@ import httpx
 BASE_TIME = datetime(2026, 10, 16, 12, 0, 0, tzinfo=timezone.utc)
 
 STATION_META: dict[str, dict] = {
+    "014501": {"name": "Stung Treng", "river": "Mekong", "alarm": 10.7, "flood": 12.0},
+    "014901": {"name": "Kratie", "river": "Mekong", "alarm": 22.0, "flood": 23.0},
     "019802": {"name": "Kompong Cham", "river": "Mekong", "alarm": 15.2, "flood": 16.2},
+    "019806": {"name": "Neak Luong", "river": "Mekong", "alarm": 7.5, "flood": 8.0},
+    "020101": {"name": "Phnom Penh Port", "river": "Tonlesap", "alarm": 9.5, "flood": 11.0},
     "020102": {"name": "Prek Kdam", "river": "Tonlesap", "alarm": 9.5, "flood": 10.0},
+    "020106": {"name": "Kampong Luong", "river": "Tonlesap", "alarm": 8.5, "flood": 9.5},
     "033401": {"name": "Chaktomuk", "river": "Bassac", "alarm": 10.5, "flood": 12.0},
     "033402": {"name": "Koh Khel", "river": "Bassac", "alarm": 7.9, "flood": 8.4},
 }
@@ -87,7 +92,17 @@ def healthy_handlers(
     levels: dict[str, float] | None = None,
     rates: dict[str, float] | None = None,
 ) -> dict[str, dict]:
-    default_levels = {"019802": 12.5, "020102": 6.5, "033401": 7.8, "033402": 5.2}
+    default_levels = {
+        "014501": 7.0,
+        "014901": 16.0,
+        "019802": 12.5,
+        "019806": 5.0,
+        "020101": 6.5,
+        "020102": 6.5,
+        "020106": 5.5,
+        "033401": 7.8,
+        "033402": 5.2,
+    }
     merged = {**default_levels, **(levels or {})}
     return {
         sid: mrc_payload(sid, level=level, rate_m_per_hr=(rates or {}).get(sid, 0.0))

@@ -180,3 +180,37 @@ async def test_watch_callback_rejects_non_officer(settings, pipeline, repo):
     assert "not enabled" in denied.text.lower()
     run = await repo.get_agent_run(run_id)
     assert run is not None and run.status.value == "pending_approval"
+
+
+async def test_watch_by_commune_name_and_disambiguation(settings, pipeline, repo):
+    """BUG-09: `/watch <commune name>` searches gazetteer and disambiguates multi-matches."""
+    await _seed_risk(repo)
+    settings = settings.model_copy(update={"officer_telegram_ids": "123"})
+    service = BotService(
+        settings,
+        pipeline,
+        repo,
+        llm=ScriptedLLM([StepResult(text="Review the warning draft.")]),
+    )
+
+    # 0 matches -> not found
+    missing = await service.watch("123", "NoSuchCommuneXYZ")
+    assert "Could not find" in missing.text
+
+    # Multiple matches ("Koh Thom") -> inline disambiguation buttons with watch_pick:<code>
+    multi = await service.watch("123", "Koh Thom")
+    assert multi.buttons is not None
+    cb_data = [row[0][1] for row in multi.buttons]
+    assert len(cb_data) >= 2
+    assert all(item.startswith("watch_pick:") for item in cb_data)
+
+    # Tapping watch_pick:<code> runs watch for that commune
+    picked = await service.callback("123", f"watch_pick:{COMMUNE}")
+    assert picked.edit is True
+    assert picked.buttons is not None
+    assert picked.buttons[0][0][1].startswith("watch:approve:")
+
+    # Single match by name ("Batheay" or exact unique name) -> runs watch or disambiguates cleanly
+    batheay = await service.watch("123", "Batheay")
+    assert "Could not find" not in batheay.text
+    assert batheay.buttons is not None

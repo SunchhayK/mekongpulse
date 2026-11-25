@@ -132,6 +132,16 @@ export function RiskList({ rows, onSelect }: RiskListProps) {
                         />
                         {tierT(row.tier)}
                       </span>
+                      {row.forecast_tier && (
+                        <span className="forecast-badge label-small" data-tier={row.forecast_tier}>
+                          {row.forecast_lead_days != null
+                            ? tierT("forecastDays", {
+                                days: row.forecast_lead_days,
+                                tier: tierT(row.forecast_tier),
+                              })
+                            : tierT("forecast", { tier: tierT(row.forecast_tier) })}
+                        </span>
+                      )}
                     </td>
                     <td className="muted">
                       {row.lead_time_hours != null ? tierT("lead", { hours: row.lead_time_hours }) : "—"}

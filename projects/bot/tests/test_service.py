@@ -346,3 +346,35 @@ async def test_digest_with_real_shared_builder_when_available(service):
 
     assert "MekongPulse" in reply.text
     assert "unavailable" not in reply.text
+
+
+async def test_subscribe_crop_type_planting_date_and_stage_confirm(service, repo):
+    from datetime import date
+    from mekong_shared.models import CropType
+
+    # Subscribe with VEGETABLES crop type
+    veg = await service.subscribe("1", f"{COMMUNE} VEGETABLES")
+    assert "✅" in veg.text
+    assert repo.subscriptions[("1", COMMUNE)].crop_type is CropType.VEGETABLES
+
+    # Switch to LIVESTOCK via callback
+    live = await service.callback("1", f"croptype:{COMMUNE}:LIVESTOCK")
+    assert "✅" in live.text
+    assert repo.subscriptions[("1", COMMUNE)].crop_type is CropType.LIVESTOCK
+
+    # Subscribe with RICE + planting_date
+    planted = date(2026, 7, 1)
+    rice = await service.subscribe("2", f"{COMMUNE} RICE {planted.isoformat()}")
+    assert "✅" in rice.text
+    assert planted.isoformat() in rice.text
+    sub = repo.subscriptions[("2", COMMUNE)]
+    assert sub.crop_type is CropType.RICE
+    assert sub.planting_date == planted
+
+    # One-tap stage advancement confirmation callback preserves planting_date
+    confirmed = await service.callback("2", f"stage_confirm:{COMMUNE}:FLOWERING")
+    assert confirmed.edit is True
+    assert "FLOWERING" in confirmed.text or "Flowering" in confirmed.text
+    updated = repo.subscriptions[("2", COMMUNE)]
+    assert updated.crop_stage == CropStage.FLOWERING
+    assert updated.planting_date == planted

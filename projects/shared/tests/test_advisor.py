@@ -56,10 +56,10 @@ async def advisor_tools(repo, settings, make_pipeline, gazetteer):
     stations = load_stations(str(settings.data_dir))
     await repo.seed_stations(list(stations.values()))
     # Warning-level readings everywhere so tier is deterministic for any commune.
-    await repo.save_observation(_snapshot("019802", 15.5, 15.2, 16.2))
-    await repo.save_observation(_snapshot("020102", 9.6, 9.5, 10.0))
-    await repo.save_observation(_snapshot("033401", 10.6, 10.5, 12.0))
-    await repo.save_observation(_snapshot("033402", 8.0, 7.9, 8.4))
+    for cfg in stations.values():
+        await repo.save_observation(
+            _snapshot(cfg.id, cfg.alarm_stage_m + 0.3, cfg.alarm_stage_m, cfg.flood_stage_m)
+        )
     commune = gazetteer.get(COMMUNE)
     await repo.save_weather(
         WeatherSnapshot(

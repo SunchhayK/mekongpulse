@@ -15,7 +15,7 @@ async def test_latest_empty_until_sync_then_populated(client):
     response = await client.post("/api/v1/telemetry/sync")
     assert response.status_code == 200
     body = response.json()
-    assert body["stations_polled"] == 4
+    assert body["stations_polled"] == 9
     assert body["stations_failed"] == []
     assert body["communes_evaluated"] > 1000
     assert sum(body["risk_counts"].values()) == body["communes_evaluated"]
@@ -24,7 +24,10 @@ async def test_latest_empty_until_sync_then_populated(client):
 
     latest = (await client.get("/api/v1/telemetry/latest")).json()
     by_id = {s["station_id"]: s for s in latest}
-    assert set(by_id) == {"019802", "020102", "033401", "033402"}
+    assert set(by_id) == {
+        "014501", "014901", "019802", "019806",
+        "020101", "020102", "020106", "033401", "033402",
+    }
     assert by_id["019802"]["level_m"] == 12.5
     assert by_id["019802"]["is_stale_fallback"] is False
     assert by_id["019802"]["source"] == "live"
@@ -38,11 +41,14 @@ async def test_sync_degrades_gracefully_with_dead_station(repo, make_pipeline, m
     async with running_client(app) as client:
         body = (await client.post("/api/v1/telemetry/sync")).json()
         assert body["stations_failed"] == ["019802"]
-        assert body["stations_polled"] == 3
+        assert body["stations_polled"] == 8
         kinds = {w["kind"] for w in body["warnings"] if w["station_id"] == "019802"}
         assert kinds == {"STATION_UNAVAILABLE", "STATION_DROPPED"}
         latest = (await client.get("/api/v1/telemetry/latest")).json()
-        assert {s["station_id"] for s in latest} == {"020102", "033401", "033402"}
+        assert {s["station_id"] for s in latest} == {
+            "014501", "014901", "019806",
+            "020101", "020102", "020106", "033401", "033402",
+        }
 
 
 async def test_hydrograph_returns_series(client, repo):

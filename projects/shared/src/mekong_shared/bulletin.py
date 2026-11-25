@@ -1,18 +1,31 @@
-"""Bilingual bulletin composition (FR-05).
+"""Bilingual bulletin composition (FR-05, BUG-11, IMP-01, IMP-06).
 
 Deterministic Khmer/English templates always work offline; when a Gemini text
-key is configured the Khmer bulletin is additionally polished by
-`gemini_text_model` under hard "no new facts" constraints. The template output
-is the fallback and the source of truth for tests.
+key or Vertex AI ADC is configured the Khmer bulletin is additionally polished
+through `ModelRotator` under hard "no new facts" constraints. The template
+output is the fallback and the source of truth for tests.
 """
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 
+from .cache import StateStore
 from .config import Settings
-from .models import Commune, CommuneRisk, Directive, FloodReason, RiskTier, StationSnapshot, WeatherSnapshot
+from .model_rotation import create_genai_client, rotator_for
+from .models import (
+    Commune,
+    CommuneRisk,
+    Directive,
+    FloodReason,
+    RiskTier,
+    StationSnapshot,
+    WeatherSnapshot,
+)
+
+log = logging.getLogger("mekongpulse.bulletin")
 
 _REASON_KH = {
     FloodReason.NONE: "លក្ខខណ្ឌធម្មតា",
@@ -27,34 +40,58 @@ _REASON_EN = {
     FloodReason.LOCAL_FLASH_FLOOD: "localized flash-flood risk from heavy rain",
 }
 
+_POLISH_CACHE_TTL_SECONDS = 24 * 3600
+
 
 class GeminiTextClient:
-    """Thin async wrapper around google-genai text generation (mockable)."""
+    """Thin async wrapper around google-genai text generation with ModelRotator."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        client=None,
+        state_store: StateStore | None = None,
+    ) -> None:
         self._settings = settings
-        self._client = None
+        self._client = client
+        self._state_store = state_store
+
+    def _get_client(self):
+        if self._client is None:
+            self._client = create_genai_client(self._settings)
+        return self._client
 
     async def generate(self, prompt: str) -> str:
-        from google import genai  # local import: optional in offline runs
-
-        if self._client is None:
-            if self._settings.use_vertex_ai:
-                self._client = genai.Client(
-                    vertexai=True,
-                    project=self._settings.vertex_project,
-                    location=self._settings.vertex_location,
+        client = self._get_client()
+        rotator = rotator_for(
+            self._settings.gemini_model_chain,
+            state_store=self._state_store,
+        )
+        last_error: BaseException | None = None
+        for model in await rotator.ordered_async():
+            try:
+                response = await asyncio.to_thread(
+                    client.models.generate_content,
+                    model=model,
+                    contents=prompt,
                 )
-            else:
-                self._client = genai.Client(api_key=self._settings.gemini_api_key)
-
-        def _run() -> str:
-            response = self._client.models.generate_content(
-                model=self._settings.gemini_text_model, contents=prompt
-            )
-            return (response.text or "").strip()
-
-        return await asyncio.to_thread(_run)
+            except Exception as exc:  # noqa: BLE001 - provider failure, rotate
+                if not rotator.should_rotate(exc):
+                    raise
+                log.warning(
+                    "Bulletin model %s failed (%s); trying next fallback",
+                    model,
+                    type(exc).__name__,
+                )
+                await rotator.mark_failed_async(model, exc)
+                last_error = exc
+                continue
+            await rotator.mark_ok_async(model)
+            return (getattr(response, "text", None) or "").strip()
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("No Gemini model configured")
 
     async def polish_khmer(self, template_text: str) -> str:
         prompt = (
@@ -74,8 +111,14 @@ class GeminiTextClient:
 class BulletinBuilder:
     _POLISH_CACHE_LIMIT = 512
 
-    def __init__(self, text_client: GeminiTextClient | None = None) -> None:
+    def __init__(
+        self,
+        text_client: GeminiTextClient | None = None,
+        *,
+        state_store: StateStore | None = None,
+    ) -> None:
         self._text = text_client
+        self._state_store = state_store
         self._polish_cache: dict[str, str] = {}
 
     # ---- deterministic templates -----------------------------------------
@@ -152,7 +195,14 @@ class BulletinBuilder:
         kh, en = self.build_templates(commune, risk, directives, station, weather)
         if self._text is not None:
             cache_key = hashlib.sha256(kh.encode("utf-8")).hexdigest()
-            cached = None if force_polish else self._polish_cache.get(cache_key)
+            cached: str | None = None
+            if not force_polish:
+                cached = self._polish_cache.get(cache_key)
+                if cached is None and self._state_store is not None:
+                    stored = await self._state_store.get_json(f"polish:{cache_key}")
+                    if isinstance(stored, str) and stored:
+                        cached = stored
+                        self._polish_cache[cache_key] = stored
             if cached is not None:
                 return cached, en
             try:
@@ -163,5 +213,11 @@ class BulletinBuilder:
                 if len(self._polish_cache) >= self._POLISH_CACHE_LIMIT:
                     self._polish_cache.pop(next(iter(self._polish_cache)))
                 self._polish_cache[cache_key] = polished
+                if self._state_store is not None:
+                    await self._state_store.set_json(
+                        f"polish:{cache_key}",
+                        polished,
+                        ttl_seconds=_POLISH_CACHE_TTL_SECONDS,
+                    )
                 kh = polished
         return kh, en

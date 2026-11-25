@@ -1,0 +1,37 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "sentinel_alerts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "commune_id", "order": "ASCENDING" },
+        { "fieldPath": "dispatched_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "conversation_turns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "chat_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "field_reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "commune_code", "order": "ASCENDING" },
+        { "fieldPath": "reported_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "agent_runs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

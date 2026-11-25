@@ -46,26 +46,42 @@ class LocalAudioStore:
 
 
 class GCSAudioStore:
-    def __init__(self, bucket: str | None, public_base: str | None) -> None:
+    def __init__(
+        self,
+        bucket: str | None,
+        public_base: str | None,
+        *,
+        cdn_base_url: str | None = None,
+        cache_control: str = "public, max-age=31536000, immutable",
+        client=None,
+    ) -> None:
         if not bucket:
             raise ValueError("GCS_BUCKET is required in production")
-        from google.cloud import storage
+        if client is None:
+            from google.cloud import storage
+
+            client = storage.Client()
 
         self._bucket_name = bucket
-        self._client = storage.Client()
+        self._client = client
         self._bucket = self._client.bucket(bucket)
-        self._base = (public_base or f"https://storage.googleapis.com/{bucket}").rstrip("/")
+        self._cdn_base = cdn_base_url.rstrip("/") if cdn_base_url else None
+        self._base = (
+            self._cdn_base or public_base or f"https://storage.googleapis.com/{bucket}"
+        ).rstrip("/")
+        self._cache_control = cache_control
 
     async def put(self, key: str, data: bytes, mime_type: str = "audio/mpeg") -> AudioRef:
         def _upload() -> None:
             blob = self._bucket.blob(key)
-            blob.cache_control = "public, max-age=86400"
+            blob.cache_control = self._cache_control
             blob.upload_from_string(data, content_type=mime_type)
 
         await asyncio.to_thread(_upload)
+        url = f"{self._base}/{key}" if self._cdn_base else f"{self._base}/{key}?v={time.time_ns()}"
         return AudioRef(
             uri=f"gs://{self._bucket_name}/{key}",
-            url=f"{self._base}/{key}?v={time.time_ns()}",
+            url=url,
             mime_type=mime_type,
         )
 

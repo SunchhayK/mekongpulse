@@ -11,6 +11,7 @@ import { Link } from "@/i18n/navigation";
 import {
   api,
   ApiError,
+  isFirebaseAuthConfigured,
   type AdvisorAction,
   type AdvisorToolCall,
   type OfficerSession,
@@ -37,7 +38,12 @@ function readStoredSession(): OfficerSession | null {
       window.localStorage.removeItem(SESSION_KEY);
       return null;
     }
-    return { session: parsed.session, expires_at: parsed.expires_at };
+    return {
+      session: parsed.session,
+      expires_at: parsed.expires_at,
+      email: typeof parsed.email === "string" ? parsed.email : null,
+      auth_mode: parsed.auth_mode === "firebase" ? "firebase" : "passcode",
+    };
   } catch {
     return null;
   }
@@ -178,7 +184,11 @@ function AssistantView() {
   const locale = useLocale();
   const searchParams = useSearchParams();
   const [session, setSession] = useState<OfficerSession | null>(null);
+  const firebaseEnabled = isFirebaseAuthConfigured();
+  const [authTab, setAuthTab] = useState<"passcode" | "firebase">("passcode");
   const [passcode, setPasscode] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [signingIn, setSigningIn] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
   const initialCode = searchParams.get("code")?.trim() ?? "";
@@ -237,8 +247,35 @@ function AssistantView() {
 
   async function signIn(event: React.FormEvent) {
     event.preventDefault();
+    if (signingIn) return;
+    if (authTab === "firebase" && firebaseEnabled) {
+      const trimmedEmail = email.trim();
+      if (!trimmedEmail || !password) return;
+      setSigningIn(true);
+      setSignInError(null);
+      try {
+        const result = await api.firebaseOfficerLogin(trimmedEmail, password);
+        setSession(result);
+        setPassword("");
+        writeStoredSession(result);
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setSignInError(
+            err.status === 401
+              ? t("signIn.errors.invalidCredentials")
+              : `${t("errors.server")} (${err.status})`,
+          );
+        } else {
+          setSignInError(t("errors.network"));
+        }
+      } finally {
+        setSigningIn(false);
+      }
+      return;
+    }
+
     const code = passcode.trim();
-    if (!code || signingIn) return;
+    if (!code) return;
     setSigningIn(true);
     setSignInError(null);
     try {
@@ -293,7 +330,12 @@ function AssistantView() {
         {activeSession && (
           <>
             <span className="session-chip label-small">
-              {t("signedIn", { time: formatExpiry(activeSession.expires_at, locale) })}
+              {activeSession.email
+                ? t("signedInAs", {
+                    officer: activeSession.email,
+                    time: formatExpiry(activeSession.expires_at, locale),
+                  })
+                : t("signedIn", { time: formatExpiry(activeSession.expires_at, locale) })}
             </span>
             <button type="button" className="btn assistant-signout label-small" onClick={clearSession}>
               {t("signOut")}
@@ -306,29 +348,97 @@ function AssistantView() {
       <main className="assistant-main">
         {!activeSession && (
           <section className="card assistant-signin" aria-label={t("signIn.title")}>
-            <h2 className="title-small" style={{ margin: 0 }}>
-              {t("signIn.title")}
-            </h2>
+            <div className="assistant-signin-head">
+              <h2 className="title-small" style={{ margin: 0 }}>
+                {t("signIn.title")}
+              </h2>
+              {firebaseEnabled && (
+                <div className="assistant-signin-tabs" role="tablist" aria-label={t("signIn.methodAria")}>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={authTab === "passcode"}
+                    className="chip label-small"
+                    onClick={() => {
+                      setAuthTab("passcode");
+                      setSignInError(null);
+                    }}
+                  >
+                    {t("signIn.methodPasscode")}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={authTab === "firebase"}
+                    className="chip label-small"
+                    onClick={() => {
+                      setAuthTab("firebase");
+                      setSignInError(null);
+                    }}
+                  >
+                    {t("signIn.methodAccount")}
+                  </button>
+                </div>
+              )}
+            </div>
             <form className="assistant-signin-row" onSubmit={(event) => void signIn(event)}>
-              <input
-                className="text-field assistant-signin-input"
-                type="password"
-                id="officer-passcode"
-                name="passcode"
-                value={passcode}
-                placeholder={t("signIn.placeholder")}
-                aria-label={t("signIn.passcode")}
-                aria-invalid={signInError != null}
-                autoComplete="current-password"
-                onChange={(event) => setPasscode(event.target.value)}
-              />
-              <button
-                type="submit"
-                className="btn btn--filled label-medium"
-                disabled={signingIn || passcode.trim().length === 0}
-              >
-                {signingIn ? t("signIn.working") : t("signIn.submit")}
-              </button>
+              {authTab === "firebase" && firebaseEnabled ? (
+                <>
+                  <input
+                    className="text-field assistant-signin-input"
+                    type="email"
+                    id="officer-email"
+                    name="email"
+                    value={email}
+                    placeholder={t("signIn.emailPlaceholder")}
+                    aria-label={t("signIn.email")}
+                    aria-invalid={signInError != null}
+                    autoComplete="username"
+                    onChange={(event) => setEmail(event.target.value)}
+                  />
+                  <input
+                    className="text-field assistant-signin-input"
+                    type="password"
+                    id="officer-password"
+                    name="password"
+                    value={password}
+                    placeholder={t("signIn.passwordPlaceholder")}
+                    aria-label={t("signIn.password")}
+                    aria-invalid={signInError != null}
+                    autoComplete="current-password"
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                  <button
+                    type="submit"
+                    className="btn btn--filled label-medium"
+                    disabled={signingIn || email.trim().length === 0 || password.length === 0}
+                  >
+                    {signingIn ? t("signIn.working") : t("signIn.submit")}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <input
+                    className="text-field assistant-signin-input"
+                    type="password"
+                    id="officer-passcode"
+                    name="passcode"
+                    value={passcode}
+                    placeholder={t("signIn.placeholder")}
+                    aria-label={t("signIn.passcode")}
+                    aria-invalid={signInError != null}
+                    autoComplete="current-password"
+                    onChange={(event) => setPasscode(event.target.value)}
+                  />
+                  <button
+                    type="submit"
+                    className="btn btn--filled label-medium"
+                    disabled={signingIn || passcode.trim().length === 0}
+                  >
+                    {signingIn ? t("signIn.working") : t("signIn.submit")}
+                  </button>
+                </>
+              )}
             </form>
             {signInError ? (
               <p className="error-banner body-small" role="alert">

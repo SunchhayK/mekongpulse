@@ -1,9 +1,7 @@
 """Station roster loader (data/stations.json).
 
-The four stations verified live against the MRC API on 2026-10-17. The
-technical report v1.1.0 listed `019803`/`019806` for Koh Khel/Kampong Cham;
-those ids belong to Tan Chau (VN) and Neak Luong in the live API, so the
-verified ids are `033402` and `019802`.
+Nine Cambodian MRC telemetry gauges across the Mekong mainstream, Tonle Sap,
+and Bassac rivers (expanded from the original four gauges in IMP-04).
 """
 
 from __future__ import annotations

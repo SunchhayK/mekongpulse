@@ -10,19 +10,21 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import StrEnum
 from typing import Awaitable, Callable
 from uuid import uuid4
 
 from mekong_shared.adk_agent import AdvisorUnavailable, StepLLM, answer
 from mekong_shared.adk_tools import TELEGRAM_MESSAGE_LIMIT, AdvisorToolContext, AdvisorTools
+from mekong_shared.agronomy import stage_for_planting_date
 from mekong_shared.config import Settings
 from mekong_shared.models import (
     AgentRunStatus,
     AssessmentResult,
     Commune,
     CropStage,
+    CropType,
 )
 from mekong_shared.pipeline import AssessmentUnavailable, CommuneNotFound, Pipeline
 from mekong_shared.repository import Repository
@@ -124,23 +126,61 @@ class BotService:
     async def help(self, chat_id: str | int) -> BotReply:
         return BotReply(WELCOME)
 
+    @staticmethod
+    def _parse_subscribe_args(raw: str) -> tuple[str, CropType | None, date | None]:
+        """Parse `/subscribe <commune> [RICE|VEGETABLES|LIVESTOCK] [YYYY-MM-DD]`."""
+        tokens = (raw or "").strip().split()
+        crop_type: CropType | None = None
+        planting_date: date | None = None
+        remaining: list[str] = []
+        for token in tokens:
+            upper = token.upper()
+            if crop_type is None and upper in CropType._value2member_map_:
+                crop_type = CropType(upper)
+                continue
+            if planting_date is None and len(token) == 10 and token[4] == "-" and token[7] == "-":
+                try:
+                    planting_date = date.fromisoformat(token)
+                    continue
+                except ValueError:
+                    pass
+            remaining.append(token)
+        return " ".join(remaining).strip(), crop_type, planting_date
+
     async def subscribe(self, chat_id: str | int, query: str) -> BotReply:
-        query = (query or "").strip()
-        if not query:
+        commune_query, crop_type, planting_date = self._parse_subscribe_args(query)
+        if not commune_query:
             return BotReply(
-                "សូមសរសេរ: /subscribe <ឈ្មោះឃុំ ឬកូដ>\n"
-                "Usage: /subscribe <commune name or 6-digit code>"
+                "សូមសរសេរ: /subscribe <ឈ្មោះឃុំ ឬកូដ> [RICE|VEGETABLES|LIVESTOCK] [YYYY-MM-DD]\n"
+                "Usage: /subscribe <commune name or 6-digit code> [crop_type] [planting_date]"
             )
-        commune = await self._commune(query) if query.isdigit() else None
-        if commune is not None:
-            return self._stage_prompt(commune)
-        hits = self.pipeline.gazetteer.search(query, limit=8)
-        if not hits:
-            return BotReply(self._not_found(query))
-        if len(hits) == 1:
-            return self._stage_prompt(hits[0])
-        buttons = [[(self._label(h), f"sub:{h.code}")] for h in hits]
-        return BotReply("ឃើញឃុំច្រើន — សូមជ្រើសរើស / Multiple communes found — pick one:", buttons=buttons)
+        commune = await self._commune(commune_query) if commune_query.isdigit() else None
+        if commune is None:
+            hits = self.pipeline.gazetteer.search(commune_query, limit=8)
+            if not hits:
+                return BotReply(self._not_found(commune_query))
+            if len(hits) > 1:
+                buttons = [[(self._label(h), f"sub:{h.code}")] for h in hits]
+                return BotReply(
+                    "ឃើញឃុំច្រើន — សូមជ្រើសរើស / Multiple communes found — pick one:",
+                    buttons=buttons,
+                )
+            commune = hits[0]
+
+        if crop_type in (CropType.VEGETABLES, CropType.LIVESTOCK):
+            return await self.subscribe_crop_type(
+                chat_id, commune.code, crop_type.value, planting_date=planting_date
+            )
+        if planting_date is not None:
+            inferred_stage = stage_for_planting_date(planting_date)
+            return await self.subscribe_stage(
+                chat_id,
+                commune.code,
+                inferred_stage.value,
+                crop_type=CropType.RICE,
+                planting_date=planting_date,
+            )
+        return self._stage_prompt(commune)
 
     def _stage_prompt(self, commune: Commune) -> BotReply:
         buttons = [
@@ -151,7 +191,15 @@ class BotService:
             f"{self._label(commune)}\nជ្រើសដំណាក់កាលស្រូវ / Choose the rice stage:", buttons=buttons
         )
 
-    async def subscribe_stage(self, chat_id: str | int, code: str, stage_value: str) -> BotReply:
+    async def subscribe_stage(
+        self,
+        chat_id: str | int,
+        code: str,
+        stage_value: str,
+        *,
+        crop_type: CropType = CropType.RICE,
+        planting_date: date | None = None,
+    ) -> BotReply:
         commune = await self._commune(code)
         if commune is None:
             return BotReply(self._not_found(code))
@@ -159,13 +207,101 @@ class BotService:
             stage = CropStage(stage_value)
         except ValueError:
             return BotReply("ដំណាក់កាលមិនត្រឹមត្រូវ / Unknown crop stage.")
-        await self.repo.upsert_subscription(str(chat_id), commune.code, stage.value)
+        await self.repo.upsert_subscription(
+            str(chat_id),
+            commune.code,
+            stage.value,
+            crop_type=crop_type.value,
+            planting_date=planting_date,
+        )
+        planted_line = (
+            f"📅 ថ្ងៃដាំ / Planting date: {planting_date.isoformat()}\n" if planting_date else ""
+        )
+        buttons = [
+            [
+                (
+                    f"🥬 {CropType.VEGETABLES.label_kh} / {CropType.VEGETABLES.label_en}",
+                    f"croptype:{commune.code}:{CropType.VEGETABLES.value}",
+                ),
+                (
+                    f"🐄 {CropType.LIVESTOCK.label_kh} / {CropType.LIVESTOCK.label_en}",
+                    f"croptype:{commune.code}:{CropType.LIVESTOCK.value}",
+                ),
+            ]
+        ]
         return BotReply(
             f"✅ ចុះឈ្មោះតាមដាន {self._label(commune)}\n"
             f"({stage.label_kh} / {stage.label_en})\n"
+            f"{planted_line}"
             "យើងនឹងជូនដំណឹងពេលហានិភ័យកើនឡើង។\n"
             "You will get an alert when the risk for this commune escalates.\n"
-            "ពិនិត្យឥឡូវ / check now: /risk"
+            "ពិនិត្យឥឡូវ / check now: /risk",
+            buttons=buttons,
+        )
+
+    async def subscribe_crop_type(
+        self,
+        chat_id: str | int,
+        code: str,
+        crop_type_value: str,
+        *,
+        planting_date: date | None = None,
+        edit: bool = False,
+    ) -> BotReply:
+        commune = await self._commune(code)
+        if commune is None:
+            return BotReply(self._not_found(code), edit=edit)
+        try:
+            crop_type = CropType(crop_type_value.upper())
+        except ValueError:
+            return BotReply("ប្រភេទដំណាំមិនត្រឹមត្រូវ / Unknown crop type.", edit=edit)
+        if crop_type is CropType.RICE:
+            return self._stage_prompt(commune)
+        await self.repo.upsert_subscription(
+            str(chat_id),
+            commune.code,
+            None,
+            crop_type=crop_type.value,
+            planting_date=planting_date,
+        )
+        return BotReply(
+            f"✅ ចុះឈ្មោះតាមដាន {self._label(commune)}\n"
+            f"({crop_type.label_kh} / {crop_type.label_en})\n"
+            "យើងនឹងជូនដំណឹងពេលហានិភ័យកើនឡើង។\n"
+            "You will get an alert when the risk for this commune escalates.\n"
+            "ពិនិត្យឥឡូវ / check now: /risk",
+            edit=edit,
+        )
+
+    async def confirm_stage_advance(
+        self, chat_id: str | int, code: str, new_stage_value: str
+    ) -> BotReply:
+        commune = await self._commune(code)
+        if commune is None:
+            return BotReply(self._not_found(code), edit=True)
+        try:
+            new_stage = CropStage(new_stage_value)
+        except ValueError:
+            return BotReply("ដំណាក់កាលមិនត្រឹមត្រូវ / Unknown crop stage.", edit=True)
+
+        existing = next(
+            (s for s in await self.repo.subscriptions_for_chat(str(chat_id)) if s.commune_id == commune.code),
+            None,
+        )
+        crop_type = existing.crop_type if existing is not None else CropType.RICE
+        planting_date = existing.planting_date if existing is not None else None
+        await self.repo.upsert_subscription(
+            str(chat_id),
+            commune.code,
+            new_stage.value,
+            crop_type=crop_type.value,
+            planting_date=planting_date,
+        )
+        return BotReply(
+            f"✅ បានអាប់ដេតដំណាក់កាលស្រូវសម្រាប់ {self._label(commune)} ទៅជា "
+            f"{new_stage.label_kh} ({new_stage.label_en})។\n"
+            f"Updated your rice stage for {self._label(commune)} to {new_stage.label_en}.",
+            edit=True,
         )
 
     async def unsubscribe(self, chat_id: str | int, query: str) -> BotReply:
@@ -200,13 +336,21 @@ class BotService:
         for sub in subs:
             commune = await self._commune(sub.commune_id)
             name = self._label(commune) if commune else sub.commune_id
-            stage = f" • {sub.crop_stage.value}" if sub.crop_stage else ""
+            crop_type_val = getattr(sub, "crop_type", CropType.RICE)
+            crop_str = getattr(crop_type_val, "value", crop_type_val)
+            crop = f" • {crop_str}" if crop_str and crop_str != CropType.RICE.value else ""
+            stage = f" • {getattr(sub.crop_stage, 'value', sub.crop_stage)}" if sub.crop_stage else ""
+            planted = (
+                f" • planted {sub.planting_date.isoformat()}"
+                if getattr(sub, "planting_date", None)
+                else ""
+            )
             last = (
                 f" (last alert: {sub.last_notified_risk_tier.value})"
                 if sub.last_notified_risk_tier
                 else ""
             )
-            lines.append(f"• {name}{stage}{last} — /risk {sub.commune_id}")
+            lines.append(f"• {name}{crop}{stage}{planted}{last} — /risk {sub.commune_id}")
         return BotReply("\n".join(lines))
 
     async def report(self, chat_id: str | int) -> BotReply:
@@ -343,7 +487,20 @@ class BotService:
             )
             return BotReply(text, buttons=buttons, edit=edit)
 
-        commune = await self._commune(query)
+        commune = await self._commune(query) if query.isdigit() else None
+        if commune is None and not query.isdigit():
+            hits = self.pipeline.gazetteer.search(query, limit=5)
+            if not hits:
+                return BotReply(self._not_found(query), edit=edit)
+            if len(hits) > 1:
+                buttons = [[(self._label(h), f"watch_pick:{h.code}")] for h in hits]
+                return BotReply(
+                    "🛡 ឃើញឃុំច្រើន — សូមជ្រើសរើសឃុំសម្រាប់ការឃ្លាំមើល\n"
+                    "Multiple communes matched — choose one for the watch run:",
+                    buttons=buttons,
+                    edit=edit,
+                )
+            commune = hits[0]
         if commune is None:
             return BotReply(self._not_found(query), edit=edit)
         try:
@@ -418,6 +575,16 @@ class BotService:
                 "Approve from the web officer console instead.",
                 edit=True,
             )
+
+        claim_fn = getattr(self.repo, "claim_agent_run_for_publish", None)
+        if claim_fn is not None:
+            claimed = await claim_fn(run_id)
+            if claimed is None:
+                latest = await self.repo.get_agent_run(run_id)
+                status_label = latest.status.value if latest else "claimed"
+                return BotReply(f"This run is already {status_label}.", edit=True)
+            run = claimed
+
         text = run.draft_khmer
         if run.draft_english:
             text = f"{text}\n\n{run.draft_english}"
@@ -429,6 +596,14 @@ class BotService:
                 or (result or {}).get("error")
                 or "Telegram rejected the post"
             )
+            failed = run.model_copy(
+                update={
+                    "status": AgentRunStatus.FAILED,
+                    "approved_by": f"telegram:{chat_id}",
+                    "error": detail[:500],
+                }
+            )
+            await self.repo.update_agent_run(failed)
             return BotReply(f"❌ Publish failed: {detail}", edit=True)
 
         updated = run.model_copy(
@@ -439,6 +614,7 @@ class BotService:
                 "published_at": now,
                 "published_message_id": result.get("message_id"),
                 "published_text": text,
+                "error": None,
             }
         )
         await self.repo.update_agent_run(updated)
@@ -454,6 +630,8 @@ class BotService:
             return await self._watch_action(chat_id, parts[1], parts[2])
         if parts[0] == "watch" and len(parts) == 3 and parts[1] == "pick":
             return await self.watch(chat_id, parts[2], edit=True)
+        if parts[0] == "watch_pick" and len(parts) == 2:
+            return await self.watch(chat_id, parts[1], edit=True)
         if parts[0] == "watch" and len(parts) == 2 and parts[1] == "menu":
             return await self.watch(chat_id, "", edit=True)
         if parts[0] == "sub" and len(parts) == 2:
@@ -463,6 +641,10 @@ class BotService:
             return self._stage_prompt(commune)
         if parts[0] == "crop" and len(parts) == 3:
             return await self.subscribe_stage(chat_id, parts[1], parts[2])
+        if parts[0] == "croptype" and len(parts) == 3:
+            return await self.subscribe_crop_type(chat_id, parts[1], parts[2], edit=True)
+        if parts[0] == "stage_confirm" and len(parts) == 3:
+            return await self.confirm_stage_advance(chat_id, parts[1], parts[2])
         if parts[0] == "risk" and len(parts) == 2:
             return await self._risk_for(chat_id, parts[1])
         if parts[0] == "fr" and len(parts) == 2:

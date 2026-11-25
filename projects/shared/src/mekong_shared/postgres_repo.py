@@ -8,7 +8,7 @@ init(); the local container is `pg_db` per the repo operating rules.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import asyncpg
 
@@ -16,8 +16,10 @@ from .models import (
     AgentRun,
     AgentRunStatus,
     Commune,
+    CommuneCalibration,
     CommuneRisk,
     ConversationTurn,
+    CropType,
     FieldReport,
     FieldReportStatus,
     FloodReason,
@@ -199,11 +201,23 @@ CREATE TABLE IF NOT EXISTS agent_runs(
 );
 CREATE INDEX IF NOT EXISTS idx_agent_runs_status_time
   ON agent_runs(status, created_at DESC);
+ALTER TABLE communes ADD COLUMN IF NOT EXISTS forecast_tier text;
+ALTER TABLE communes ADD COLUMN IF NOT EXISTS forecast_lead_days integer;
+ALTER TABLE commune_subscriptions ADD COLUMN IF NOT EXISTS crop_type text NOT NULL DEFAULT 'RICE';
+ALTER TABLE commune_subscriptions ADD COLUMN IF NOT EXISTS planting_date date;
+CREATE TABLE IF NOT EXISTS commune_calibrations(
+  commune_code text PRIMARY KEY REFERENCES communes(code),
+  levee_margin_m double precision NOT NULL,
+  lead_time_multiplier double precision NOT NULL DEFAULT 1.0,
+  sample_size integer NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 """
 
 _OBS_COLS = """
-  o.recorded_at, o.water_level_m, o.rate_of_rise_m_per_hr, o.is_stale_fallback, o.source,
-  o.fetched_at, s.id AS station_id, s.name, s.river, s.alarm_stage_m, s.flood_stage_m
+  o.recorded_at, o.water_level_m, o.rate_of_rise_m_per_hr, o.rainfall_mm,
+  o.is_stale_fallback, o.source, o.fetched_at,
+  s.id AS station_id, s.name, s.river, s.alarm_stage_m, s.flood_stage_m
 """
 
 # Latest gauge reading per risk row -> CommuneRisk.station_level_m. Keeps the
@@ -231,6 +245,7 @@ def _snapshot_from_row(row: asyncpg.Record) -> StationSnapshot:
         flood_stage_m=row["flood_stage_m"],
         rate_of_rise_m_per_hr=row["rate_of_rise_m_per_hr"],
         recorded_at=row["recorded_at"],
+        rain_mm=row["rainfall_mm"],
         is_stale_fallback=row["is_stale_fallback"],
         source=source,
         staleness_minutes=staleness,
@@ -246,6 +261,17 @@ class PostgresRepository:
         self._pool = await asyncpg.create_pool(self._dsn, min_size=1, max_size=5)
         async with self._pool.acquire() as conn:
             await conn.execute(SCHEMA_SQL)
+            # Optional PostGIS support (IMP-01): plain Postgres without PostGIS still initializes cleanly.
+            try:
+                await conn.execute("CREATE EXTENSION IF NOT EXISTS postgis")
+                await conn.execute(
+                    "ALTER TABLE communes ADD COLUMN IF NOT EXISTS geom geometry(Point, 4326)"
+                )
+                await conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_communes_geom ON communes USING GIST (geom)"
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
     async def close(self) -> None:
         if self._pool is not None:
@@ -292,11 +318,13 @@ class PostgresRepository:
                 ON CONFLICT (station_id, recorded_at) DO UPDATE SET
                   water_level_m=EXCLUDED.water_level_m,
                   rate_of_rise_m_per_hr=EXCLUDED.rate_of_rise_m_per_hr,
+                  rainfall_mm=COALESCE(EXCLUDED.rainfall_mm, hydro_observations.rainfall_mm),
                   is_stale_fallback=EXCLUDED.is_stale_fallback, source=EXCLUDED.source,
                   fetched_at=now()
                 """,
                 snapshot.station_id, snapshot.recorded_at, snapshot.level_m,
-                snapshot.rate_of_rise_m_per_hr, None, snapshot.is_stale_fallback, snapshot.source,
+                snapshot.rate_of_rise_m_per_hr, snapshot.rain_mm,
+                snapshot.is_stale_fallback, snapshot.source,
             )
 
     async def latest_observation(self, station_id: str) -> StationSnapshot | None:
@@ -447,13 +475,15 @@ class PostgresRepository:
                 """
                 UPDATE communes SET current_risk_tier=$2, risk_score=$3, risk_reason=$4,
                   lead_time_hours=$5, risk_drivers=$6::jsonb, risk_station_id=$7,
-                  risk_estimated=$8, risk_updated_at=$9
+                  risk_estimated=$8, risk_updated_at=$9,
+                  forecast_tier=$10, forecast_lead_days=$11
                 WHERE code=$1
                 """,
                 [
                     (
                         r.commune_code, r.tier.value, r.score, r.reason.value, r.lead_time_hours,
                         json.dumps(r.drivers), r.station_id, r.estimated, r.updated_at,
+                        r.forecast_tier.value if r.forecast_tier else None, r.forecast_lead_days,
                     )
                     for r in risks
                 ],
@@ -490,18 +520,25 @@ class PostgresRepository:
 
     # --- subscriptions ---------------------------------------------------------
     async def upsert_subscription(
-        self, chat_id: str, commune_id: str, crop_stage: str | None
+        self,
+        chat_id: str,
+        commune_id: str,
+        crop_stage: str | None,
+        crop_type: str = "RICE",
+        planting_date: date | None = None,
     ) -> Subscription:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                INSERT INTO commune_subscriptions(telegram_chat_id, commune_id, crop_stage)
-                VALUES($1,$2,$3)
+                INSERT INTO commune_subscriptions(telegram_chat_id, commune_id, crop_stage, crop_type, planting_date)
+                VALUES($1,$2,$3,$4,$5)
                 ON CONFLICT (telegram_chat_id, commune_id) DO UPDATE SET
-                  crop_stage=COALESCE(EXCLUDED.crop_stage, commune_subscriptions.crop_stage)
+                  crop_stage=COALESCE(EXCLUDED.crop_stage, commune_subscriptions.crop_stage),
+                  crop_type=COALESCE(EXCLUDED.crop_type, commune_subscriptions.crop_type),
+                  planting_date=COALESCE(EXCLUDED.planting_date, commune_subscriptions.planting_date)
                 RETURNING *
                 """,
-                chat_id, commune_id, crop_stage,
+                chat_id, commune_id, crop_stage, CropType(crop_type).value, planting_date,
             )
         return _subscription_from_row(row)
 
@@ -525,6 +562,11 @@ class PostgresRepository:
             rows = await conn.fetch(
                 "SELECT * FROM commune_subscriptions WHERE telegram_chat_id=$1 ORDER BY id", chat_id
             )
+        return [_subscription_from_row(r) for r in rows]
+
+    async def list_all_subscriptions(self) -> list[Subscription]:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch("SELECT * FROM commune_subscriptions ORDER BY id")
         return [_subscription_from_row(r) for r in rows]
 
     async def touch_notified(
@@ -697,6 +739,20 @@ class PostgresRepository:
                 run.published_message_id, run.published_text, run.error,
             )
 
+    async def claim_agent_run_for_publish(self, run_id: str) -> AgentRun | None:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                UPDATE agent_runs SET status = $2
+                WHERE id = $1 AND status = $3
+                RETURNING *
+                """,
+                run_id,
+                AgentRunStatus.PUBLISHING.value,
+                AgentRunStatus.PENDING_APPROVAL.value,
+            )
+        return _agent_run_from_row(row) if row else None
+
     async def get_agent_run(self, run_id: str) -> AgentRun | None:
         async with self.pool.acquire() as conn:
             row = await conn.fetchrow("SELECT * FROM agent_runs WHERE id=$1", run_id)
@@ -715,6 +771,38 @@ class PostgresRepository:
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(query, *args)
         return [_agent_run_from_row(r) for r in rows]
+
+    # --- calibration -----------------------------------------------------------
+    async def save_commune_calibration(self, cal: CommuneCalibration) -> None:
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO commune_calibrations(commune_code, levee_margin_m,
+                  lead_time_multiplier, sample_size, updated_at)
+                VALUES($1,$2,$3,$4,$5)
+                ON CONFLICT (commune_code) DO UPDATE SET
+                  levee_margin_m=EXCLUDED.levee_margin_m,
+                  lead_time_multiplier=EXCLUDED.lead_time_multiplier,
+                  sample_size=EXCLUDED.sample_size,
+                  updated_at=EXCLUDED.updated_at
+                """,
+                cal.commune_code, cal.levee_margin_m, cal.lead_time_multiplier,
+                cal.sample_size, cal.updated_at,
+            )
+
+    async def list_commune_calibrations(self) -> dict[str, CommuneCalibration]:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch("SELECT * FROM commune_calibrations")
+        return {
+            r["commune_code"]: CommuneCalibration(
+                commune_code=r["commune_code"],
+                levee_margin_m=r["levee_margin_m"],
+                lead_time_multiplier=r["lead_time_multiplier"],
+                sample_size=r["sample_size"],
+                updated_at=r["updated_at"],
+            )
+            for r in rows
+        }
 
 
 def _commune_from_row(row: asyncpg.Record) -> Commune:
@@ -749,6 +837,8 @@ def _risk_from_row(row: asyncpg.Record) -> CommuneRisk:
         drivers=list(drivers or []),
         station_id=row["risk_station_id"],
         station_level_m=row["station_level_m"],
+        forecast_tier=RiskTier(row["forecast_tier"]) if row.get("forecast_tier") else None,
+        forecast_lead_days=row.get("forecast_lead_days"),
         estimated=bool(row["risk_estimated"]),
         updated_at=row["risk_updated_at"],
     )
@@ -759,7 +849,9 @@ def _subscription_from_row(row: asyncpg.Record) -> Subscription:
         id=row["id"],
         telegram_chat_id=row["telegram_chat_id"],
         commune_id=row["commune_id"],
+        crop_type=CropType(row.get("crop_type") or CropType.RICE.value),
         crop_stage=row["crop_stage"],
+        planting_date=row.get("planting_date"),
         subscribed_at=row["subscribed_at"],
         last_notified_at=row["last_notified_at"],
         last_notified_risk_tier=RiskTier(row["last_notified_risk_tier"])

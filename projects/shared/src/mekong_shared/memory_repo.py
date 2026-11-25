@@ -7,13 +7,16 @@ Used by the test-suite and by `REPOSITORY_BACKEND=memory` offline demos
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from .models import (
     AgentRun,
+    AgentRunStatus,
     Commune,
+    CommuneCalibration,
     CommuneRisk,
     ConversationTurn,
+    CropType,
     FieldReport,
     PatrolRun,
     RiskTier,
@@ -42,6 +45,7 @@ class MemoryRepository:
         self.turns: dict[str, list[ConversationTurn]] = {}
         self.field_reports: list[FieldReport] = []
         self.agent_runs: dict[str, AgentRun] = {}
+        self.calibrations: dict[str, CommuneCalibration] = {}
         self._sub_seq = 0
 
     async def init(self) -> None:  # pragma: no cover - trivially in-memory
@@ -70,7 +74,7 @@ class MemoryRepository:
     ) -> list[tuple[datetime, float, float | None]]:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
         return [
-            (p.recorded_at, p.level_m, None)
+            (p.recorded_at, p.level_m, p.rain_mm)
             for p in self.observations.get(station_id, [])
             if p.recorded_at >= cutoff
         ]
@@ -134,22 +138,34 @@ class MemoryRepository:
 
     # --- subscriptions ---------------------------------------------------------------
     async def upsert_subscription(
-        self, chat_id: str, commune_id: str, crop_stage: str | None
+        self,
+        chat_id: str,
+        commune_id: str,
+        crop_stage: str | None,
+        crop_type: str = "RICE",
+        planting_date: date | None = None,
     ) -> Subscription:
         key = (chat_id, commune_id)
         existing = self.subscriptions.get(key)
+        ct = CropType(crop_type)
         if existing is None:
             self._sub_seq += 1
             sub = Subscription(
                 id=self._sub_seq,
                 telegram_chat_id=chat_id,
                 commune_id=commune_id,
+                crop_type=ct,
                 crop_stage=crop_stage,
+                planting_date=planting_date,
                 subscribed_at=datetime.now(timezone.utc),
             )
         else:
             sub = existing.model_copy(
-                update={"crop_stage": crop_stage or existing.crop_stage}
+                update={
+                    "crop_stage": crop_stage or existing.crop_stage,
+                    "crop_type": ct,
+                    "planting_date": planting_date if planting_date is not None else existing.planting_date,
+                }
             )
         self.subscriptions[key] = sub
         return sub
@@ -162,6 +178,9 @@ class MemoryRepository:
 
     async def subscriptions_for_chat(self, chat_id: str) -> list[Subscription]:
         return [s for (chat, cid), s in self.subscriptions.items() if chat == chat_id]
+
+    async def list_all_subscriptions(self) -> list[Subscription]:
+        return list(self.subscriptions.values())
 
     async def touch_notified(
         self, chat_id: str, commune_id: str, tier: RiskTier, at: datetime
@@ -252,6 +271,14 @@ class MemoryRepository:
     async def update_agent_run(self, run: AgentRun) -> None:
         self.agent_runs[run.id] = run
 
+    async def claim_agent_run_for_publish(self, run_id: str) -> AgentRun | None:
+        run = self.agent_runs.get(run_id)
+        if run is None or run.status != AgentRunStatus.PENDING_APPROVAL:
+            return None
+        claimed = run.model_copy(update={"status": AgentRunStatus.PUBLISHING})
+        self.agent_runs[run_id] = claimed
+        return claimed
+
     async def get_agent_run(self, run_id: str) -> AgentRun | None:
         return self.agent_runs.get(run_id)
 
@@ -264,3 +291,10 @@ class MemoryRepository:
         ]
         runs.sort(key=lambda r: r.created_at, reverse=True)
         return runs[:limit]
+
+    # --- calibration ---------------------------------------------------------------
+    async def save_commune_calibration(self, cal: CommuneCalibration) -> None:
+        self.calibrations[cal.commune_code] = cal
+
+    async def list_commune_calibrations(self) -> dict[str, CommuneCalibration]:
+        return dict(self.calibrations)

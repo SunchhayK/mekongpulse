@@ -138,3 +138,87 @@ def test_rate_limiter_blocks_after_five_failures_and_resets():
 
     limiter.reset("1.2.3.4")
     assert limiter.blocked("1.2.3.4") is False
+
+
+async def test_passcode_rate_limiter_backed_by_state_store():
+    from mekong_shared.cache import InMemoryStateStore
+
+    store = InMemoryStateStore()
+    limiter = PasscodeRateLimiter(max_failures=3, window_seconds=60.0, state_store=store)
+    for _ in range(2):
+        await limiter.arecord_failure("10.0.0.1")
+    assert await limiter.ablocked("10.0.0.1") is False
+    await limiter.arecord_failure("10.0.0.1")
+    assert await limiter.ablocked("10.0.0.1") is True
+    await limiter.areset("10.0.0.1")
+    assert await limiter.ablocked("10.0.0.1") is False
+
+
+def test_named_session_token_preserves_officer_identity():
+    from mekong_backend.officer_auth import verify_session_identity
+
+    settings = make_settings(admin_token=ADMIN)
+    token, _ = issue_session(settings, officer_id="chief@mowram.gov.kh")
+    identity = verify_session_identity(settings, token)
+    assert identity is not None
+    assert identity.subject == "chief@mowram.gov.kh"
+    assert identity.email == "chief@mowram.gov.kh"
+    assert identity.label == "chief@mowram.gov.kh"
+    assert verify_session(settings, token) is True
+
+
+async def test_verify_firebase_and_oidc_tokens_with_injectable_verifiers():
+    from mekong_backend.officer_auth import (
+        OfficerIdentity,
+        verify_firebase_id_token,
+        verify_oidc_token,
+    )
+
+    settings = make_settings(
+        firebase_project_id="demo-proj",
+        oidc_audience="https://api.example",
+        scheduler_service_account_email="sched@demo.iam.gserviceaccount.com",
+    )
+
+    fb = await verify_firebase_id_token(
+        settings,
+        "good-fb",
+        verifier=lambda tok, proj: {
+            "sub": "u1",
+            "email": "officer@example.org",
+            "aud": proj,
+            "iss": f"https://securetoken.google.com/{proj}",
+            "exp": int(time.time()) + 300,
+        },
+    )
+    assert fb == OfficerIdentity(subject="u1", email="officer@example.org", auth_method="firebase")
+
+    bad_fb = await verify_firebase_id_token(
+        settings,
+        "wrong-aud",
+        verifier=lambda tok, proj: {"sub": "u1", "aud": "other-proj"},
+    )
+    assert bad_fb is None
+
+    oidc = await verify_oidc_token(
+        settings,
+        "good-oidc",
+        verifier=lambda tok, aud: {
+            "aud": aud,
+            "email": "sched@demo.iam.gserviceaccount.com",
+            "email_verified": True,
+            "exp": int(time.time()) + 300,
+        },
+    )
+    assert oidc is not None and oidc["email"] == "sched@demo.iam.gserviceaccount.com"
+
+    bad_oidc = await verify_oidc_token(
+        settings,
+        "wrong-sa",
+        verifier=lambda tok, aud: {
+            "aud": aud,
+            "email": "attacker@evil.com",
+            "email_verified": True,
+        },
+    )
+    assert bad_oidc is None

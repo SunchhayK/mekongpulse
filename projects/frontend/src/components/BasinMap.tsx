@@ -189,6 +189,17 @@ export function BasinMap({
       const meta = TIER_META[row.tier];
       const lead =
         row.lead_time_hours != null ? t("floodArrival", { hours: row.lead_time_hours }) : "";
+      const forecast =
+        row.forecast_tier != null
+          ? ` · ${
+              row.forecast_lead_days != null
+                ? tierT("forecastDays", {
+                    days: row.forecast_lead_days,
+                    tier: tierT(row.forecast_tier),
+                  })
+                : tierT("forecast", { tier: tierT(row.forecast_tier) })
+            }`
+          : "";
       const options: CircleMarkerOptions & { keyboard: boolean } = {
         renderer,
         radius: 5,
@@ -203,7 +214,7 @@ export function BasinMap({
       };
       const marker = L.circleMarker([row.lat, row.lng], options);
       marker.bindTooltip(
-        `${row.commune_name_kh} · ${row.commune_name_en} - ${tierT(row.tier)}${lead}`,
+        `${row.commune_name_kh} · ${row.commune_name_en} - ${tierT(row.tier)}${lead}${forecast}`,
         { direction: "top", offset: [0, -6], opacity: 1, className: "basin-tooltip" },
       );
       marker.on("click", () => handlersRef.current.onSelectCommune(row.commune_code));
@@ -211,7 +222,10 @@ export function BasinMap({
     });
 
     stations.forEach((station) => {
-      const position = STATION_POSITIONS[station.station_id];
+      const position =
+        station.lat != null && station.lng != null
+          ? { lat: station.lat, lng: station.lng }
+          : STATION_POSITIONS[station.station_id];
       if (!position) return;
       const selected = station.station_id === selectedStationId;
       const level = formatMeters(station.level_m);
@@ -284,10 +298,15 @@ export function BasinMap({
   );
 }
 
-// Station geometry from projects/data/stations.json (verified 2026-10).
+// Station geometry from projects/data/stations.json (all 9 Cambodian MRC gauges).
 const STATION_POSITIONS: Record<string, { lat: number; lng: number }> = {
-  "019802": { lat: 11.994647, lng: 105.46873 },
-  "020102": { lat: 11.81117, lng: 104.80678 },
-  "033401": { lat: 11.563, lng: 104.9353 },
-  "033402": { lat: 11.242035, lng: 105.036156 },
+  "014501": { lat: 13.5333, lng: 105.95 }, // Stung Treng
+  "014901": { lat: 12.481, lng: 106.017 }, // Kratie
+  "019802": { lat: 11.994647, lng: 105.46873 }, // Kompong Cham
+  "019806": { lat: 11.2583, lng: 105.2833 }, // Neak Luong
+  "020101": { lat: 11.575, lng: 104.923 }, // Phnom Penh Port
+  "020102": { lat: 11.81117, lng: 104.80678 }, // Prek Kdam
+  "020106": { lat: 12.576, lng: 104.212 }, // Kampong Luong
+  "033401": { lat: 11.563, lng: 104.9353 }, // Chaktomuk
+  "033402": { lat: 11.242035, lng: 105.036156 }, // Koh Khel
 };

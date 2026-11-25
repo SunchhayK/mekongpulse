@@ -138,3 +138,50 @@ async def test_channel_link_uses_web_base_url_default(pipeline, settings):
     await dispatch(_alert(), _subs()[:1])
 
     assert bot.messages[-1][1].endswith(f"\n\n{DEFAULT_WEB_BASE_URL}/km/commune?code=030502")
+
+
+async def test_dispatch_batched_fanout_delivers_all_with_failure_isolation(pipeline, settings):
+    pipeline.settings = settings.model_copy(update={"telegram_broadcast_channel_id": None})
+    subs = [
+        Subscription(telegram_chat_id=str(1000 + i), commune_id="030502") for i in range(30)
+    ]
+    bot = FakeBot(raise_for={"1005", "1020"})
+    dispatch = make_telegram_dispatcher(
+        pipeline, bot, batch_size=10, max_per_second=1000.0, concurrency=8
+    )
+
+    delivered = await dispatch(_alert(), subs, post_to_channel=False)
+
+    assert delivered == 28
+    assert len(bot.messages) == 28
+
+
+async def test_dispatch_delegates_batches_to_cloud_tasks_when_configured(pipeline, settings):
+    from mekong_shared.tasks import CloudTasksQueue
+
+    created_tasks: list[dict] = []
+
+    class FakeCloudTasksClient:
+        def create_task(self, request):
+            created_tasks.append(request)
+
+    queue = CloudTasksQueue(
+        project="demo-proj",
+        location="asia-southeast1",
+        watch_queue="mekongpulse-watch",
+        dispatch_queue="mekongpulse-telegram-fanout",
+        target_base_url="https://api.example",
+        client=FakeCloudTasksClient(),
+    )
+    pipeline.settings = settings.model_copy(update={"telegram_broadcast_channel_id": None})
+    subs = [
+        Subscription(telegram_chat_id=str(2000 + i), commune_id="030502") for i in range(30)
+    ]
+    bot = FakeBot()
+    dispatch = make_telegram_dispatcher(pipeline, bot, task_queue=queue, batch_size=12)
+
+    delivered = await dispatch(_alert(), subs, post_to_channel=False)
+
+    assert delivered == 30
+    assert len(created_tasks) == 3  # 12 + 12 + 6
+    assert bot.messages == []  # delegated to Cloud Tasks, not sent inline

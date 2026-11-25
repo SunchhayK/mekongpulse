@@ -70,3 +70,18 @@ def test_all_models_cooling_still_returns_the_chain(monkeypatch):
     rotator.mark_failed("primary", ProviderError("quota", 429))
     rotator.mark_failed("secondary", ProviderError("quota", 429))
     assert rotator.ordered() == ["primary", "secondary"]
+
+
+async def test_rotator_shares_cooldowns_via_state_store():
+    """IMP-01: two ModelRotator instances backed by the same StateStore share cooldowns."""
+    from mekong_shared.cache import InMemoryStateStore
+
+    store = InMemoryStateStore()
+    r1 = ModelRotator(["shared-a", "shared-b"], state_store=store)
+    r2 = ModelRotator(["shared-a", "shared-b"], state_store=store)
+
+    await r1.mark_failed_async("shared-a", ProviderError("quota", 429))
+    assert await r2.ordered_async() == ["shared-b", "shared-a"]
+
+    await r2.mark_ok_async("shared-a")
+    assert await r2.ordered_async() == ["shared-a", "shared-b"]

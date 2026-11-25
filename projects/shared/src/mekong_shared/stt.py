@@ -1,17 +1,19 @@
-"""Server-side speech-to-text for the officer assistant's voice input (FR-08).
+"""Server-side speech-to-text for the officer assistant's voice input (FR-08, IMP-06).
 
 Same degradation discipline as tts.py: no key, missing SDK, provider errors
 (quota, safety blocks, transport), and empty transcripts all surface as
-`TranscriptionUnavailable` so the gateway answers 503 instead of 500. The
-sync google-genai call is wrapped in a thread like adk_agent.py does.
+`TranscriptionUnavailable` so the gateway answers 503 instead of 500. Uses
+`ModelRotator` with optional `StateStore` cooldowns and Vertex AI ADC / Workload
+Identity IAM when `use_vertex_ai=True`.
 """
 
 from __future__ import annotations
 
 import asyncio
 
+from .cache import StateStore
 from .config import Settings
-from .model_rotation import rotator_for
+from .model_rotation import create_genai_client, rotator_for
 
 
 class TranscriptionUnavailable(Exception):
@@ -36,15 +38,7 @@ def transcribe_instruction(locale_hint: str | None = None) -> str:
 def _get_client(settings: Settings):
     if not settings.has_gemini:
         raise TranscriptionUnavailable("GEMINI_API_KEY / Vertex configuration is missing")
-    from google import genai
-
-    if settings.use_vertex_ai:
-        return genai.Client(
-            vertexai=True,
-            project=settings.vertex_project,
-            location=settings.vertex_location,
-        )
-    return genai.Client(api_key=settings.gemini_api_key)
+    return create_genai_client(settings)
 
 
 def _extract_transcript(response) -> str:
@@ -61,47 +55,51 @@ async def transcribe_audio(
     audio: bytes,
     mime_type: str,
     locale_hint: str | None = None,
+    *,
+    state_store: StateStore | None = None,
 ) -> str:
     """Audio bytes -> stripped transcript. Raises TranscriptionUnavailable, never others."""
     client = _get_client(settings)
     instruction = transcribe_instruction(locale_hint)
+    rotator = rotator_for(settings.gemini_model_chain, state_store=state_store)
+    contents = [
+        {
+            "role": "user",
+            "parts": [
+                {"inline_data": {"mime_type": mime_type, "data": audio}},
+                {"text": instruction},
+            ],
+        }
+    ]
 
-    def _generate() -> str:
-        rotator = rotator_for(settings.gemini_model_chain)
-        last_error: BaseException | None = None
-        for model in rotator.ordered():
+    transcript: str | None = None
+    last_error: BaseException | None = None
+    try:
+        for model in await rotator.ordered_async():
             try:
-                response = client.models.generate_content(
+                response = await asyncio.to_thread(
+                    client.models.generate_content,
                     model=model,
-                    contents=[
-                        {
-                            "role": "user",
-                            "parts": [
-                                {"inline_data": {"mime_type": mime_type, "data": audio}},
-                                {"text": instruction},
-                            ],
-                        }
-                    ],
+                    contents=contents,
                 )
             except Exception as exc:  # noqa: BLE001 - provider failure, rotate
                 if not rotator.should_rotate(exc):
                     raise
-                rotator.mark_failed(model, exc)
+                await rotator.mark_failed_async(model, exc)
                 last_error = exc
                 continue
-            rotator.mark_ok(model)
-            return _extract_transcript(response)
-        raise last_error or TranscriptionUnavailable("No Gemini model configured")
-
-    try:
-        transcript = await asyncio.to_thread(_generate)
+            await rotator.mark_ok_async(model)
+            transcript = _extract_transcript(response)
+            break
     except TranscriptionUnavailable:
         raise
     except Exception as exc:  # noqa: BLE001 - voice input is best-effort
-        # Quota (429), safety blocks, and transient API failures degrade to
-        # "transcription unavailable" in the UI; a 500 on /advisor/transcribe
-        # would break that contract.
         raise TranscriptionUnavailable(f"transcription request failed: {exc}") from exc
+
+    if transcript is None:
+        if last_error is not None:
+            raise TranscriptionUnavailable(f"transcription request failed: {last_error}") from last_error
+        raise TranscriptionUnavailable("No Gemini model configured")
     if not transcript:
         raise TranscriptionUnavailable("Gemini returned an empty transcript")
     return transcript

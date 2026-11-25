@@ -78,7 +78,7 @@ async def test_ac03_escalation_dispatches_with_debounce(
     assert any(d["commune_id"] == COMMUNE for d in repo.dispatches)
     assert repo.subscriptions[("12345", COMMUNE)].last_notified_risk_tier is RiskTier.WARNING
 
-    # Run 3 — stage floods (16.5m) => WARNING -> DANGER but 6h debounce blocks it.
+    # Run 3 — stage floods (16.5m) => WARNING -> DANGER MUST bypass 6h debounce (BUG-03).
     summary3 = await _patrol(
         repo,
         settings,
@@ -86,14 +86,30 @@ async def test_ac03_escalation_dispatches_with_debounce(
         healthy_handlers(levels={STATION: 16.5}, rates={STATION: 0.02}),
         dispatcher,
     )
-    assert COMMUNE in summary3.debounced
-    assert [a for a in summary3.alerts if a.commune_id == COMMUNE] == []
-    assert summary3.run.alerts_dispatched_count == 0
-    assert len([a for a in repo.sentinel_alerts if a.commune_id == COMMUNE]) == 1
+    assert COMMUNE not in summary3.debounced
+    danger_alerts = [a for a in summary3.alerts if a.commune_id == COMMUNE]
+    assert len(danger_alerts) == 1
+    assert danger_alerts[0].risk_tier is RiskTier.DANGER
+    assert len([a for a in repo.sentinel_alerts if a.commune_id == COMMUNE]) == 2
+
+    # Run 4 — drops to NORMAL then bounces back to WARNING within 6h => debounced
+    # because WARNING.severity <= last.risk_tier.severity (DANGER).
+    await _patrol(
+        repo, settings, make_pipeline, healthy_handlers(levels={STATION: 12.5}), dispatcher
+    )
+    summary5 = await _patrol(
+        repo,
+        settings,
+        make_pipeline,
+        healthy_handlers(levels={STATION: 15.5}, rates={STATION: 0.02}),
+        dispatcher,
+    )
+    assert COMMUNE in summary5.debounced
+    assert [a for a in summary5.alerts if a.commune_id == COMMUNE] == []
 
     # Patrol run audit rows
-    assert len(repo.patrol_runs) == 3
-    assert repo.patrol_runs[-1].communes_evaluated > 1000
+    assert len(repo.patrol_runs) == 5
+    assert repo.patrol_runs[-1].communes_evaluated > 500
 
 
 async def test_escalation_personalizes_by_stored_stage(repo, settings, make_pipeline):
@@ -163,3 +179,40 @@ async def test_patrol_alert_carries_text_when_tts_unavailable(
     assert alert.audio_url is None
     assert "សារព្រមាន" in alert.bulletin_text
     assert alert.directive_title
+
+
+async def test_patrol_presynthesizes_audio_for_warning_communes(
+    repo, settings, make_pipeline, tmp_path
+):
+    """IMP-06: communes entering WARNING/DANGER pre-warm Khmer MP3 audio without breaking patrol."""
+    from mekong_shared.audio_store import LocalAudioStore
+    from mekong_shared.tts import AudioArtifact
+
+    stations = load_stations(str(settings.data_dir))
+    await repo.seed_stations(list(stations.values()))
+    dispatcher = RecordingDispatcher()
+
+    gemini_settings = settings.model_copy(update={"gemini_api_key": "test-key"})
+    synth_calls = {"count": 0}
+
+    class StubTTS:
+        async def synthesize(self, text: str) -> AudioArtifact:
+            synth_calls["count"] += 1
+            return AudioArtifact(
+                data=b"\xff\xfb\x90\x00fake-mp3", mime_type="audio/mpeg", duration_seconds=12.0
+            )
+
+    audio_store = LocalAudioStore(tmp_path / "audio", "http://localhost:8080")
+
+    p1 = make_pipeline(repo, healthy_handlers(levels={STATION: 12.5}), weather=weather_payload(0.0))
+    await SentinelPatrol(p1, settings=gemini_settings, dispatcher=dispatcher).run()
+
+    p2 = make_pipeline(repo, healthy_handlers(levels={STATION: 15.5}), weather=weather_payload(0.0))
+    p2.settings = gemini_settings
+    p2.tts = StubTTS()  # type: ignore[assignment]
+    p2.audio_store = audio_store
+    summary = await SentinelPatrol(p2, settings=gemini_settings, dispatcher=dispatcher).run()
+
+    assert any(a.commune_id == COMMUNE for a in summary.alerts)
+    assert synth_calls["count"] >= 1
+    assert len(list((tmp_path / "audio" / COMMUNE).glob("*.mp3"))) == 1

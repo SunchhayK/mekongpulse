@@ -1,8 +1,9 @@
 """FastAPI application factory (TRD §2.2 presentation layer).
 
-Wires settings, repository, pipeline, sentinel, and (when a token is present)
-the Telegram webhook application. Everything heavy is injectable so tests can
-run offline against the in-memory repository and mock transports.
+Wires settings, repository, StateStore, TaskQueue, OpenTelemetry tracing,
+pipeline, sentinel, and (when a token is present) the Telegram webhook
+application. Everything heavy is injectable so tests can run offline against
+the in-memory repository and mock transports.
 """
 
 from __future__ import annotations
@@ -15,21 +16,28 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from mekong_shared.cache import create_state_store
 from mekong_shared.config import Settings, get_settings
 from mekong_shared.logging_utils import configure_logging, log_event
+from mekong_shared.models import RiskTier, SentinelAlert
 from mekong_shared.pipeline import Pipeline
 from mekong_shared.repository import create_audio_store, create_repository
 from mekong_shared.security import new_trace_id, parse_traceparent
 from mekong_shared.sentinel import SentinelPatrol
+from mekong_shared.tasks import create_task_queue
+from mekong_shared.telemetry import configure_tracing
+from mekong_shared.watch import run_watch
 
 from .problems import register_exception_handlers
 from .routers import (
     alerts,
+    analytics,
     communes,
     health,
     officer,
     patrol,
     subscriptions,
+    tasks,
     telegram,
     telemetry,
     watch,
@@ -44,6 +52,8 @@ def create_app(
     repo=None,
     pipeline: Pipeline | None = None,
     telegram_app=None,
+    state_store=None,
+    task_queue=None,
 ) -> FastAPI:
     app_settings = settings or get_settings()
     logger = configure_logging("mekong-backend")
@@ -51,6 +61,9 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.settings = app_settings
+        store = state_store or create_state_store(app_settings)
+        app.state.state_store = store
+
         repository = repo or create_repository(app_settings)
         await repository.init()
         app.state.repo = repository
@@ -78,12 +91,39 @@ def create_app(
                 tg = None
         app.state.telegram_app = tg
 
+        async def _local_watch_handler(
+            commune_code: str, trigger: str, previous_tier: str | None
+        ) -> None:
+            try:
+                prev = RiskTier(previous_tier) if previous_tier else None
+                await run_watch(pl, commune_code, trigger=trigger, previous_tier=prev)
+            except Exception:  # noqa: BLE001 - watch draft must never break patrol
+                log.exception("automatic watch run failed for commune %s", commune_code)
+
+        async def _local_dispatch_handler(alert_payload: dict, chat_ids: list[str]) -> None:
+            if tg is None:
+                return
+            try:
+                from mekong_bot.dispatcher import dispatch_alert_batch
+
+                alert = SentinelAlert.model_validate(alert_payload)
+                await dispatch_alert_batch(pl, tg.bot, alert, chat_ids)
+            except Exception:  # noqa: BLE001
+                log.exception("local dispatch batch failed")
+
+        queue = task_queue or create_task_queue(
+            app_settings,
+            watch_handler=_local_watch_handler,
+            dispatch_handler=_local_dispatch_handler,
+        )
+        app.state.task_queue = queue
+
         dispatcher = None
         if tg is not None:
             try:
                 from mekong_bot.dispatcher import make_telegram_dispatcher
 
-                dispatcher = make_telegram_dispatcher(pl, tg.bot)
+                dispatcher = make_telegram_dispatcher(pl, tg.bot, task_queue=queue)
             except Exception as exc:  # noqa: BLE001
                 log_event(logger, "DISPATCHER_INIT_FAILED", error=str(exc))
         app.state.sentinel = SentinelPatrol(pl, settings=app_settings, dispatcher=dispatcher)
@@ -102,9 +142,14 @@ def create_app(
                     await tg.shutdown()
                 except Exception:  # noqa: BLE001
                     pass
+            try:
+                await store.close()
+            except Exception:  # noqa: BLE001
+                pass
             await repository.close()
 
     app = FastAPI(title="MekongPulse API", version="1.0.0", lifespan=lifespan)
+    configure_tracing(app, app_settings, service_name="mekong-backend")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=app_settings.cors_origin_list,
@@ -141,6 +186,9 @@ def create_app(
     app.include_router(subscriptions.router)
     app.include_router(patrol.router)
     app.include_router(alerts.router)
+    app.include_router(alerts.digest_router)
+    app.include_router(analytics.router)
+    app.include_router(tasks.router)
     app.include_router(telegram.router)
     app.include_router(officer.router)
     app.include_router(watch.router)

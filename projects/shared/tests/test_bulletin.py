@@ -157,3 +157,62 @@ async def test_polish_is_cached_for_identical_templates():
 def test_gemini_text_client_has_polish_contract():
     assert hasattr(GeminiTextClient, "polish_khmer")
     assert hasattr(GeminiTextClient, "generate")
+
+
+async def test_gemini_text_client_rotates_on_429_and_503(tmp_path):
+    """BUG-11: GeminiTextClient.generate() rotates through ModelRotator on 429/503."""
+    from types import SimpleNamespace
+    from mekong_shared.config import Settings
+
+    class _RotatingModels:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def generate_content(self, *, model, contents):
+            self.calls.append(model)
+            if model == "unit-bulletin-primary":
+                raise RuntimeError("429 RESOURCE_EXHAUSTED")
+            if model == "unit-bulletin-secondary":
+                raise RuntimeError("503 UNAVAILABLE")
+            return SimpleNamespace(text="  សារខ្មែរបានកែសម្រួល  ")
+
+    settings = Settings(
+        _env_file=None,
+        environment="development",
+        data_dir=tmp_path,
+        audio_dir=tmp_path / "audio",
+        gemini_api_key="test-key",
+        use_vertex_ai=False,
+        gemini_text_model="unit-bulletin-primary",
+        gemini_fallback_models="unit-bulletin-secondary,unit-bulletin-tertiary",
+    )
+    models = _RotatingModels()
+    client = GeminiTextClient(settings, client=SimpleNamespace(models=models))
+    out = await client.generate("hello")
+    assert out == "សារខ្មែរបានកែសម្រួល"
+    assert models.calls == [
+        "unit-bulletin-primary",
+        "unit-bulletin-secondary",
+        "unit-bulletin-tertiary",
+    ]
+
+
+async def test_polish_cache_shares_via_state_store():
+    """IMP-01: BulletinBuilder shares polished text across instances via StateStore."""
+    from mekong_shared.cache import InMemoryStateStore
+
+    store = InMemoryStateStore()
+    engine = AgriDecisionEngine()
+    directives = engine.evaluate(RiskTier.WARNING, CropStage.RIPENING)
+
+    client1 = CountingTextClient()
+    builder1 = BulletinBuilder(client1, state_store=store)  # type: ignore[arg-type]
+    first, _ = await builder1.build(_commune(), _risk(RiskTier.WARNING), directives, _station(), _weather())
+
+    client2 = CountingTextClient()
+    builder2 = BulletinBuilder(client2, state_store=store)  # type: ignore[arg-type]
+    second, _ = await builder2.build(_commune(), _risk(RiskTier.WARNING), directives, _station(), _weather())
+
+    assert client1.calls == 1
+    assert client2.calls == 0  # served from shared StateStore
+    assert second == first

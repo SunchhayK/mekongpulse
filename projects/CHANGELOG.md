@@ -2,6 +2,44 @@
 
 All notable changes to the MekongPulse monorepo. Versions follow [SemVer](https://semver.org/); each package under `projects/` is versioned independently.
 
+## [0.18.0] — 2026-11-25
+
+Production hardening across persistence, durable queues, officer identity, multi-day forecasting, pre-classification sensor QC, PWA offline resilience, observability, and calibration analytics. Per SemVer 0.x (rule 4), pre-1.0.0 releases may introduce breaking changes.
+
+Package versions: `shared` — 0.13.0, `backend` — 0.8.0, `bot` — 0.7.0, `frontend` — 0.12.0.
+
+### Added
+
+- `shared` — 0.13.0: `StateStore` (`InMemoryStateStore` + optional `RedisStateStore`) for shared rate limits, model cooldowns, and caches; Google Flood Hub multi-day forecast client (`forecast_tier`, `forecast_lead_days`); expanded 9-station Cambodian MRC gauge roster (`stations.json` + regenerated `commune_gazetteer_2025.json`); committed `projects/firestore.indexes.json` composite indexes; `CropType` (`RICE`, `VEGETABLES`, `LIVESTOCK`) and `planting_date` auto-advance; `CommuneCalibration` & `VerificationSummary` ground-truth calibration loop; Cloud CDN immutable audio URL support (`AUDIO_CDN_BASE_URL`).
+- `backend` — 0.8.0: durable Cloud Tasks enqueueing for automatic watch runs and rate-limited Telegram fan-out; Firebase ID token verification for per-officer identity alongside passcode sessions; Cloud Scheduler OIDC verification; OpenTelemetry / Cloud Trace instrumentation; rate limiting on `/communes/*/reports` and `/advisor/*`; weekly `/api/v1/digest/stage-advance` and calibration endpoints.
+- `bot` — 0.7.0: multi-crop subscription profiles (`RICE`, `VEGETABLES`, `LIVESTOCK`), optional planting date with automatic stage-advance confirmation prompts, and fuzzy commune-name lookup for `/watch <commune name>`.
+- `frontend` — 0.12.0: PWA manifest (`public/manifest.webmanifest`) and service worker (`public/sw.js`) caching the app shell, commune risk/evidence/assess responses, and spoken Khmer MP3 bulletins for offline rural playback; live offline/cached banner (`OfflineBanner`) in Khmer and English; optional Firebase officer email/password sign-in alongside passcode login; officer `approved_by` identity display on watch runs; observed `rain_mm` bars on `HydrographChart`; all 9 Cambodian MRC gauges on `BasinMap`; multi-day Flood Hub forecast badges.
+- `infra` & `analytics`: Cloud Armor WAF and per-IP rate-limiting policy (`projects/infra/cloud_armor_policy.yaml`), Cloud Monitoring log-based metrics, alert policies, and SLO dashboard (`projects/infra/monitoring/`), plus BigQuery schema, BigQuery ML threshold calibration query, and Google Earth Engine Sentinel-1 SAR verification script (`projects/analytics/`).
+
+### Changed
+
+- `projects/scripts/deploy_gcp.sh`: gated unused `bot` image build behind `BUILD_BOT_IMAGE=0`, added `--no-cpu-throttling`, Cloud Tasks queue provisioning (`mekongpulse-watch`, `mekongpulse-telegram-fanout`), Firestore index deployment, OIDC Cloud Scheduler authentication (`USE_OIDC_SCHEDULER=1`), daily 07:00 digest and weekly Monday 08:00 stage-advance scheduler jobs, Vertex AI Workload Identity default (`USE_VERTEX_AI=true`), optional Cloud SQL + PostGIS (`USE_CLOUD_SQL=1`), `REDIS_URL`, `AUDIO_CDN_BASE_URL`, `ENABLE_CLOUD_TRACE`, and wired `OFFICER_PASSCODE`, `OFFICER_TELEGRAM_IDS`, and `WEB_BASE_URL`.
+- `projects/frontend/firebase.json`: added `Cache-Control: no-cache` and `Service-Worker-Allowed: /` for `/sw.js` and manifest headers for `/manifest.webmanifest`.
+
+### Fixed
+
+- `BUG-01` (`firestore_repo.py`): populated `lat`, `lng`, and `station_level_m` in Firestore `risk_map()` and `get_commune_risk()` so the basin map renders all positioned communes in production.
+- `BUG-02` (`models.py` / `firestore_repo.py`): typed `PatrolRun.id`, `SentinelAlert.id`, and `SentinelAlert.patrol_run_id` as `int | str | None` so Firestore string document IDs no longer break alert reads and debouncing.
+- `BUG-03` (`sentinel.py`): 6-hour per-commune debounce now bypasses suppression on strict severity escalations (`WARNING` → `DANGER`).
+- `BUG-04` (`routers/watch.py` / repositories): atomic `PENDING_APPROVAL` → `PUBLISHING` claim prevents concurrent double-posts to Telegram.
+- `BUG-06` (`routers/patrol.py` / `deploy_gcp.sh`): offloaded automatic watch runs to Cloud Tasks and enabled `--no-cpu-throttling` on Cloud Run.
+- `BUG-07` (`firestore_repo.py` / `firestore.indexes.json`): added composite indexes and pushed `order_by` + `limit` into Firestore queries.
+- `BUG-08` (`firestore_repo.py`): fixed inverted `last_sync_age_minutes()` calculation and zero-second falsy bug.
+- `BUG-09` (`bot/service.py`): `/watch <commune name>` now resolves commune names via gazetteer search.
+- `BUG-10` (`mrc.py` / `risk.py`): moved range/spike sensor QC ahead of risk classification and smoothed `rate_of_rise_m_per_hr` to prevent single-tick false `WARNING` spikes.
+- `BUG-11` (`bulletin.py`): routed Khmer bulletin polishing through `ModelRotator` fallback chains.
+- `BUG-12` (`models.py` / repositories / `HydrographChart.tsx`): persisted observed MRC `rain_mm` and rendered rainfall bars on the 7-day hydrograph.
+- `BUG-13` (`deploy_gcp.sh`): removed default unused `bot` build, scheduled daily digest, and wired officer/web environment variables.
+
+### Security
+
+- `BUG-05` & `IMP-03`: locked `/api/v1/subscriptions` to admin/bot callers, rate-limited public field-report and advisor endpoints, added Cloud Armor edge WAF rules, and migrated Cloud Scheduler jobs to short-lived OIDC tokens.
+
 ## [0.17.1] — 2026-11-24
 
 Removed unused blue-green/Caddy deployment scaffolding and switched `labyrinth` to git-tracked single-container deployment. No package versions changed.
